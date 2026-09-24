@@ -23,6 +23,12 @@ A scripted pass in the real app, recording board, date and result for each scena
 - **F10:** Do the Diagnostics settings survive a restart? If not, the page's claim is corrected.
 - The roadmap's own list: installing a pasted style, SD eject, style editor output on a blade, a sample of styles against the simulator, fonts heard.
 - Scenarios from the four later baselines, as they are archived.
+- **From `baseline-firmware`, checked by hand in the real app:**
+  - hardware-wiring 1.1, 1.2, 1.5, 1.7, 1.11, 1.12
+  - toolchain 2.5
+  - firmware-build 4.1, 4.2, 4.3, 4.5, 4.6, 4.8
+  - firmware-install 5.1 (after the FW1 fix)
+- **From `baseline-firmware`, on hote2:** a fresh install started from the bootloader (5.7), and a saber that is slow to return (5.11).
 
 ## Non-goals
 

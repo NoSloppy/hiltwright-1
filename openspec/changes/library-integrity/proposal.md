@@ -12,6 +12,7 @@ The saber library is the owner's record of every saber, and its build model, sna
 - **F15:** Without a USB serial (for example, two boards plugged in), do not create a duplicate record on reflash. Write the install's firmware record to the saber that was being worked on.
 - **F16:** Offer adoption only to a saber without a saved build model, or warn before replacing one.
 - **F17:** "New saber" while a saber is plugged in makes that plan's steps reachable, or explains why the plugged-in saber stays the working one.
+- **FW26** (from `baseline-firmware`): Before adoption replaces a saber's compiled styles with Hiltwright's, tell the owner. That includes presets whose styles will point elsewhere.
 
 ## Non-goals
 

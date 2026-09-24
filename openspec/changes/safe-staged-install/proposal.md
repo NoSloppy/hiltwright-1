@@ -11,6 +11,7 @@ Installing staged presets deletes the saber's `presets.ini` before the reboot wi
 - **F31:** Check the replies to the `presets.ini` and `presets.tmp` deletes. Refuse to reboot if they fail. If the write fails after the delete, offer to put the snapshot back. Make the "Check again" path clear the presets too.
 - **F32:** For a board already in its bootloader, either clear the presets after the new firmware boots, or keep the list staged and tell the owner what happened.
 - **F47:** Label the pre-install snapshot plainly ("Before install with staged presets"), not `Before bank "edits made here"`.
+- **FW37** (from `baseline-firmware`): Cancelling at the Windows driver step must not leave the saber in its bootloader with its presets already deleted. Clear the presets as late as possible, or put them back on cancel.
 
 ## Non-goals
 

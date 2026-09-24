@@ -15,6 +15,7 @@ Beta 1 promises Proffieboard V3 support, and nothing has ever been compiled for,
   - diagnostics 4.1, 4.3, 4.6
   - preset-editing 6.1, 6.4, 6.5, 6.7, 6.9, 6.10, 6.12, 6.13, 6.15, 6.19
 - Scenarios from later baselines, as they are archived.
+- **From `baseline-firmware`, every board-marked scenario on the V3:** version after install (4.4), backup (5.4), reboot (5.6), driver (5.8), install (5.10) and restore (5.14). Also a V3 build from the app with its flash budget (3.3, FW13), and an install started from the V3's bootloader (5.7).
 
 ## Non-goals
 

@@ -13,6 +13,7 @@ Beta 1 ships a packaged installer to testers. Several development conveniences a
 - **F27:** The production content security policy drops `ws:` and `wss:`.
 - **F28:** Opening a folder checks the real path is inside the app's data folder, not a string prefix.
 - **F29:** The page error screen says only what it knows.
+- **FW33** (from `baseline-firmware`): The build end-to-end hook that confirms the wiring as a side effect is removed from packaged builds along with the other development aids.
 
 ## Non-goals
 

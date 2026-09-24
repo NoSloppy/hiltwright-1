@@ -37,6 +37,25 @@
     | board-side-later | M5+ | F22, F30, F46 | |
     | blade-id-verification (task 5.1) | M4 | F8 (connect re-runs blade detection) | |
   - Inputs from baseline-firmware: the Findings table in `baseline-firmware/design.md` (FW1–FW37, which also corrects F18 and extends F31), and the scenarios marked neither or partial in `baseline-firmware/tasks.md` (18 neither and 10 partial of 55).
+  - **Triage of the baseline-firmware batch, 2026-09-24:**
+
+    | Change | Milestone | Findings | Scenarios |
+    |---|---|---|---|
+    | wiring-confirmation-gate (rewritten) | M2 | FW1, FW2 (supersede F18) | 5.1 once fixed |
+    | install-target-safety | M2 | FW3, FW4, FW5, FW31 | |
+    | wiring-validation | M2 | FW6, FW22, FW23, FW27 | |
+    | install-safety-nets | M2 | FW7, FW8, FW9, FW10, FW12, FW29 | |
+    | toolchain-integrity | M2 | FW11, FW28, FW32, FW36 | |
+    | build-correctness | M2 | FW13, FW14, FW15, FW16 | |
+    | firmware-side-test-coverage | M2 | FW20 | 1.3, 1.4, 1.10, 2.3, 2.4, 2.6, 3.3, 5.5, 5.9, 5.11, 5.13, 5.15 |
+    | safe-staged-install (extended) | M2 | FW37 | |
+    | release-hardening (extended) | M2 | FW33 | |
+    | library-integrity (extended) | M2 | FW26 | |
+    | hardware-verification-v2 (extended) | M2 | | 14 hand checks + 5.7, 5.11 on hote2 |
+    | v3-verification (extended) | M2 | | 4.4, 5.4, 5.6, 5.8, 5.10, 5.14, 5.7, V3 build (3.3) |
+    | firmware-side-polish | M4 | FW17, FW18, FW24, FW25, FW34, FW35 | |
+    | firmware-side-later | M5+ | FW19, FW30 | |
+    | blade-id-verification (task 5.1) | M4 | FW21 | 6.1 |
 
 ## 3. M2 Beta 1 blockers
 
