@@ -10,8 +10,8 @@
 
 ## 2. M1 Baseline
 
-- [ ] 2.1 Propose, audit and archive `baseline-board` (board-connection, saber-library, preset-editing, presets-ini, diagnostics, app-shell) at the D2 depths; verify `openspec validate baseline-board --strict` passes, every scenario is sorted as test, hardware or neither, and the specs appear under `openspec/specs/`
-- [ ] 2.2 Propose, audit and archive `baseline-firmware` (hardware-wiring, config-generation, toolchain, firmware-build, firmware-install, blade-id stub); verify as in 2.1
+- [x] 2.1 Propose, audit and archive `baseline-board` (board-connection, saber-library, preset-editing, presets-ini, diagnostics, app-shell) at the D2 depths; verify `openspec validate baseline-board --strict` passes, every scenario is sorted as test, hardware or neither, and the specs appear under `openspec/specs/`
+- [x] 2.2 Propose, audit and archive `baseline-firmware` (hardware-wiring, config-generation, toolchain, firmware-build, firmware-install, blade-id stub); verify as in 2.1
 - [ ] 2.3 Propose, audit and archive `baseline-sd-fonts` (sd-card, font-library, xenopixel-import stub); verify as in 2.1
 - [ ] 2.4 Propose, audit and archive `baseline-styles` (style-library, style-simulator, style-editor, blade-preview); verify as in 2.1
 - [ ] 2.5 Propose, audit and archive `baseline-showroom` (demo-room, hwpack, contributors); verify as in 2.1, and that `hwpack` records the key open question from design.md
@@ -36,6 +36,7 @@
     | board-side-polish | M4 | F4, F19, F20, F21, F23, F24, F40, F42 | |
     | board-side-later | M5+ | F22, F30, F46 | |
     | blade-id-verification (task 5.1) | M4 | F8 (connect re-runs blade detection) | |
+  - Inputs from baseline-firmware: the Findings table in `baseline-firmware/design.md` (FW1–FW37, which also corrects F18 and extends F31), and the scenarios marked neither or partial in `baseline-firmware/tasks.md` (18 neither and 10 partial of 55).
 
 ## 3. M2 Beta 1 blockers
 
