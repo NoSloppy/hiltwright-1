@@ -12,7 +12,7 @@
 
 - [x] 2.1 Propose, audit and archive `baseline-board` (board-connection, saber-library, preset-editing, presets-ini, diagnostics, app-shell) at the D2 depths; verify `openspec validate baseline-board --strict` passes, every scenario is sorted as test, hardware or neither, and the specs appear under `openspec/specs/`
 - [x] 2.2 Propose, audit and archive `baseline-firmware` (hardware-wiring, config-generation, toolchain, firmware-build, firmware-install, blade-id stub); verify as in 2.1
-- [ ] 2.3 Propose, audit and archive `baseline-sd-fonts` (sd-card, font-library, xenopixel-import stub); verify as in 2.1
+- [x] 2.3 Propose, audit and archive `baseline-sd-fonts` (sd-card, font-library, xenopixel-import stub); verify as in 2.1
 - [ ] 2.4 Propose, audit and archive `baseline-styles` (style-library, style-simulator, style-editor, blade-preview); verify as in 2.1
 - [ ] 2.5 Propose, audit and archive `baseline-showroom` (demo-room, hwpack, contributors); verify as in 2.1, and that `hwpack` records the key open question from design.md
 - [ ] 2.6 Triage every scenario marked neither on an F capability: each gets a blocker change, joins `hardware-verification-v2`/`v3-verification`, or is moved past Beta 1 with a reason; decide here whether a support bundle / log export is a blocker; verify `openspec list` shows a change for every item kept, and the moves are recorded in this file
@@ -56,6 +56,7 @@
     | firmware-side-polish | M4 | FW17, FW18, FW24, FW25, FW34, FW35 | |
     | firmware-side-later | M5+ | FW19, FW30 | |
     | blade-id-verification (task 5.1) | M4 | FW21 | 6.1 |
+  - Inputs from baseline-sd-fonts: the Findings table in `baseline-sd-fonts/design.md` (SF1–SF34), and the scenarios marked neither or partial in `baseline-sd-fonts/tasks.md` (14 neither and 8 partial of 33).
 
 ## 3. M2 Beta 1 blockers
 
