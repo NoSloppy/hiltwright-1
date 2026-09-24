@@ -16,6 +16,7 @@
 - [ ] 2.4 Propose, audit and archive `baseline-styles` (style-library, style-simulator, style-editor, blade-preview); verify as in 2.1
 - [ ] 2.5 Propose, audit and archive `baseline-showroom` (demo-room, hwpack, contributors); verify as in 2.1, and that `hwpack` records the key open question from design.md
 - [ ] 2.6 Triage every scenario marked neither on an F capability: each gets a blocker change, joins `hardware-verification-v2`/`v3-verification`, or is moved past Beta 1 with a reason; decide here whether a support bundle / log export is a blocker; verify `openspec list` shows a change for every item kept, and the moves are recorded in this file
+  - Inputs from baseline-board: the Findings table in `baseline-board/design.md` (F1–F47; after archive under `openspec/changes/archive/`), and the scenarios marked neither or partial in `baseline-board/tasks.md` (44 neither and 14 partial of 78).
 
 ## 3. M2 Beta 1 blockers
 
