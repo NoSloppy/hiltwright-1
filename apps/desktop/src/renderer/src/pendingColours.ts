@@ -33,7 +33,7 @@ export function usePendingLookColours(board: Board): void {
         const style = formatBuiltin({ preset: w.i, blade: w.k + 1, args: w.args });
         const ok = await board.setPresetStyles(index, { [w.k + 1]: style }, `Colours for ${w.name.replace(/\s*\n\s*/g, ' ')}, blade ${w.k + 1}`);
         if (ok) written.add(`${w.i}:${w.k}`);
-        console.log(`[looks] pending colours preset ${index + 1} blade ${w.k + 1}: ${ok ? 'written' : 'not confirmed'}`);
+        console.log(`[styles] pending colours preset ${index + 1} blade ${w.k + 1}: ${ok ? 'written' : 'not confirmed'}`);
       }
       if (before != null) await board.choosePreset(before);
       if (!written.size) return;

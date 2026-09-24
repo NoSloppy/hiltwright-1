@@ -328,11 +328,11 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         </div>
 
         <div className={`stepc ${wiringOk ? 'done' : nowStep === 1 ? 'now' : ''} ${preview?.errors.length ? 'bad' : ''}`}>
-          <div className="head"><span className="nbox">{wiringOk ? <Icon name="check" /> : 1}</span><b>Set up</b><span className="what">{model?.blades.length ?? 0} blade{model?.blades.length === 1 ? '' : 's'}, {model?.presets.length ?? 0} preset{model?.presets.length === 1 ? '' : 's'}{model?.presetsFrom ? ' (staged)' : ''}{queuedLooks.length ? `, ${queuedLooks.length} new look${queuedLooks.length === 1 ? '' : 's'}` : ''}</span></div>
+          <div className="head"><span className="nbox">{wiringOk ? <Icon name="check" /> : 1}</span><b>Set up</b><span className="what">{model?.blades.length ?? 0} blade{model?.blades.length === 1 ? '' : 's'}, {model?.presets.length ?? 0} preset{model?.presets.length === 1 ? '' : 's'}{model?.presetsFrom ? ' (staged)' : ''}{queuedLooks.length ? `, ${queuedLooks.length} new style${queuedLooks.length === 1 ? '' : 's'}` : ''}</span></div>
           <div className="row wrap" style={{ gap: 6 }}>
             <button type="button" className="chip" onClick={() => go('wiring')}><Icon name="blade" />Wiring{confirmedWiring ? '' : ' · confirm'}</button>
             <button type="button" className="chip" onClick={() => go('presets')}><Icon name="presets" />Presets</button>
-            <button type="button" className="chip" onClick={() => go('looks')}><Icon name="looks" />Looks</button>
+            <button type="button" className="chip" onClick={() => go('looks')}><Icon name="looks" />Styles</button>
             <button type="button" className="chip" onClick={() => go('fonts')}><Icon name="fonts" />Fonts</button>
           </div>
           <span className="hint">{PROPS.find((p) => p.value === prop)?.label}{saber?.planned ? ' · planned ahead, not connected yet' : ''}</span>

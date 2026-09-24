@@ -8,6 +8,7 @@ import { HardwareEditor } from './Hardware';
 import type { Board } from './board';
 import { Icon } from './Icon';
 import type { Workspace } from './workspace';
+import { Select } from './Select';
 
 export const PROPS: { value: Prop; label: string }[] = [
   { value: 'fett263', label: 'Fett263 · edit mode, gestures' }, { value: 'sa22c', label: 'SA22C' }, { value: 'bc', label: 'BC' }, { value: 'default', label: 'ProffieOS default' },
@@ -62,7 +63,7 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
             </label>
             <label className="field grow" style={{ minWidth: 260 }}><span className="label">Prop file (how the buttons behave)</span>
               <span className="input sans" style={{ height: 32 }}><span className="ellip">{PROPS.find((p) => p.value === draft.prop)?.label}</span><span className="caret"><Icon name="down" /></span>
-                <select value={draft.prop} aria-label="Prop file" onChange={(e) => change({ prop: e.target.value as Prop }, false)}>{PROPS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></span>
+                <Select value={draft.prop} aria-label="Prop file" onChange={(e) => change({ prop: e.target.value as Prop }, false)}>{PROPS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select></span>
             </label>
           </div>
           <HardwareEditor blades={draft.blades} board={draft.board} detected={detected} locked={board.busy} onChange={(b: ModelBlade[]) => change({ blades: b })}
@@ -87,7 +88,7 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
         <div className="stepc">
           <div className="head"><span className="nbox">2</span><b>Next</b><span className="what">presets</span></div>
           <button type="button" className="btn pri full" disabled={!confirmed} onClick={() => go('presets')}><span className="b"><span className="i"><Icon name="presets" />Presets</span></span></button>
-          <span className="hint">{confirmed ? 'The saber’s presets: fonts, tracks and a look for each blade.' : 'Confirm the wiring first.'}</span>
+          <span className="hint">{confirmed ? 'The saber’s presets: fonts, tracks and a style for each blade.' : 'Confirm the wiring first.'}</span>
         </div>
       </aside>
     </div>

@@ -87,7 +87,7 @@ describe('generateConfig with chosen looks', () => {
     expect(lookAtSlot(full, 5, 1)).toBeNull();
   });
   it('flags unknown look ids', () => {
-    expect(validateModel({ ...model, presets: [{ font: 'A', track: '', name: 'x', looks: ['nope'] }] })[0]).toMatch(/unknown look "nope"/);
+    expect(validateModel({ ...model, presets: [{ font: 'A', track: '', name: 'x', looks: ['nope'] }] })[0]).toMatch(/unknown style "nope"/);
   });
   it('starters cover every role', () => {
     for (const role of ['main', 'side', 'crystal', 'accent', 'motor'] as const) expect(STARTER_LOOKS.some((l) => l.roles.includes(role))).toBe(true);

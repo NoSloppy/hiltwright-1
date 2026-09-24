@@ -6,9 +6,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { STARTER_LOOKS, analyzeStyleCode, registerLookSim, argInfo, formatBuiltin, formatStyleArgs, hexToColorWord, lookSlots, type BladeRole, type LookDef } from '@hiltwright/core';
 import type { Board } from './board';
 import { Icon } from './Icon';
+import { ContributorLogo, CreditCard, NOT_A_CONTRIBUTOR, useContributors } from './credits';
 import { BladePreview, canSimulate } from './BladePreview';
 import { queuedLookIds, withLookInSlot } from './saberModel';
 import type { Workspace } from './workspace';
+import { Select } from './Select';
 
 const api = () => window.hiltwright;
 const ROLE_LABEL: Record<BladeRole, string> = { main: 'main blade', side: 'side blade', crystal: 'crystal', accent: 'accent', motor: 'motor' };
@@ -17,7 +19,7 @@ const usesMotion = (l: LookDef) => /BladeAngle|TwistAngle|SwingSpeed|SwingAccele
 
 type LookState = 'compiled' | 'queued' | 'new';
 
-export function Looks({ ws, board, onPresets, onBuild, onDemo, onEdit, onNew }: { ws: Workspace; board: Board; onPresets: () => void; onBuild: () => void; onDemo: (lookId: string) => void; onEdit: (look: LookDef) => void; onNew: () => void }) {
+export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, onEdit, onNew }: { ws: Workspace; board: Board; initialCreator?: string | null; onPresets: () => void; onBuild: () => void; onDemo: (lookId: string) => void; onEdit: (look: LookDef) => void; onNew: () => void }) {
   // Looks go into the working saber's presets: written to it when it is plugged in and already carries the look,
   // otherwise queued in its model for the next build. Nothing plugged in is fine.
   const { saber, info, live, model } = ws;
@@ -27,6 +29,9 @@ export function Looks({ ws, board, onPresets, onBuild, onDemo, onEdit, onNew }: 
   const [q, setQ] = useState('');
   const [onlyFirmware, setOnlyFirmware] = useState(false);
   const [roleFilter, setRoleFilter] = useState<BladeRole | null>(null);
+  // Who made it, matched regardless of case; the owner's own styles (no author, or 'you') count as one creator, You.
+  const creatorKey = (by: string) => (NOT_A_CONTRIBUTOR.test(by.trim()) ? '' : by.trim().toLowerCase());
+  const [creator, setCreator] = useState<string | null>(() => (initialCreator != null ? creatorKey(initialCreator) : null));
   const [onlyMotion, setOnlyMotion] = useState(false);
   const [pasting, setPasting] = useState(false);
   const [code, setCode] = useState('');
@@ -52,14 +57,20 @@ export function Looks({ ws, board, onPresets, onBuild, onDemo, onEdit, onNew }: 
   const queued = new Set(queuedLookIds(model ?? undefined, saber?.firmware));
   const compiled = new Set((saber?.firmware?.looks ?? []).map((l) => l.id));
   const stateOf = (id: string): LookState => (compiled.has(id) ? 'compiled' : queued.has(id) ? 'queued' : 'new');
+  const creators = useMemo(() => {
+    const m = new Map<string, { name: string; count: number }>();
+    for (const l of looks) { const k = creatorKey(l.by); const c = m.get(k) ?? { name: k ? l.by.trim() : 'You', count: 0 }; c.count++; m.set(k, c); }
+    return [...m.entries()].sort(([a, x], [b, y]) => y.count - x.count || (a ? 0 : 1) - (b ? 0 : 1) || x.name.localeCompare(y.name));
+  }, [looks]);
   const visible = looks.filter((l) => {
+    if (creator !== null && creatorKey(l.by) !== creator) return false;
     if (q && !l.name.toLowerCase().includes(q.toLowerCase()) && !l.by.toLowerCase().includes(q.toLowerCase())) return false;
     if (onlyFirmware && stateOf(l.id) !== 'compiled') return false;
     if (roleFilter && !l.roles.includes(roleFilter)) return false;
     if (onlyMotion && !usesMotion(l)) return false;
     return true;
   });
-  const sel = looks.find((l) => l.id === selectedId) ?? looks[0];
+  const sel = visible.find((l) => l.id === selectedId) ?? visible[0] ?? looks.find((l) => l.id === selectedId) ?? looks[0];
   const selState = stateOf(sel.id);
   const analysis = useMemo(() => (code.trim() ? analyzeStyleCode(code) : null), [code]);
   const bladesForLook = model ? model.blades.map((b, i) => ({ n: i + 1, role: b.role, fits: sel.roles.includes(b.role) })) : [];
@@ -70,13 +81,20 @@ export function Looks({ ws, board, onPresets, onBuild, onDemo, onEdit, onNew }: 
     if (!analysis?.ok) return;
     const id = `look_${(lookName || 'pasted').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'pasted'}_${Date.now().toString(36)}`;
     const roles: BladeRole[] = ['main', 'side'];
-    const look: LookDef = { id, name: lookName.trim() || 'Pasted look', source: 'pasted', by: lookBy.trim() || 'unknown', code: analysis.expression, header: analysis.header, roles, args: analysis.args, preview: analysis.preview, defaults: analysis.defaults, description: analysis.header ? analysis.header.split('\n').map((l) => l.replace(/^\/\/\s?|\/\*|\*\//g, '').trim()).filter(Boolean).slice(0, 3).join(' · ') : 'Pasted style code.' };
+    const look: LookDef = { id, name: lookName.trim() || 'Pasted style', source: 'pasted', by: lookBy.trim() || 'unknown', code: analysis.expression, header: analysis.header, roles, args: analysis.args, preview: analysis.preview, defaults: analysis.defaults, description: analysis.header ? analysis.header.split('\n').map((l) => l.replace(/^\/\/\s?|\/\*|\*\//g, '').trim()).filter(Boolean).slice(0, 3).join(' · ') : 'Pasted style code.' };
     registerLookSim(look);
     setPasted(await api().looks.add(look));
     setSelectedId(id);
     setPasting(false); setCode(''); setLookName('');
   };
 
+  const people = useContributors();
+  /** The author of one of the owner's own looks, typed in when it was pasted; fixed here if it was wrong. */
+  const setAuthor = async (look: LookDef, by: string) => {
+    const next = await api().looks.update(look.id, { ...look, by: by || 'you' });
+    setPasted(next);
+    registerLookSim(next.find((l) => l.id === look.id) ?? look);
+  };
   const removePasted = async (id: string) => {
     setPasted(await api().looks.remove(id));
     if (selectedId === id) setSelectedId(STARTER_LOOKS[0].id);
@@ -119,16 +137,16 @@ export function Looks({ ws, board, onPresets, onBuild, onDemo, onEdit, onNew }: 
           <section className="panel dialog" role="dialog" aria-modal="true" aria-label="Paste style code">
             <div className="ph"><h2>Paste a style</h2><button type="button" className="chip" aria-label="Close" onClick={() => setPasting(false)}><Icon name="x" /></button></div>
             <div className="pb col scroll" style={{ gap: 12 }}>
-              <span className="hint">Paste the whole block from the Fett263 style library, comments included. Its copyright header stays with the look and goes into your config; Hiltwright never redistributes the library itself.</span>
+              <span className="hint">Paste the whole block from the Fett263 style library, comments included. Its copyright header stays with the style and goes into your config; Hiltwright never redistributes the library itself.</span>
               <textarea className="console" autoFocus style={{ minHeight: 220, resize: 'vertical', width: '100%', boxSizing: 'border-box', color: 'var(--text)', background: '#0b1016', border: '1px solid var(--line)', padding: 10 }} value={code} onChange={(e) => setCode(e.target.value)} aria-label="Style code" placeholder={'// Fett263 Style Library\n// Copyright ...\nStylePtr<Layers<...>>()'} spellCheck={false} />
               {analysis && !analysis.ok && analysis.problems.map((p) => <div key={p} className="note red"><Icon name="x" /><span>{p}</span></div>)}
               {analysis?.ok && (
                 <div className="note green"><Icon name="check" /><span>Looks like a style. {analysis.args.length ? `Colours and options you can change live: ${analysis.args.map((n) => argInfo(n).name).join(', ')}.` : 'It has no live arguments, so its colours are fixed.'}{analysis.header ? ' Header kept.' : ' No header found; add the library comment block if this came from Fett263.'}</span></div>
               )}
               <div className="row wrap" style={{ gap: 12 }}>
-                <label className="field grow"><span className="label">Name</span><span className="input sans"><input type="text" value={lookName} onChange={(e) => setLookName(e.target.value)} placeholder="Ember" aria-label="Look name" /></span></label>
-                <label className="field" style={{ width: 200 }}><span className="label">By</span><span className="input sans"><input type="text" value={lookBy} onChange={(e) => setLookBy(e.target.value)} aria-label="Look author" /></span></label>
-                <button type="button" className="btn pri" style={{ alignSelf: 'end' }} disabled={!analysis?.ok} onClick={() => void savePasted()}><span className="b"><span className="i"><Icon name="plus" />Save look</span></span></button>
+                <label className="field grow"><span className="label">Name</span><span className="input sans"><input type="text" value={lookName} onChange={(e) => setLookName(e.target.value)} placeholder="Ember" aria-label="Style name" /></span></label>
+                <label className="field" style={{ width: 200 }}><span className="label">By</span><span className="input sans"><input type="text" value={lookBy} onChange={(e) => setLookBy(e.target.value)} aria-label="Style author" /></span></label>
+                <button type="button" className="btn pri" style={{ alignSelf: 'end' }} disabled={!analysis?.ok} onClick={() => void savePasted()}><span className="b"><span className="i"><Icon name="plus" />Save style</span></span></button>
               </div>
             </div>
           </section>
@@ -138,11 +156,19 @@ export function Looks({ ws, board, onPresets, onBuild, onDemo, onEdit, onNew }: 
       <div className="work" style={{ gridTemplateColumns: 'minmax(0,1fr) 420px' }}>
         <div className="col" style={{ gap: 12, minHeight: 0 }}>
           <div className="toolbar">
-            <label className="input sans" style={{ width: 180, height: 32 }}><Icon name="search" /><input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search looks" aria-label="Search looks" style={{ position: 'static', color: 'var(--text)' }} /></label>
+            <label className="input sans" style={{ width: 180, height: 32 }}><Icon name="search" /><input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search styles" aria-label="Search styles" style={{ position: 'static', color: 'var(--text)' }} /></label>
             <button type="button" className={`chip ${onlyFirmware ? 'sel' : ''}`} aria-pressed={onlyFirmware} disabled={!saber?.firmware} onClick={() => setOnlyFirmware((v) => !v)}><Icon name="check" />On the saber {compiled.size}</button>
             {(['main', 'crystal', 'accent', 'motor'] as BladeRole[]).map((r) => <button key={r} type="button" className={`chip ${roleFilter === r ? 'sel' : ''}`} aria-pressed={roleFilter === r} onClick={() => setRoleFilter(roleFilter === r ? null : r)}>{ROLE_LABEL[r]}</button>)}
-            <button type="button" className={`chip ${onlyMotion ? 'sel' : ''}`} aria-pressed={onlyMotion} title="Looks that respond to tilt, swing or twist" onClick={() => setOnlyMotion((v) => !v)}>Motion</button>
-            <button type="button" className="btn sm pri" style={{ marginLeft: 'auto' }} onClick={onNew}><span className="b"><span className="i"><Icon name="plus" />Build a look</span></span></button>
+            <button type="button" className={`chip ${onlyMotion ? 'sel' : ''}`} aria-pressed={onlyMotion} title="Styles that respond to tilt, swing or twist" onClick={() => setOnlyMotion((v) => !v)}>Motion</button>
+            <label className="input sans" style={{ width: 190, height: 32 }} title="Show one creator's styles">
+              {creator !== null && creator !== '' ? <ContributorLogo name={creators.find(([k]) => k === creator)?.[1].name ?? creator} logo={people.logoFor(creator)} size={18} /> : <Icon name="people" />}
+              <span className="ellip">{creator === null ? 'Every creator' : creators.find(([k]) => k === creator)?.[1].name ?? creator}</span><span className="caret"><Icon name="down" /></span>
+              <Select value={creator ?? '*'} aria-label="Creator" onChange={(e) => setCreator(e.target.value === '*' ? null : e.target.value)}>
+                <option value="*">Every creator ({looks.length})</option>
+                {creators.map(([k, c]) => <option key={k || '-'} value={k}>{c.name} ({c.count})</option>)}
+              </Select>
+            </label>
+            <button type="button" className="btn sm pri" style={{ marginLeft: 'auto' }} onClick={onNew}><span className="b"><span className="i"><Icon name="plus" />Build a style</span></span></button>
             <button type="button" className="btn sm" onClick={() => setPasting(true)}><span className="b"><span className="i"><Icon name="import" />Paste style code</span></span></button>
           </div>
           <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(176px, 1fr))', gap: 10, alignContent: 'start', paddingRight: 4 }}>
@@ -153,17 +179,20 @@ export function Looks({ ws, board, onPresets, onBuild, onDemo, onEdit, onNew }: 
                 </div>
                 <div className="col" style={{ padding: '2px 14px 12px', gap: 4, width: '100%' }}>
                   <div className="row between" style={{ gap: 8 }}><b className="ellip" style={{ fontWeight: 600, fontSize: 14 }}>{l.name}</b>{stateOf(l.id) === 'compiled' ? <span className="green small nowrap">on the saber</span> : stateOf(l.id) === 'queued' ? <span className="amber small nowrap">queued</span> : null}</div>
-                  <div className="hint ellip">{l.source !== 'starter' ? `${l.by}, ` : ''}{ROLE_LABEL[l.roles[0]]}{l.roles.length > 1 ? ` +${l.roles.length - 1}` : ''}{l.kb != null ? `, ${l.kb.toFixed(1)} KB` : ''}</div>
+                  <div className="hint ellip row" style={{ gap: 6 }}>{people.logoFor(l.by) && <ContributorLogo name={l.by} logo={people.logoFor(l.by)} size={16} />}<span className="ellip">{l.source !== 'starter' ? `${l.by}, ` : ''}{ROLE_LABEL[l.roles[0]]}{l.roles.length > 1 ? ` +${l.roles.length - 1}` : ''}{l.kb != null ? `, ${l.kb.toFixed(1)} KB` : ''}</span></div>
                 </div>
               </button>
             ))}
-            {visible.length === 0 && <div className="hint" style={{ gridColumn: '1 / -1', padding: 20 }}>No looks match. Clear a filter, or paste one.</div>}
+            {visible.length === 0 && <div className="hint" style={{ gridColumn: '1 / -1', padding: 20 }}>No styles match. Clear a filter, or paste one.</div>}
           </div>
         </div>
 
-        <section className="panel fill" aria-label="Selected look">
+        <section className="panel fill" aria-label="Selected style">
           <div className="ph">
-            <div className="col" style={{ gap: 2, minWidth: 0 }}><h2 className="ellip">{sel.name}</h2><span className="hint ellip">{sel.by}, for {sel.roles.map((r) => ROLE_LABEL[r]).join(' or ')}</span></div>
+            <div className="row" style={{ gap: 12, minWidth: 0 }}>
+              {!NOT_A_CONTRIBUTOR.test(sel.by.trim()) && <ContributorLogo name={sel.by} logo={people.logoFor(sel.by)} size={34} />}
+              <div className="col" style={{ gap: 2, minWidth: 0 }}><h2 className="ellip">{sel.name}</h2><span className="hint ellip">{NOT_A_CONTRIBUTOR.test(sel.by.trim()) ? 'Yours' : `by ${sel.by}`}, for {sel.roles.map((r) => ROLE_LABEL[r]).join(' or ')}</span></div>
+            </div>
             <div className="row" style={{ gap: 8 }}>{canSimulate(sel.id) && !isDot(sel) && <button type="button" className="chip" title="Swing it in the demo room" onClick={() => onDemo(sel.id)}><Icon name="play" />Demo room</button>}{stateChip(selState)}</div>
           </div>
           <div className="pb col scroll" style={{ gap: 14, overflowX: 'hidden' }}>
@@ -193,38 +222,39 @@ export function Looks({ ws, board, onPresets, onBuild, onDemo, onEdit, onNew }: 
                     );
                   })}
                 </div>
-                <span className="hint">These go with the look when you put it on a preset below. Fine-tune later on the <button type="button" className="holo" onClick={onPresets}>Presets page</button>.</span>
+                <span className="hint">These go with the style when you put it on a preset below. Fine-tune later on the <button type="button" className="holo" onClick={onPresets}>Presets page</button>.</span>
               </div>
             )}
             <p className="dim" style={{ fontSize: 13 }}>{sel.description}</p>
+            <CreditCard key={`credit:${sel.id}`} name={sel.by} label={sel.source === 'starter' ? 'Made by' : sel.source === 'built' ? 'Built by' : 'Style by'} onRename={sel.source === 'starter' ? undefined : (by) => void setAuthor(sel, by)} onError={(text) => setNote({ tone: 'red', text })} />
 
-            {sel.args.length === 0 && <span className="hint">Nothing in this look can be changed live.</span>}
+            {sel.args.length === 0 && <span className="hint">Nothing in this style can be changed live.</span>}
             {sel.source === 'pasted' && sel.header && <pre className="console" style={{ maxHeight: 110, margin: 0, fontSize: 11, flex: 'none' }}>{sel.header}</pre>}
             {sel.source === 'built' && <button type="button" className="btn sm" onClick={() => onEdit(sel)}><span className="b"><span className="i"><Icon name="gear" />Edit the layers</span></span></button>}
             {(sel.source === 'pasted' || sel.source === 'built') && <button type="button" className="btn sm ghost" onClick={() => void removePasted(sel.id)}><span className="b"><span className="i"><Icon name="trash" />Remove from library</span></span></button>}
           </div>
           <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }}>
-              {!connected && <span className="hint">No saber yet: start one in the Armory, and looks can be put into its presets before it is ever plugged in.</span>}
+              {!connected && <span className="hint">No saber yet: start one in the Armory, and styles can be put into its presets before it is ever plugged in.</span>}
               {connected && model && (
                 <div className="row" style={{ gap: 8, alignItems: 'end' }}>
                   <label className="field grow"><span className="label">Preset</span><span className="input sans" style={{ height: 32 }}><span className="ellip">{presetName(targetPreset)}</span><span className="caret"><Icon name="down" /></span>
-                    <select value={targetPreset} aria-label="Preset to put the look in" onChange={(e) => setTargetPreset(Number(e.target.value))}>{model!.presets.map((_p, i) => <option key={i} value={i}>{i + 1}. {presetName(i)}</option>)}</select></span></label>
+                    <Select value={targetPreset} aria-label="Preset to put the style in" onChange={(e) => setTargetPreset(Number(e.target.value))}>{model!.presets.map((_p, i) => <option key={i} value={i}>{i + 1}. {presetName(i)}</option>)}</Select></span></label>
                   <label className="field" style={{ width: 140 }}><span className="label">Blade</span><span className="input sans" style={{ height: 32 }}><span className="ellip">{fittingBlade ? `${fittingBlade.n}. ${ROLE_LABEL[fittingBlade.role]}` : 'none'}</span><span className="caret"><Icon name="down" /></span>
-                    <select value={fittingBlade?.n ?? 1} aria-label="Blade slot" onChange={(e) => setTargetBlade(Number(e.target.value))}>{bladesForLook.map((b) => <option key={b.n} value={b.n}>{b.n}. {ROLE_LABEL[b.role]}{b.fits ? '' : ' (unusual)'}</option>)}</select></span></label>
+                    <Select value={fittingBlade?.n ?? 1} aria-label="Blade slot" onChange={(e) => setTargetBlade(Number(e.target.value))}>{bladesForLook.map((b) => <option key={b.n} value={b.n}>{b.n}. {ROLE_LABEL[b.role]}{b.fits ? '' : ' (unusual)'}</option>)}</Select></span></label>
                 </div>
               )}
               {connected && model && live && selState === 'compiled' && (
                 <>
                   <button type="button" className="btn pri full" disabled={!live || !fittingBlade || applying || board.busy} onClick={() => void useInPreset()}><span className="b"><span className="i"><Icon name="presets" />{applying ? 'Writing to the saber…' : `Use it in ${presetName(targetPreset)}`}</span></span></button>
-                  <span className="hint">{live ? `This look is already on ${saber!.name}, so it is written to the preset now${colourCount ? ', in the colours you chose above' : ''}. No rebuild.` : `This look is already on ${saber!.name}. Plug the saber in to put it on a preset.`} <button type="button" className="holo" onClick={onPresets}>Open Presets</button></span>
+                  <span className="hint">{live ? `This style is already on ${saber!.name}, so it is written to the preset now${colourCount ? ', in the colours you chose above' : ''}. No rebuild.` : `This style is already on ${saber!.name}. Plug the saber in to put it on a preset.`} <button type="button" className="holo" onClick={onPresets}>Open Presets</button></span>
                 </>
               )}
               {connected && model && (!live || selState !== 'compiled') && (
                 <>
                   <button type="button" className="btn pri full" disabled={!fittingBlade} onClick={() => void addToSaber()}><span className="b"><span className="i"><Icon name="plus" />{selState === 'queued' ? `Also use it in ${presetName(targetPreset)}` : `Add to ${presetName(targetPreset)}`}</span></span></button>
                   {selState === 'queued'
-                    ? <button type="button" className="btn warn full" onClick={onBuild}><span className="b"><span className="i"><Icon name="bolt" />Build &amp; install queued looks</span></span></button>
-                    : <span className="hint">New looks reach the saber with the next Build &amp; Install{sel.kb != null ? `, and cost about ${sel.kb.toFixed(1)} KB of firmware space once` : ''}.{colourCount ? ' The colours you tried go with it.' : ''}</span>}
+                    ? <button type="button" className="btn warn full" onClick={onBuild}><span className="b"><span className="i"><Icon name="bolt" />Build &amp; install queued styles</span></span></button>
+                    : <span className="hint">New styles reach the saber with the next Build &amp; Install{sel.kb != null ? `, and cost about ${sel.kb.toFixed(1)} KB of firmware space once` : ''}.{colourCount ? ' The colours you tried go with it.' : ''}</span>}
                 </>
               )}
               {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : 'x'} /><span>{note.text}</span></div>}

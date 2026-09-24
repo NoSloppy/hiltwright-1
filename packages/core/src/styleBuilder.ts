@@ -205,7 +205,7 @@ export const BLOCKS: Record<'base' | 'effect' | 'transition', BlockDef[]> = { ba
 export function newBlock(def: BlockDef): Block { return { kind: def.kind, params: { ...def.defaults } }; }
 
 /** A fresh style: a steady blue blade with the usual effects and a plain wipe. */
-export function defaultStyle(name = 'My look'): StyleDoc {
+export function defaultStyle(name = 'My style'): StyleDoc {
   const e = (k: string) => newBlock(EFFECTS.find((x) => x.kind === k)!);
   return { version: 1, name, base: newBlock(BASES[0]), effects: [e('blast'), e('clash'), e('lockup'), e('lightning'), e('drag'), e('stab')], ignition: newBlock(TRANSITIONS[0]), retraction: newBlock(TRANSITIONS[0]) };
 }

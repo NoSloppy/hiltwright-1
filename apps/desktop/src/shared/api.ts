@@ -74,6 +74,22 @@ export interface FontEntry {
   report: FontReport;
 }
 
+export interface FontMeta { name: string; maker: string; notes: string; added: string; from?: string; /** A set the maker released together. */ bundle?: string }
+/** Someone credited for a font or a look, with their logo (a data URL) and link when the owner added them. */
+export interface ContributorInfo { name: string; logo: string | null; url: string | null }
+export interface FontSound { path: string; effect: string; kind: 'mono' | 'poly' | 'shared' | 'other'; seconds: number | null; size: number }
+export interface FontSupport { type: FontReport['type']; smoothSwing: boolean; effects: string[]; special: string[]; tracks: number }
+export interface LibraryFont { folder: string; meta: FontMeta; report: FontReport; support: FontSupport; bytes: number }
+export interface LibraryFontDetail extends LibraryFont { sounds: FontSound[]; tracks: FontSound[] }
+export interface ImportResult { added: string[]; skipped: { name: string; why: string }[] }
+export interface FontLibraryStatus {
+  root: string;
+  /** The library is in its default place, userData/fonts. */
+  isDefault: boolean;
+  /** A folder chosen as the old "font bank", offered once for import. */
+  legacyBank: string | null;
+}
+
 export interface XenoFontInfo {
   slot: string;
   path: string;
@@ -181,19 +197,54 @@ export interface HiltwrightApi {
     listFonts(root: string): Promise<FontEntry[]>;
     /** Flush and dismount the card's volume, as 'Safely remove' does. Before the saber takes its card back. */
     eject(root: string): Promise<{ ok: boolean; detail: string }>;
-    /** A font's playable sounds, from a known card or the font bank. Slow over the saber's USB link. */
+    /** A font's playable sounds, from a known card. Slow over the saber's USB link. */
     readFont(root: string, fontName: string): Promise<FontSounds>;
+    /** Progress of readFont and fontLibrary.readFont. */
     onReadFontProgress(cb: (p: { file: string; done: number; total: number }) => void): () => void;
-    /** The folder of fonts on this computer used when no card is about, or null. */
-    fontBank(): Promise<string | null>;
-    pickFontBank(): Promise<string | null>;
-    bankFonts(): Promise<FontEntry[]>;
     listTracks(root: string): Promise<{ name: string; size: number }[]>;
     /** The Fett263 voice pack in the card's common folder. */
     voicePack(root: string): Promise<VoicePackStatus>;
     /** Ask the user for a font folder on this computer and check it without copying. */
     pickFont(): Promise<FontEntry | null>;
     copyFont(src: string, root: string, replace: boolean): Promise<FontEntry>;
+  };
+  /** Sound fonts the owner added to this computer, in a folder they can move (default userData/fonts). */
+  fontLibrary: {
+    status(): Promise<FontLibraryStatus>;
+    list(): Promise<LibraryFont[]>;
+    /** One font with every sound and track in it. */
+    detail(folder: string): Promise<LibraryFontDetail>;
+    setMeta(folder: string, patch: Partial<Pick<FontMeta, 'name' | 'maker' | 'notes' | 'bundle'>>): Promise<LibraryFont>;
+    /** Moves the font's folder to the recycle bin. */
+    remove(folder: string): Promise<void>;
+    /** The bytes of one sound or track (a path from detail()), to play. */
+    readSound(folder: string, path: string): Promise<ArrayBuffer>;
+    /** The playable sounds, for the demo room's font engine. Progress arrives through sd.onReadFontProgress. */
+    readFont(folder: string): Promise<FontSounds>;
+    copyToCard(folder: string, root: string, replace: boolean): Promise<FontEntry>;
+    /** Ask for .zip packages, or for folders, and copy the fonts found in them into the library. Null when cancelled. */
+    addZip(): Promise<ImportResult | null>;
+    addFolder(): Promise<ImportResult | null>;
+    importLegacy(): Promise<ImportResult | null>;
+    dismissLegacy(): Promise<FontLibraryStatus>;
+    /** Ask for a new location; offers to move the fonts there. */
+    chooseRoot(): Promise<FontLibraryStatus>;
+    resetRoot(): Promise<FontLibraryStatus>;
+    /** Open the library folder, or one font's folder, in the file manager. */
+    open(folder?: string): Promise<void>;
+    onProgress(cb: (line: string) => void): () => void;
+  };
+  /** Font makers and look authors, credited with a logo and a link. Shared by the font library and the looks. */
+  contributors: {
+    /** Everyone given a logo or a link. Names without either are only on the fonts and looks themselves. */
+    list(): Promise<ContributorInfo[]>;
+    /** Ask for an image and make it the person's logo. Null when cancelled. */
+    setLogo(name: string): Promise<ContributorInfo | null>;
+    clearLogo(name: string): Promise<void>;
+    /** An http(s) address, or '' to drop it. */
+    setUrl(name: string, url: string): Promise<void>;
+    /** Open the person's saved link in the browser. */
+    open(name: string): Promise<void>;
   };
   packs: {
     list(): Promise<PackInfo[]>;

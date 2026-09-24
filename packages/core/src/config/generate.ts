@@ -109,10 +109,10 @@ export function validateModel(m: SaberConfigModel): string[] {
   }
   for (const [pin, n] of dataPins) if (n > 1) errors.push(`${pin} is used by ${n} separate strips. Chain them or use different data pins.`);
   const known = new Set(modelLooks(m).map((l) => l.id));
-  m.presets.forEach((p, pi) => (p.looks ?? []).forEach((id, bi) => { if (id && !known.has(id)) errors.push(`Preset ${pi + 1}, blade ${bi + 1}: unknown look "${id}".`); }));
+  m.presets.forEach((p, pi) => (p.looks ?? []).forEach((id, bi) => { if (id && !known.has(id)) errors.push(`Preset ${pi + 1}, blade ${bi + 1}: unknown style "${id}".`); }));
   for (const l of m.looks ?? []) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(l.id)) errors.push(`Look id "${l.id}" must be letters, digits and underscores.`);
-    if (!l.code.trim()) errors.push(`Look "${l.name}" has no style code.`);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(l.id)) errors.push(`Style id "${l.id}" must be letters, digits and underscores.`);
+    if (!l.code.trim()) errors.push(`Style "${l.name}" has no style code.`);
   }
   const variants = m.bladeId?.variants ?? [];
   if (variants.length) {
@@ -189,7 +189,7 @@ export function generateConfig(m: SaberConfigModel): GeneratedConfig {
   if (abilityLooks.length) {
     const names = abilityLooks.map((l) => `"${l.name}"`).join(', ');
     if (m.prop === 'fett263') { defines.push('FETT263_SPECIAL_ABILITIES'); warnings.push(`${names} use${abilityLooks.length > 1 ? '' : 's'} special abilities: FETT263_SPECIAL_ABILITIES added, so hold Power and turn the hilt to use them.`); }
-    else if (m.prop !== 'bc') warnings.push(`${names} use${abilityLooks.length > 1 ? '' : 's'} special abilities, which the ${m.prop} prop has no gesture for; that part of the look will not trigger on this saber.`);
+    else if (m.prop !== 'bc') warnings.push(`${names} use${abilityLooks.length > 1 ? '' : 's'} special abilities, which the ${m.prop} prop has no gesture for; that part of the style will not trigger on this saber.`);
   }
   const manifest: GeneratedConfig['manifest'] = {
     hash: '',

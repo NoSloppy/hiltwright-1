@@ -3,7 +3,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { VoicePackStatus } from '@hiltwright/core';
-import type { CardInfo, FontEntry } from '../../shared/api';
+import type { CardInfo, FontEntry, LibraryFont } from '../../shared/api';
+import type { Workspace } from './workspace';
 import type { Board } from './board';
 import { XenoImport } from './XenoImport';
 import { Icon } from './Icon';
@@ -15,7 +16,7 @@ function mb(bytes: number | null): string {
   return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${(bytes / 1e6).toFixed(0)} MB`;
 }
 
-export function Fonts({ board }: { board: Board }) {
+export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (page: 'library') => void }) {
   const [cards, setCards] = useState<CardInfo[]>([]);
   const [card, setCard] = useState<CardInfo | null>(null);
   const [fonts, setFonts] = useState<FontEntry[]>([]);
@@ -25,6 +26,9 @@ export function Fonts({ board }: { board: Board }) {
   const [message, setMessage] = useState<{ tone: '' | 'green' | 'amber' | 'red'; text: string } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [voice, setVoice] = useState<VoicePackStatus | null>(null);
+  const [library, setLibrary] = useState<LibraryFont[]>([]);
+  const [copyingNeeded, setCopyingNeeded] = useState<string | null>(null);
+  useEffect(() => { void api().fontLibrary.list().then(setLibrary).catch(() => setLibrary([])); }, []);
   // The saber's own card over USB. Hiltwright firmware carries a mass-storage interface, but ProffieOS only hands
   // the card over when asked ('sd 1'): the blade goes off, idle sounds stop, the card is released and Windows
   // mounts it as a drive. 'sd 0' takes it back. While the host has it, the saber cannot play from it.
@@ -104,6 +108,26 @@ export function Fonts({ board }: { board: Board }) {
     } finally { setBusy(false); }
   };
 
+  // The fonts this saber's presets name, and where each one is: on the card, in the library ready to copy, or nowhere.
+  const needed = [...new Set((ws.model?.presets ?? []).map((p) => p.font.split(';')[0]?.trim() ?? '').filter((f) => f && f.toLowerCase() !== 'common'))];
+  const onCard = (f: string) => fonts.some((x) => x.name.toLowerCase() === f.toLowerCase());
+  const inLibrary = (f: string) => library.find((x) => x.folder.toLowerCase() === f.toLowerCase()) ?? null;
+  const copyable = needed.filter((f) => !onCard(f) && inLibrary(f));
+  const copyNeeded = async (list: string[]) => {
+    if (!card) return;
+    setBusy(true); setMessage(null);
+    const done: string[] = []; const failed: string[] = [];
+    try {
+      for (const f of list) {
+        const lib = inLibrary(f); if (!lib) continue;
+        setCopyingNeeded(f);
+        try { await api().fontLibrary.copyToCard(lib.folder, card.root, false); done.push(f); } catch (err) { failed.push(`${f}: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}`); }
+      }
+      setMessage(failed.length ? { tone: done.length ? 'amber' : 'red', text: `${done.length ? `Copied ${done.join(', ')}. ` : ''}Not copied: ${failed.join('; ')}` } : { tone: 'green', text: `Copied ${done.join(', ')} from the font library to the card.` });
+      await scan();
+    } finally { setCopyingNeeded(null); setBusy(false); }
+  };
+
   const issues = fonts.flatMap((f) => f.report.issues.map((i) => ({ font: f.name, ...i })));
   const sel = fonts.find((f) => f.name === selected) ?? null;
 
@@ -159,7 +183,27 @@ export function Fonts({ board }: { board: Board }) {
           </div>
         </section>
 
-        <aside className="col" style={{ gap: 20, minHeight: 0 }}>
+        <aside className="col" style={{ gap: 20, minHeight: 0, overflow: 'auto' }}>
+          {needed.length > 0 && (
+            <section className="panel" aria-label="Fonts the presets use">
+              <div className="ph"><h2>Fonts the presets use</h2>{card && copyable.length > 1 && <button type="button" className="btn sm pri" disabled={busy} onClick={() => void copyNeeded(copyable)}><span className="b"><span className="i"><Icon name="sd" />Copy all {copyable.length}</span></span></button>}</div>
+              <div className="list" style={{ maxHeight: 260, overflow: 'auto' }}>
+                {needed.map((f) => {
+                  const lib = inLibrary(f);
+                  return (
+                    <div key={f} className="li" style={{ minHeight: 38 }}>
+                      <span className="col grow" style={{ gap: 0 }}><span className="small ellip" style={{ fontWeight: 600 }}>{f}</span>{lib && lib.meta.name !== lib.folder && <span className="hint ellip" style={{ fontSize: 11.5 }}>{lib.meta.name}{lib.meta.maker ? `, ${lib.meta.maker}` : ''}</span>}</span>
+                      {!card ? (lib ? <span className="chip ok"><Icon name="check" />In library</span> : <span className="chip" title="Put the card in to see whether it is there">Card not checked</span>)
+                        : onCard(f) ? <span className="chip ok"><Icon name="check" />On the card</span>
+                        : lib ? <button type="button" className="btn sm" disabled={busy} onClick={() => void copyNeeded([f])}><span className="b"><span className="i">{copyingNeeded === f ? 'Copying…' : 'Copy from library'}</span></span></button>
+                        : <span className="chip err" title="Not on the card and not in the font library"><Icon name="x" />Missing</span>}
+                    </div>
+                  );
+                })}
+              </div>
+              {card && needed.some((f) => !inLibrary(f) && !onCard(f)) && <div className="pb hint" style={{ paddingTop: 10 }}>A font marked missing has to reach the card before the saber can play that preset. <button type="button" className="holo" onClick={() => go('library')}>Add it to the Font library</button>, then copy it from here.</div>}
+            </section>
+          )}
           <section className="panel" aria-label="Add a font">
             <div className="ph"><h2>Add a font</h2>{picked && (picked.report.issues.length ? <span className="chip warn"><Icon name="warn" />{picked.report.issues.length} issue{picked.report.issues.length > 1 ? 's' : ''}</span> : <span className="chip ok"><Icon name="check" />Looks good</span>)}</div>
             <div className="pb col" style={{ gap: 12 }}>
@@ -176,7 +220,7 @@ export function Fonts({ board }: { board: Board }) {
                 </>
               ) : (
                 <>
-                  <p className="hint">Choose a font folder on this computer. Hiltwright checks the files before anything is copied. Your originals are never changed.</p>
+                  <p className="hint">Choose a font folder on this computer. Hiltwright checks the files before anything is copied. Your originals are never changed. Fonts you keep in the <button type="button" className="holo" onClick={() => go('library')}>Font library</button> can be copied from there.</p>
                   <button type="button" className="btn" disabled={busy || !card} onClick={() => void pick()}><span className="b"><span className="i"><Icon name="import" />Choose folder</span></span></button>
                 </>
               )}

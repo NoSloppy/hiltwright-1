@@ -37,11 +37,11 @@ export interface BuildResult {
 /** Turn compiler output into something a saber owner can act on. */
 export function translateErrors(stderr: string, presetNames: string[]): string[] {
   const out: string[] = [];
-  if (/will not fit in region ['`]FLASH['`]|region ['`]FLASH['`] overflowed/i.test(stderr)) out.push('The firmware is too big for this board. Remove a look or two, or reuse looks with different colours instead of adding new ones.');
+  if (/will not fit in region ['`]FLASH['`]|region ['`]FLASH['`] overflowed/i.test(stderr)) out.push('The firmware is too big for this board. Remove a style or two, or reuse styles with different colours instead of adding new ones.');
   if (/Please select Proffieboard V(\d)/i.test(stderr)) out.push(`This config is for a Proffieboard V${/Please select Proffieboard V(\d)/i.exec(stderr)![1]}. Check the board type in the saber's setup.`);
   const conflict = /#error (\S+) cannot be combined with (\S+)/i.exec(stderr);
   if (conflict) out.push(`Two button options conflict: ${conflict[1]} and ${conflict[2]}.`);
-  if (/cannot convert 'const char\*' to 'StyleFactory\*'/i.test(stderr)) out.push('A preset has fewer looks than the saber has blades. Every preset needs one look per blade.');
+  if (/cannot convert 'const char\*' to 'StyleFactory\*'/i.test(stderr)) out.push('A preset has fewer styles than the saber has blades. Every preset needs one style per blade.');
   if (/cannot convert 'Preset\*' to 'BladeBase\*'/i.test(stderr) && !out.length) out.push('The blade table and the presets do not line up. Check the blade count.');
   // The compiler failing to open one of its own files is an install problem, not a config problem.
   if (/(arm-none-eabi-gcc|arduino-data)[^\n]*fatal error: [^\n:]+: No such file or directory/i.test(stderr) || /cannot execute '[^']+'/i.test(stderr)) {

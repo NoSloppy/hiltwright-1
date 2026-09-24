@@ -6,6 +6,7 @@ export * from './lookLibrary';
 export { BladeSim, CLASH_G, PROPS, propBehaviour, type PropBehaviour, SIMULATED_LOOKS, canSimulateLook, registerStyleSim, unregisterStyleSim, prims, type EffectType, type LockupType, type ColorFn, type SimEffect } from './sim';
 export * from './styleBuilder';
 export * from './styleTree';
+export * from './layerCard';
 export { registerLookSim } from './lookSim';
 export * from './banks';
 export * from './voicepack';

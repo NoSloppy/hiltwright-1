@@ -88,8 +88,8 @@ export function bankProblems(bank: PresetBank, blades: readonly { role: BladeRol
     if (!p.name.trim()) out.push(`Preset ${i + 1} has no name.`);
     if (!p.font.trim()) out.push(`"${p.name || i + 1}" has no font.`);
     for (const [role, id] of Object.entries(p.looks)) {
-      if (id && !known.has(id)) out.push(`"${p.name || i + 1}": look "${id}" is not in the library any more.`);
-      if (id && !roles.has(role as BladeRole)) out.push(`"${p.name || i + 1}" sets a look for a ${role} blade, which this saber does not have; it will be ignored.`);
+      if (id && !known.has(id)) out.push(`"${p.name || i + 1}": style "${id}" is not in the library any more.`);
+      if (id && !roles.has(role as BladeRole)) out.push(`"${p.name || i + 1}" sets a style for a ${role} blade, which this saber does not have; it will be ignored.`);
     }
   });
   return out;

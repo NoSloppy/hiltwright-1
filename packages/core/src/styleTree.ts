@@ -103,7 +103,11 @@ export function defaultFor(kind: Kind, def?: string | null): Node {
 export function newNode(name: string): Node {
   const e = CATALOGUE[name];
   if (!e) return { name, args: [] };
-  return { name, args: e.params.filter((p) => !e.variadic || p !== e.params[e.params.length - 1] || e.params.length === 1).map((p) => defaultFor(p.kind, p.default)) };
+  const params = e.params.filter((p) => !e.variadic || p !== e.params[e.params.length - 1] || e.params.length === 1);
+  // A default can name an earlier parameter (LockupL's DRAG_COLOR defaults to LOCKUP): it takes that one's value.
+  const args: Node[] = [];
+  params.forEach((p) => { const same = params.findIndex((q) => q.name === p.default); args.push(same >= 0 && same < args.length ? cloneNode(args[same]) : defaultFor(p.kind, p.default)); });
+  return { name, args };
 }
 
 // ---------------- run on the simulator ----------------
@@ -185,7 +189,7 @@ function substitute(n: Node, bind: Map<string, Node | Node[]>): Node {
 }
 
 interface TrFn { begin(): void; run(c: Ctx): void; done(): boolean; get(led: number, a: Px, b: Px): Px }
-type Detector = { run(c: Ctx): boolean; pos: number; wavnum: number; strength: number; at: number };
+type Detector = { run(c: Ctx): boolean; pos: number; wavnum: number; strength: number; at: number; soundLength?: number };
 
 export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalReport } {
   const unsupported = new Set<string>(); const approximate = new Set<string>();
@@ -290,6 +294,8 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
 
   // ---- effects, read off the simulator's bus the way OneshotEffectDetector does: the newest match, once ----
   const busName = (effect: Node | undefined): string => { const n = (effect?.name ?? 'EFFECT_NONE').replace(/^SaberBase::/, ''); return n === 'EFFECT_CLASH' ? 'clash' : n === 'EFFECT_BLAST' ? 'blast' : n === 'EFFECT_STAB' ? 'stab' : n; };
+  // The effect the last detector to fire saw: what WavLen<> with no effect reads (last_detected_blade_effect).
+  let lastDetected: SimEffect | null = null;
   const detector = (effect: Node | undefined): Detector => {
     const type = busName(effect); const any = type === 'EFFECT_NONE'; const alsoStab = type === 'clash' && !handlesStab;
     let lastSeq = 0;
@@ -297,7 +303,8 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
       let found: SimEffect | null = null;
       for (const e of c.effects) if ((any || e.type === type || (alsoStab && e.type === 'stab')) && e.seq > lastSeq) found = e;
       if (!found) return false;
-      lastSeq = found.seq; d.pos = found.pos; d.wavnum = found.wavnum; d.strength = found.strength; d.at = found.at;
+      lastSeq = found.seq; d.pos = found.pos; d.wavnum = found.wavnum; d.strength = found.strength; d.at = found.at; d.soundLength = found.soundLength;
+      lastDetected = found;
       return true;
     } };
     return d;
@@ -423,7 +430,13 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
       case 'SwingAccelerationX': case 'SwingAcceleration': { approx('SwingAcceleration'); const max = fn(a[0], 130); let v = 0; let lastSwing = 0; let last = -1; return { run(c) { max.run(c); const dt = last < 0 ? 0 : (c.now - last) / 1000; last = c.now; const acc = dt > 0 ? Math.abs(c.swing - lastSwing) / dt / 100 : 0; lastSwing = c.swing; v = clamp(Math.round((acc / Math.max(1, max.get(0))) * 32768), 0, 32768); }, get: () => v }; }
       case 'TwistAcceleration': { approx('TwistAcceleration'); const max = num(a[0], 90); let v = 0; let lastTwist = 0; let last = -1; return { run(c) { const dt = last < 0 ? 0 : (c.now - last) / 1000; last = c.now; const acc = dt > 0 ? Math.abs(c.twist - lastTwist) / dt / 10 : 0; lastTwist = c.twist; v = clamp(Math.round(((acc * 32768) / 360) / Math.max(1, max)), 0, 32768); }, get: () => v }; }
       case 'MarbleF': { approx('MarbleF'); const offset = fn(a[0], 0); const friction = fn(a[1], 3000); const accel = fn(a[2], 0); const gravity = fn(a[3], 32768); let pos = 0; let speed = 0; let last = -1; let v = 0; return { run(c) { offset.run(c); friction.run(c); accel.run(c); gravity.run(c); const dt = last < 0 ? 0.001 : Math.min(1, (c.now - last) / 1000); last = c.now; const rad = (pos + offset.get(0) / 32768) * Math.PI * 2; const tilt = ((c.angle - 16384) / 16384) * (Math.PI / 2); const downY = Math.cos(tilt); const downZ = -Math.sin(tilt); let acc = (downY * Math.sin(rad) + downZ * Math.cos(rad)) * (gravity.get(0) / 32768); acc += accel.get(0) / 32768; acc -= (speed * friction.get(0)) / 32768; speed += acc * dt; pos = (((pos + speed * dt) % 1) + 1) % 1; v = Math.trunc(pos * 32768); }, get: () => v }; }
-      case 'WavLen': approx('WavLen'); return P.constInt(1000);
+      case 'WavLen': {
+        // The length of the sound the font played for the effect, in ms. Without a font playing there is no sound
+        // to measure, so a typical one second stands in.
+        const det = a[0] ? detector(a[0]) : null; let v = 0; let seen = -1;
+        const take = (e: { soundLength?: number }) => { v = e.soundLength != null ? Math.round(e.soundLength * 1000) : 1000; };
+        return { run(c) { if (det) { if (det.run(c)) take(det); } else if (lastDetected && lastDetected.seq !== seen) { seen = lastDetected.seq; take(lastDetected); } }, get: () => v };
+      }
       case 'ClashImpactFX': { approx('ClashImpactF'); const lo = fn(a[0], 200); const hi = fn(a[1], 1600); let v = 0; let g = CLASH_G.soft; return { run(c) { lo.run(c); hi.run(c); for (const e of c.effects) if (e.type === 'clash' || e.type === 'stab') g = e.strength || g; v = clamp(Math.trunc(((g * 100 - lo.get(0)) * 32768) / Math.max(1, hi.get(0))), 0, 32768); }, get: () => v }; }
       case 'EffectPosition': { const det = detector(a[0]); let v = 0; return { run(c) { if (det.run(c)) v = Math.round(det.pos * 32768); }, get: () => v }; }
       case 'EffectRandomF': { const det = detector(a[0]); let v = 0; return { run(c) { if (det.run(c)) v = c.rnd(32768); }, get: () => v }; }
@@ -569,7 +582,7 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
 // ---------------- as a saved look ----------------
 
 /** A look kept as a tree: anything ProffieOS's Layers<> can express. */
-export interface TreeDoc { version: 2; name: string; tree: Node }
+export interface TreeDoc { version: 2; name: string; tree: Node; /** Names given to the layers in the editor, by position in Layers<> (the base is 0). */ labels?: (string | null)[] }
 
 export function isTreeDoc(v: unknown): v is TreeDoc {
   const d = v as TreeDoc;

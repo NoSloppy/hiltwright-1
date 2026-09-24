@@ -11,7 +11,8 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "dist": "electron-vite build && electron-builder --win --publish never",
-    "test": "vitest run"
+    "test": "vitest run",
+    "icons": "electron scripts/icons.mjs"
   },
   "dependencies": {
     "@hiltwright/core": "*",
@@ -48,9 +49,14 @@
       {
         "from": "resources/builtin",
         "to": "builtin"
+      },
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",

@@ -14,6 +14,9 @@ import type { Board } from './board';
 import { Icon } from './Icon';
 import { ROLE_META } from './hardwareModel';
 import type { Workspace } from './workspace';
+import type { LibraryFont } from '../../shared/api';
+import { FontPicker } from './FontPicker';
+import { Select } from './Select';
 
 const api = () => window.hiltwright;
 type ModelPreset = SaberConfigModel['presets'][number];
@@ -22,7 +25,7 @@ const joinFont = (folder: string, common: boolean) => (common && folder !== 'com
 const when = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
 const clean = (name: string) => name.replace(/\s*\n\s*/g, ' ');
 
-export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (page: 'looks' | 'build' | 'wiring' | 'armory' | 'fonts') => void }) {
+export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (page: 'looks' | 'build' | 'wiring' | 'armory' | 'fonts' | 'library') => void }) {
   const { saber, info, model, live } = ws;
   const staged = !!model?.presetsFrom;
   // Live: the saber's own list is what is shown, so each change goes to it at once. Staged edits win until installed.
@@ -36,6 +39,8 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
   const [note, setNote] = useState<{ tone: 'green' | 'amber' | 'red'; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pending, setPending] = useState<Record<string, string>>({});
+  const [library, setLibrary] = useState<LibraryFont[]>([]);
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     void api().looks.list().then((ls) => { for (const l of ls) registerLookSim(l); setSaved(ls); });
@@ -44,7 +49,15 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
       const f = new Set<string>(); const t = new Set<string>();
       for (const s of board.library) { for (const x of s.fonts) if (x !== 'common') f.add(x); for (const x of s.tracks) t.add(x); }
       if (info) { for (const x of info.fonts) if (x !== 'common') f.add(x); for (const x of info.tracks) t.add(x); }
-      try { for (const x of await api().sd.bankFonts()) f.add(x.name); } catch { /* no bank */ }
+      // Fonts in the library can be named before they are on the card; Fonts & SD copies them over.
+      try {
+        const lib = await api().fontLibrary.list();
+        setLibrary(lib);
+        for (const x of lib) {
+          f.add(x.folder);
+          if (x.support.tracks) for (const tr of (await api().fontLibrary.detail(x.folder)).tracks) t.add(`${x.folder}/${tr.path}`);
+        }
+      } catch { /* library unreadable */ }
       setFonts([...f].sort((a, b) => a.localeCompare(b))); setTracks([...t].sort());
     })();
   }, [saber?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -130,9 +143,17 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
   const trackChoices = [...new Set(['', ...tracks, ...(cur ? [cur.track] : [])])];
   const cf = cur ? splitFont(cur.font) : { folder: '', common: true };
   const busy = board.busy;
+  // The preset's font as the library knows it, and whether the saber's card has it (as last read).
+  const libFont = library.find((f) => f.folder.toLowerCase() === cf.folder.toLowerCase()) ?? null;
+  const cardFonts = info.fonts.length ? new Set(info.fonts) : null;
+  const fontOnCard = cardFonts && cf.folder ? [...cardFonts].some((x) => x.toLowerCase() === cf.folder.toLowerCase()) : null;
 
   return (
     <>
+      {picking && cur && (
+        <FontPicker fonts={library} current={cf.folder} onCard={cardFonts} onClose={() => setPicking(false)} onManage={() => go('library')}
+          onPick={(f) => { setPicking(false); void editPreset({ font: joinFont(f.folder, cf.common) }, `Font → ${f.folder}`); }} />
+      )}
       {staged && (
         <div className="note amber"><Icon name="info" /><span>{live ? `These ${presets.length} presets are staged (${model.presetsFrom!.name}, ${when(model.presetsFrom!.at)}) and will replace the ${info.presets.length} on ${saber.name} at the next install; a snapshot of the saber's own is kept first. ` : `These presets are staged (${model.presetsFrom!.name}, ${when(model.presetsFrom!.at)}) and go on with the next install. `}{live && <button type="button" className="holo" onClick={() => void dropStaged()}>Discard them and show the saber's own</button>}</span></div>
       )}
@@ -172,7 +193,17 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
             <div className="pb col" style={{ gap: 16, overflowY: 'auto', overflowX: 'hidden' }}>
               <div className="grid2">
                 <CommitField label="Name" value={cur.name} disabled={busy} onCommit={(name) => void editPreset({ name }, 'Rename')} />
-                <CommitField label="Sound font" value={cf.folder} list="hw-fonts" choices={fontFolders} placeholder="Folder name on the card" disabled={busy} onCommit={(folder) => void editPreset({ font: joinFont(folder, cf.common) }, `Font → ${folder}`)} />
+                <div className="col" style={{ gap: 4, minWidth: 0 }}>
+                  <CommitField label="Sound font" value={cf.folder} list="hw-fonts" choices={fontFolders} placeholder="Folder name on the card" disabled={busy} onCommit={(folder) => void editPreset({ font: joinFont(folder, cf.common) }, `Font → ${folder}`)} />
+                  <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                    <span className="hint ellip grow" title={libFont?.meta.notes || undefined}>
+                      {cf.folder && (libFont ? <>{libFont.meta.name}{libFont.meta.maker ? ` by ${libFont.meta.maker}` : ''}</> : 'Not in the font library')}
+                      {fontOnCard === true && <span className="green"> · on the card</span>}
+                      {fontOnCard === false && <> · <span className="amber">not on the card</span>{libFont && <>, <button type="button" className="holo" onClick={() => go('fonts')}>copy it over</button></>}</>}
+                    </span>
+                    <button type="button" className="holo small nowrap" disabled={busy} title="Choose from the fonts in your font library" onClick={() => setPicking(true)}>Choose from library</button>
+                  </div>
+                </div>
                 <CommitField label="Track" value={cur.track} list="hw-tracks" choices={trackChoices.filter(Boolean)} placeholder="tracks/name.wav, or none" mono disabled={busy} onCommit={(track) => void editPreset({ track }, `Track → ${track || 'none'}`)} />
                 <label className="row" style={{ gap: 10, alignSelf: 'end', minHeight: 38, fontSize: 13, color: 'var(--dim)' }}>
                   <button type="button" className={`tog ${cf.common ? 'on' : ''}`} role="switch" aria-checked={cf.common} disabled={busy} aria-label="Also use the common folder" onClick={() => void editPreset({ font: joinFont(cf.folder, !cf.common) }, cf.common ? 'Drop common fallback' : 'Add common fallback')}><i /></button>
@@ -181,7 +212,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
               </div>
 
               <div className="col" style={{ gap: 8 }}>
-                <div className="row between"><span className="label">Looks, one per blade</span><button type="button" className="holo small" onClick={() => go('looks')}>Browse and try looks</button></div>
+                <div className="row between"><span className="label">Styles, one per blade</span><button type="button" className="holo small" onClick={() => go('looks')}>Browse and try styles</button></div>
                 {model.blades.map((b, k) => {
                   const id = cur.looks?.[k] ?? null;
                   const look = lookById(id);
@@ -197,11 +228,11 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
                       <div className="row" style={{ gap: 10 }}>
                         <span className="small" style={{ width: 130, flex: 'none', fontWeight: 600 }}>{k + 1}. {label}</span>
                         <span className="input sans grow" style={{ height: 30 }}><span className="ellip">{shownLook ? shownLook.name : liveStyle ? `${liveStyle} (not built here)` : 'Saber’s default'}</span><span className="caret"><Icon name="down" /></span>
-                          <select value={shownLook?.id ?? ''} disabled={busy} aria-label={`Look for blade ${k + 1}, ${label}`} onChange={(e) => void setLook(k + 1, lookById(e.target.value), null)}>
+                          <Select value={shownLook?.id ?? ''} disabled={busy} aria-label={`Style for blade ${k + 1}, ${label}`} onChange={(e) => void setLook(k + 1, lookById(e.target.value), null)}>
                             <option value="">Saber's default</option>
                             <optgroup label="Hiltwright">{choices.filter((l) => l.source === 'starter').map((l) => <option key={l.id} value={l.id}>{l.name}{compiled.has(l.id) ? '' : live ? ' (needs a build)' : ''}</option>)}</optgroup>
-                            {choices.some((l) => l.source !== 'starter') && <optgroup label="Your looks">{choices.filter((l) => l.source !== 'starter').map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}{compiled.has(l.id) ? '' : live ? ' (needs a build)' : ''}</option>)}</optgroup>}
-                          </select></span>
+                            {choices.some((l) => l.source !== 'starter') && <optgroup label="Your styles">{choices.filter((l) => l.source !== 'starter').map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}{compiled.has(l.id) ? '' : live ? ' (needs a build)' : ''}</option>)}</optgroup>}
+                          </Select></span>
                         {shownLook && !onSaber && <span className="chip warn" title="Goes on with the next Build & Install"><Icon name="clock" />Queued</span>}
                         {shownLook && canSimulate(shownLook.id) && <div style={{ width: ROLE_META[b.role].kind === 'pixel' ? 150 : 24, flex: 'none' }}><BladePreview lookId={shownLook.id} args={args} leds={ROLE_META[b.role].kind === 'pixel' ? Math.min(60, Math.max(4, Math.round(b.pixels / 3))) : 1} dot={ROLE_META[b.role].kind !== 'pixel'} size="sm" /></div>}
                       </div>
@@ -219,13 +250,13 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
                               </label>
                             );
                           })}
-                          {args.size > 0 && <button type="button" className="holo small" disabled={busy} onClick={() => void setLook(k + 1, shownLook, null)}>Look's own colours</button>}
+                          {args.size > 0 && <button type="button" className="holo small" disabled={busy} onClick={() => void setLook(k + 1, shownLook, null)}>Style's own colours</button>}
                         </div>
                       )}
                     </div>
                   );
                 })}
-                <span className="hint">{isLive ? 'Looks already on the saber switch at once; a look it does not carry yet is queued for the next Build & Install, and its colours are written right after.' : 'Colours are written to the saber after the install.'}</span>
+                <span className="hint">{isLive ? 'Styles already on the saber switch at once; a style it does not carry yet is queued for the next Build & Install, and its colours are written right after.' : 'Colours are written to the saber after the install.'}</span>
               </div>
             </div>
           )}
@@ -251,7 +282,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
               </div>
               <div className="col" style={{ marginTop: 'auto', padding: '12px 18px', borderTop: '1px solid var(--line)', gap: 8 }}>
                 <button type="button" className="btn sm" disabled={!presets.length} onClick={() => void saveAsSet()}><span className="b"><span className="i"><Icon name="plus" />Save this list as a set</span></span></button>
-                <span className="hint">A set keeps names, fonts, tracks and the look for each kind of blade, so it fits any saber. Loading one replaces this saber's presets at the next install.</span>
+                <span className="hint">A set keeps names, fonts, tracks and the style for each kind of blade, so it fits any saber. Loading one replaces this saber's presets at the next install.</span>
               </div>
             </>
           )}

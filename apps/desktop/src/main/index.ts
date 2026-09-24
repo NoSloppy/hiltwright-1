@@ -1,7 +1,7 @@
 // Main process. Owns the window and grants the renderer Web Serial access to the Proffieboard.
 // The renderer never touches Node: contextIsolation on, sandbox on, a tiny preload API.
 
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, dialog, session } from 'electron';
 import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { registerIpc } from './ipc';
@@ -54,6 +54,8 @@ function createWindow(): void {
     minHeight: 700,
     backgroundColor: '#0a0e13',
     title: 'Hiltwright',
+    // The window and taskbar icon (the installed app also carries it in its .exe, from build/icon.ico).
+    icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,
     // The app's header row is the title bar: draggable, with the caption buttons overlaid in the header's colours.
     titleBarStyle: 'hidden',
@@ -69,6 +71,15 @@ function createWindow(): void {
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
+  // The Style editor holds the window open while it has unsaved work (a beforeunload that asks to stay). Ask the owner.
+  win.webContents.on('will-prevent-unload', (e) => {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Unsaved style', buttons: ['Stay', 'Close without saving'], defaultId: 0, cancelId: 0, noLink: true,
+      message: 'Your style has changes that are not saved.',
+      detail: 'Stay to save them in the Style editor, or close and lose them.',
+    });
+    if (choice === 1) e.preventDefault(); // go ahead and close
+  });
   // Mirror renderer console output to the terminal so the walking skeleton can be checked headlessly.
   win.webContents.on('console-message', (event: unknown, ...rest: unknown[]) => {
     const details = (event as { message?: string; level?: string | number }) ?? {};

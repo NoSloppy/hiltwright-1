@@ -12,7 +12,9 @@ import type { Board } from './board';
 import type { FontEntry } from '../../shared/api';
 import { lookAtSlot } from '@hiltwright/core';
 import { listHilts, removeHilt, saveHilt } from './hiltStore';
+import { ContributorLogo, useContributors } from './credits';
 import type { Object3D } from 'three';
+import { Select } from './Select';
 
 // Hiltwright's own looks; the owner's saved looks (built or pasted) join them once loaded, when they can be simulated.
 /** The hilt the room opens with: a pack that ships inside the app. */
@@ -34,8 +36,9 @@ function loadScene(): SceneSettings {
 const HOLDS: { type: LockupType; label: string; key: string }[] = [{ type: 'normal', label: 'Lockup', key: 'l' }, { type: 'drag', label: 'Drag', key: 'd' }, { type: 'melt', label: 'Melt', key: 'm' }, { type: 'lb', label: 'Lightning', key: 'n' }];
 
 const api = () => window.hiltwright;
+const LIBRARY = 'library';
 
-export function Demo({ initialLook, board }: { initialLook?: string | null; board: Board }) {
+export function Demo({ initialLook, initialFont, board }: { initialLook?: string | null; initialFont?: string | null; board: Board }) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<DemoScene | null>(null);
   const [saved, setSaved] = useState<LookDef[]>([]);
@@ -66,9 +69,16 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
   useEffect(() => { try { localStorage.setItem('hiltwright.demo.lightOpen', lightOpen ? '1' : '0'); } catch { /* private mode */ } }, [lightOpen]);
   const [failed, setFailed] = useState<string | null>(null);
 
-  // ---- sound: a font from a card, the saber's card, or the font bank, played as the saber would ----
-  type Source = { kind: 'card' | 'bank' | 'pack'; root: string; label: string };
+  // ---- sound: a font from the font library, a card, the saber's card, or a pack, played as the saber would ----
+  type Source = { kind: 'card' | 'library' | 'pack'; root: string; label: string };
   const [sources, setSources] = useState<Source[]>([]);
+  // Library fonts go by their folder (what a preset names); the name the owner gave them is shown.
+  const [libNames, setLibNames] = useState<Record<string, string>>({});
+  const libraryEntries = async (): Promise<FontEntry[]> => {
+    const list = await api().fontLibrary.list();
+    setLibNames(Object.fromEntries(list.map((f) => [f.folder, f.meta.name])));
+    return list.map((f) => ({ name: f.folder, path: f.folder, report: f.report }));
+  };
   const [source, setSource] = useState<Source | null>(null);
   const [fonts, setFonts] = useState<FontEntry[]>([]);
   const [fontName, setFontName] = useState<string>('');
@@ -78,28 +88,31 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
   const [soundNote, setSoundNote] = useState<string | null>(null);
   const [volume, setVolume] = useState(() => { try { return Number(localStorage.getItem('hiltwright.demo.volume') ?? 0.8); } catch { return 0.8; } });
   const refreshSources = async () => {
-    const [cards, bank, found] = await Promise.all([api().sd.locate(), api().sd.fontBank(), api().packs.list().catch(() => [] as PackInfo[])]);
-    const next: Source[] = cards.filter((c) => c.proffie).map((c) => ({ kind: 'card' as const, root: c.root, label: `Card at ${c.root}` }));
-    if (bank) next.push({ kind: 'bank', root: bank, label: `Font bank (${bank.split(/[\\/]/).pop()})` });
+    const [cards, lib, found] = await Promise.all([api().sd.locate(), api().fontLibrary.list().catch(() => []), api().packs.list().catch(() => [] as PackInfo[])]);
+    // The library first: it is on this computer, so it loads in a moment where a card over USB takes a while.
+    const next: Source[] = lib.length ? [{ kind: 'library', root: LIBRARY, label: `Font library (${lib.length})` }] : [];
+    next.push(...cards.filter((c) => c.proffie).map((c) => ({ kind: 'card' as const, root: c.root, label: `Card at ${c.root}` })));
     if (found.some((p) => p.kind === 'font' && p.allow.demoPlayback)) next.push({ kind: 'pack', root: 'packs', label: 'Hiltwright fonts' });
     setSources(next);
     setSource((cur) => next.find((n) => n.root === cur?.root) ?? next[0] ?? null);
+    return next;
   };
-  useEffect(() => { void refreshSources(); }, []);
+  // Opened from the font library with a font chosen: switch to the library and load it.
+  useEffect(() => { void refreshSources().then((next) => { const lib = next.find((n) => n.kind === 'library'); if (initialFont && lib) { setSource(lib); void loadFont(initialFont, lib); } }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!source) { setFonts([]); return; }
     let live = true;
-    void (source.kind === 'pack' ? api().packs.list().then((ps) => ps.filter((p) => p.kind === 'font' && p.allow.demoPlayback).map((p) => ({ name: p.name, path: p.id, report: { files: p.sounds, bytes: 0, type: 'unknown' as const, effects: {}, issues: [] } }))) : source.kind === 'bank' ? api().sd.bankFonts() : api().sd.listFonts(source.root)).then((f) => { if (live) setFonts(f); }).catch(() => { if (live) setFonts([]); });
+    void (source.kind === 'pack' ? api().packs.list().then((ps) => ps.filter((p) => p.kind === 'font' && p.allow.demoPlayback).map((p) => ({ name: p.name, path: p.id, report: { files: p.sounds, bytes: 0, type: 'unknown' as const, effects: {}, issues: [] } }))) : source.kind === 'library' ? libraryEntries() : api().sd.listFonts(source.root)).then((f) => { if (live) setFonts(f); }).catch(() => { if (live) setFonts([]); });
     return () => { live = false; };
   }, [source?.root]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pickBank = async () => { const r = await api().sd.pickFontBank(); if (r) await refreshSources(); };
+  const addToLibrary = async () => { const r = await api().fontLibrary.addFolder(); if (r?.added.length) await refreshSources(); };
   const loadFont = async (name: string, from: Source | null = source) => {
     if (!from || !name) return;
     setFontName(name); setSoundNote(null);
     setLoading({ done: 0, total: 0, what: 'reading' });
     const off = api().sd.onReadFontProgress((p) => setLoading({ done: p.done, total: p.total, what: 'reading' }));
     try {
-      const sounds = from.kind === 'pack' ? await api().packs.font(fonts.find((f) => f.name === name)?.path ?? name) : await api().sd.readFont(from.root, name);
+      const sounds = from.kind === 'pack' ? await api().packs.font(fonts.find((f) => f.name === name)?.path ?? name) : from.kind === 'library' ? await api().fontLibrary.readFont(name) : await api().sd.readFont(from.root, name);
       off();
       const wasOn = engineRef.current?.isOn ?? false;
       engineRef.current?.dispose();
@@ -107,8 +120,9 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
       eng.setVolume(volume);
       engineRef.current = eng; setEngine(eng);
       if (sounds.skipped) setSoundNote(`${sounds.skipped} file${sounds.skipped === 1 ? '' : 's'} left out to stay under the memory cap.`);
-      eng.announce();
+      // A preset change while lit, as prop_base SetPreset does it: a fast on (fastout, no preon), then the font's name.
       if (wasOn) eng.ignite();
+      eng.announce();
     } catch (err) { off(); setSoundNote(`Could not load that font: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}`); }
     finally { setLoading(null); }
   };
@@ -136,10 +150,10 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
     const from = sources.find((sr) => fonts.some((f) => f.name === folder) && sr.root === source?.root) ?? source;
     // The font may live on a different source than the one selected: try each until one has it.
     for (const sr of [from, ...sources].filter((x): x is Source => !!x)) {
-      const list = sr.root === source?.root ? fonts : sr.kind === 'pack' ? (await api().packs.list().catch(() => [] as PackInfo[])).filter((p) => p.kind === 'font').map((p) => ({ name: p.name, path: p.id })) : await (sr.kind === 'bank' ? api().sd.bankFonts() : api().sd.listFonts(sr.root)).catch(() => []);
+      const list = sr.root === source?.root ? fonts : sr.kind === 'pack' ? (await api().packs.list().catch(() => [] as PackInfo[])).filter((p) => p.kind === 'font').map((p) => ({ name: p.name, path: p.id })) : await (sr.kind === 'library' ? libraryEntries() : api().sd.listFonts(sr.root)).catch(() => []);
       if (list.some((f) => f.name === folder)) { setSource(sr); await loadFont(folder, sr); return; }
     }
-    setSoundNote(`The font "${folder}" is not on any card or in the font bank here. Share the saber's card on Fonts & SD, or point the bank at a folder that has it.`);
+    setSoundNote(`The font "${folder}" is not in the font library or on any card here. Add it to the Font library, or share the saber's card on Fonts & SD.`);
   };
   const [control, setControl] = useState<ControlMode>(() => { try { return localStorage.getItem('hiltwright.demo.control') === 'steer' ? 'steer' : 'hold'; } catch { return 'hold'; } });
   const [look3d, setLook3d] = useState<SceneSettings>(loadScene);
@@ -163,7 +177,8 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
       setPacks(found);
       const packHilts: StoredHilt[] = found.filter((p) => p.kind === 'hilt').map((p) => {
         const kept = stored.find((h) => h.packId === p.id);
-        const entry = kept ?? { name: p.name, format: 'pack', data: new ArrayBuffer(0), fit: { ...DEFAULT_FIT, ...(p.fit ?? {}) }, packId: p.id, creator: p.creator };
+        // The credit always comes from the pack itself, so a re-credited pack shows its new creator even on a kept fit.
+        const entry = kept ? { ...kept, creator: p.creator } : { name: p.name, format: 'pack' as const, data: new ArrayBuffer(0), fit: { ...DEFAULT_FIT, ...(p.fit ?? {}) }, packId: p.id, creator: p.creator };
         return p.id === BUILT_IN_PACK ? { ...entry, name: 'Built-in' } : entry;
       });
       setHilts([...stored.filter((h) => !h.packId), ...packHilts]);
@@ -207,6 +222,13 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
     setHilts((all) => all.map((h) => (h.name === hilt.name ? next : h)));
     void saveHilt(next).catch(() => undefined);
   };
+  /** Credit a hilt the owner loaded to whoever made it. Kept with the hilt. */
+  const setHiltCreator = (h: StoredHilt, creator: string) => {
+    const { creator: _old, ...rest } = h;
+    const next: StoredHilt = creator ? { ...rest, creator } : rest;
+    setHilts((all) => all.map((x) => (x.name === h.name ? next : x)));
+    void saveHilt(next).catch(() => undefined);
+  };
   /** A loaded hilt is removed; a pack hilt goes back to the pack's own fit. */
   const forgetHilt = () => {
     if (!hilt) return;
@@ -239,10 +261,17 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
     room.setProp(propBehaviour(propKey));
     room.applySettings(look3d);
     room.onMotion = setMotion;
+    room.sound = {
+      preon: () => engineRef.current?.preon() ?? { preon: 0, out: 0 },
+      cancelPreon: () => engineRef.current?.cancelPreon(),
+      retract: () => engineRef.current?.retract() ?? { in: 0, postoff: 0 },
+    };
     room.onEvent = (ev) => {
       const eng = engineRef.current;
       if (!eng) return;
-      if (ev.kind === 'on') eng.ignite(); else if (ev.kind === 'off') eng.retract();
+      // An on or off that did not come through room.setOn (a style's FAST_ON / FAST_OFF) is a fast one: no preon,
+      // no pstoff. When it did, the engine has already been asked and these do nothing more.
+      if (ev.kind === 'on') eng.ignite(); else if (ev.kind === 'off') eng.retract(true);
       else if (ev.kind === 'clash' || ev.kind === 'blast' || ev.kind === 'stab') eng.effect(ev.kind);
       else if (ev.kind === 'lockup') { if (ev.type) eng.beginLockup(ev.type === 'normal' ? 'lock' : ev.type === 'melt' ? 'drag' : ev.type); else eng.endLockup(); }
       else if (ev.kind === 'sound') { if (propBehaviour(propKey).transitionSounds) eng.transition(ev.n); }
@@ -338,9 +367,9 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
                     <button type="button" role="tab" aria-selected={bladeTab === 'staff'} className={bladeTab === 'staff' ? 'on' : ''} style={{ height: 26, fontSize: 12, padding: '0 10px' }} onClick={() => setBladeTab('staff')}>Staff blade</button>
                   </div>
                 )}
-                <label className="field"><span className="label">{staff ? 'Staff blade look' : 'Look'}</span>
+                <label className="field"><span className="label">{staff ? 'Staff blade style' : 'Style'}</span>
                   <span className="input sans"><span className="ellip">{cur.name}</span><span className="caret"><Icon name="down" /></span>
-                    <select value={curId} aria-label={staff ? 'Staff blade look' : 'Look'} onChange={(e) => setId(e.target.value)}><optgroup label="Hiltwright">{STARTERS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</optgroup>{saved.length > 0 && <optgroup label="Your looks">{saved.map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}</option>)}</optgroup>}</select></span>
+                    <Select value={curId} aria-label={staff ? 'Staff blade style' : 'Style'} onChange={(e) => setId(e.target.value)}><optgroup label="Hiltwright">{STARTERS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</optgroup>{saved.length > 0 && <optgroup label="Your styles">{saved.map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}</option>)}</optgroup>}</Select></span>
                 </label>
                 <span className="hint" style={{ fontSize: 12 }}>{cur.description}</span>
                 {cols.length > 0 && (
@@ -364,12 +393,12 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
                 {presets.length > 0 && (
                   <div className="col" style={{ gap: 6, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
                     <span className="label">From {saber?.name ?? 'the saber'}</span>
-                    <div className="row" style={{ gap: 6 }} title="Set the look and the font from one of the saber's presets">
+                    <div className="row" style={{ gap: 6 }} title="Set the style and the font from one of the saber's presets">
                       <span className="input sans grow" style={{ height: 28, fontSize: 12 }}><span className="ellip">{presets[presetIndex]?.name.replace(/\s*\n\s*/g, ' ') ?? 'Preset'}</span><span className="caret"><Icon name="down" /></span>
-                        <select value={presetIndex} aria-label="Saber preset" onChange={(e) => setPresetIndex(Number(e.target.value))}>{presets.map((p, i) => <option key={i} value={i}>{i + 1}. {p.name.replace(/\s*\n\s*/g, ' ')}</option>)}</select></span>
+                        <Select value={presetIndex} aria-label="Saber preset" onChange={(e) => setPresetIndex(Number(e.target.value))}>{presets.map((p, i) => <option key={i} value={i}>{i + 1}. {p.name.replace(/\s*\n\s*/g, ' ')}</option>)}</Select></span>
                       <button type="button" className="chip" disabled={!!loading} onClick={() => void loadFromSaber(presetIndex)}><Icon name="play" />Load</button>
                     </div>
-                    <span className="hint" style={{ fontSize: 11.5 }}>The preset's look and its font, as they are on the saber.</span>
+                    <span className="hint" style={{ fontSize: 11.5 }}>The preset's style and its font, as they are on the saber.</span>
                   </div>
                 )}
               </>
@@ -381,12 +410,12 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
               <div className="col" style={{ gap: 6 }}>
                 <span className="label">Fonts from</span>
                 {sources.length === 0
-                  ? <span className="hint">No fonts to hand. Put a card in a reader, share the saber's card on Fonts &amp; SD, or <button type="button" className="holo" onClick={() => void pickBank()}>choose a folder of fonts</button> on this computer.</span>
+                  ? <span className="hint">No fonts to hand. Put a card in a reader, share the saber's card on Fonts &amp; SD, or <button type="button" className="holo" onClick={() => void addToLibrary()}>add a font folder</button> to the Font library.</span>
                   : (
                     <div className="row" style={{ gap: 6 }}>
                       <span className="input sans grow" style={{ height: 28, fontSize: 12 }}><span className="ellip">{source?.label ?? 'Source'}</span><span className="caret"><Icon name="down" /></span>
-                        <select value={source?.root ?? ''} aria-label="Where the fonts are" onChange={(e) => setSource(sources.find((x) => x.root === e.target.value) ?? null)}>{sources.map((x) => <option key={x.root} value={x.root}>{x.label}</option>)}</select></span>
-                      <button type="button" className="chip" title="Choose a folder of fonts on this computer" onClick={() => void pickBank()}><Icon name="import" /></button>
+                        <Select value={source?.root ?? ''} aria-label="Where the fonts are" onChange={(e) => setSource(sources.find((x) => x.root === e.target.value) ?? null)}>{sources.map((x) => <option key={x.root} value={x.root}>{x.label}</option>)}</Select></span>
+                      <button type="button" className="chip" title="Add a font folder to the Font library" onClick={() => void addToLibrary()}><Icon name="import" /></button>
                       <button type="button" className="chip" title="Look again for cards" onClick={() => void refreshSources()}><Icon name="undo" /></button>
                     </div>
                   )}
@@ -394,8 +423,8 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
               {source && (
                 <div className="col" style={{ gap: 6 }}>
                   <div className="row between"><span className="label">Font</span>{engine && <span className="hint" style={{ fontSize: 11.5 }}>{engine.hasSmoothSwing ? 'SmoothSwing' : 'no swing sounds'}</span>}</div>
-                  <span className="input sans" style={{ height: 28, fontSize: 12 }}><span className="ellip">{fontName || (fonts.length ? 'Pick a font' : 'No fonts here')}</span><span className="caret"><Icon name="down" /></span>
-                    <select value={fontName} aria-label="Sound font" disabled={!!loading} onChange={(e) => void loadFont(e.target.value)}><option value="">Pick a font</option>{fonts.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}</select></span>
+                  <span className="input sans" style={{ height: 28, fontSize: 12 }}><span className="ellip">{(fontName && (libNames[fontName] ?? fontName)) || (fonts.length ? 'Pick a font' : 'No fonts here')}</span><span className="caret"><Icon name="down" /></span>
+                    <Select value={fontName} aria-label="Sound font" disabled={!!loading} onChange={(e) => void loadFont(e.target.value)}><option value="">Pick a font</option>{fonts.map((f) => <option key={f.name} value={f.name}>{libNames[f.name] ?? f.name}</option>)}</Select></span>
                 </div>
               )}
               <label className="col" style={{ gap: 6 }}>
@@ -421,13 +450,13 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
             <>
               <label className="field"><span className="label">Prop file</span>
                 <span className="input sans"><span className="ellip">{prop.name}</span><span className="caret"><Icon name="down" /></span>
-                  <select value={propKey} aria-label="Prop file" onChange={(e) => setPropKey(e.target.value)}>{Object.keys(PROPS).map((k) => <option key={k} value={k}>{PROPS[k].name}{k === saberProp ? ' (this saber)' : ''}</option>)}</select></span>
+                  <Select value={propKey} aria-label="Prop file" onChange={(e) => setPropKey(e.target.value)}>{Object.keys(PROPS).map((k) => <option key={k} value={k}>{PROPS[k].name}{k === saberProp ? ' (this saber)' : ''}</option>)}</Select></span>
               </label>
               <ul className="col" style={{ gap: 4, margin: 0, paddingLeft: 16, fontSize: 12, color: 'var(--dim)' }}>
-                <li>{prop.stylesCanPower ? 'A look can turn the saber off and back on itself.' : 'A look cannot turn the saber off or on; those parts of a look do not happen.'}</li>
+                <li>{prop.stylesCanPower ? 'A style can turn the saber off and back on itself.' : 'A style cannot turn the saber off or on; those parts of a style do not happen.'}</li>
                 <li>{prop.abilities ? `Special abilities: ${prop.abilityGesture}.` : 'No special abilities.'}</li>
-                <li>{prop.transitionSounds ? 'Plays a look’s own sounds (tr files).' : 'Does not play a look’s own sounds.'}</li>
-                {prop.abilitiesDefine && <li>Hiltwright adds {prop.abilitiesDefine} to the build when a look uses abilities.</li>}
+                <li>{prop.transitionSounds ? 'Plays a style’s own sounds (tr files).' : 'Does not play a style’s own sounds.'}</li>
+                {prop.abilitiesDefine && <li>Hiltwright adds {prop.abilitiesDefine} to the build when a style uses abilities.</li>}
               </ul>
               <div className="col" style={{ gap: 6, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
                 <span className="label">Mouse control</span>
@@ -446,7 +475,7 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
                     <span className="mono mute" style={{ width: 40, textAlign: 'right', fontSize: 11 }}>{motion[key]}°</span>
                   </label>
                 ))}
-                <span className="hint" style={{ fontSize: 11.5 }}>For seeing what a look does with direction. Uses tilt-and-swing control, where the hand stays put; the mouse takes over again as soon as you drag.</span>
+                <span className="hint" style={{ fontSize: 11.5 }}>For seeing what a style does with direction. Uses tilt-and-swing control, where the hand stays put; the mouse takes over again as soon as you drag.</span>
               </div>
             </>
           )}
@@ -455,7 +484,7 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
         {/* The deck: everything you can do to the saber, with its key. */}
         <div className="col" style={{ gap: 8, padding: 12, borderTop: '1px solid var(--line)', background: 'rgba(8,12,17,.6)' }}>
           <div className="row" style={{ gap: 8 }}>
-            <button type="button" className="btn sm pri grow" style={{ justifyContent: 'center' }} onClick={() => { room?.setOn(!motion.on); setHold(null); }}><span className="b"><span className="i">{motion.on ? 'Retract' : 'Ignite'}<kbd className="kbd">Space</kbd></span></span></button>
+            <button type="button" className="btn sm pri grow" style={{ justifyContent: 'center' }} title={motion.preon ? 'Preon is playing; pressing again cancels it, as on the saber' : undefined} onClick={() => { room?.setOn(!room.isOn); setHold(null); }}><span className="b"><span className="i">{motion.on ? 'Retract' : motion.preon ? 'Cancel preon' : 'Ignite'}<kbd className="kbd">Space</kbd></span></span></button>
             <button type="button" className="chip" aria-pressed={tab === 'help'} title="Every mouse and keyboard control" onClick={toggleHelp}><kbd className="kbd" style={{ margin: '0 6px 0 0' }}>?</kbd>Controls</button>
           </div>
           <div className="col" style={{ gap: 4 }}>
@@ -510,10 +539,10 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
               <input type="range" min={20} max={40} step={1} value={look3d.bladeInches} aria-label="Blade length in inches" style={{ flex: 1, minWidth: 0 }} onChange={(e) => setLook3d((v) => ({ ...v, bladeInches: Number(e.target.value) }))} />
               <span className="mono mute" style={{ width: 34, textAlign: 'right' }}>{look3d.bladeInches}"</span>
             </label>
-            <div className="row" style={{ gap: 8 }} title="How densely the strip inside is populated. The count follows from the length: a shorter blade has fewer LEDs, and every look runs on that many.">
+            <div className="row" style={{ gap: 8 }} title="How densely the strip inside is populated. The count follows from the length: a shorter blade has fewer LEDs, and every style runs on that many.">
               <span className="dim" style={{ width: 76, flex: 'none' }}>Strip</span>
               <span className="input sans" style={{ height: 28, fontSize: 12, width: 92, flex: 'none' }}><span className="ellip">{look3d.ledsPerMetre}/m</span><span className="caret"><Icon name="down" /></span>
-                <select value={look3d.ledsPerMetre} aria-label="LEDs per metre of strip" onChange={(e) => setLook3d((v) => ({ ...v, ledsPerMetre: Number(e.target.value) }))}>{STRIP_DENSITIES.map((d) => <option key={d} value={d}>{d} per metre</option>)}</select></span>
+                <Select value={look3d.ledsPerMetre} aria-label="LEDs per metre of strip" onChange={(e) => setLook3d((v) => ({ ...v, ledsPerMetre: Number(e.target.value) }))}>{STRIP_DENSITIES.map((d) => <option key={d} value={d}>{d} per metre</option>)}</Select></span>
               <span className="mono mute" style={{ flex: 1, textAlign: 'right' }}>{ledsFor(look3d.bladeInches * 0.0254, look3d.ledsPerMetre)} LEDs</span>
             </div>
             <div className="row" style={{ gap: 8 }}>
@@ -534,7 +563,7 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
             <div className="row" style={{ gap: 8 }}>
               <span className="dim" style={{ width: 76, flex: 'none' }}>Model</span>
               <span className="input sans" style={{ height: 28, fontSize: 12 }}><span className="ellip">{hilt?.name ?? 'Built-in'}</span><span className="caret"><Icon name="down" /></span>
-                <select value={hilt && hilt !== builtIn ? hilt.name : ''} aria-label="Hilt model" onChange={(e) => setHiltName(e.target.value)}><option value="">Built-in</option>{hilts.filter((h) => h !== builtIn).map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}</select></span>
+                <Select value={hilt && hilt !== builtIn ? hilt.name : ''} aria-label="Hilt model" onChange={(e) => setHiltName(e.target.value)}><option value="">Built-in</option>{hilts.filter((h) => h !== builtIn).map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}</Select></span>
               <label className="chip" style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden' }} title="Load a .glb, .obj or .stl file. For an OBJ, select its .mtl and textures with it."><Icon name="import" />Load
                 <input type="file" multiple accept=".glb,.gltf,.obj,.stl,.mtl,.png,.jpg,.jpeg,.webp,.tga" aria-label="Load a hilt model" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={(e) => { void loadHiltFiles(e.target.files); e.target.value = ''; }} /></label>
             </div>
@@ -589,12 +618,40 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
                 <div className="row" style={{ gap: 14, justifyContent: 'flex-end' }}><button type="button" className="holo small" title="Copy the fit as text" onClick={copyFit}>Copy fit</button><button type="button" className="holo small" onClick={forgetHilt}>{hilt.packId ? 'Reset fit' : 'Remove'}</button></div>
               </>
             )}
-            {hilt?.creator && <span className="hint">{hilt === builtIn ? 'Punk Saber' : hilt.name} by {hilt.creator}{packs.find((p) => p.id === hilt.packId)?.licence ? `, ${packs.find((p) => p.id === hilt.packId)!.licence}` : ''}</span>}
+            {hilt && <HiltCredit key={hilt.name} hilt={hilt} title={hilt === builtIn ? 'Punk Saber' : hilt.name} licence={packs.find((p) => p.id === hilt.packId)?.licence ?? null} onCreator={(creator) => setHiltCreator(hilt, creator)} />}
             {hiltNote && <span className={hiltNote === 'Fit copied.' ? 'hint' : 'red small'}>{hiltNote}</span>}
           </div>
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Who made the hilt in the room, with their logo. A pack's creator comes with the pack; a hilt the owner loaded can
+ * be credited here, and then counts among that person's work on the Contributors page.
+ */
+function HiltCredit({ hilt, title, licence, onCreator }: { hilt: StoredHilt; title: string; licence: string | null; onCreator: (creator: string) => void }) {
+  const people = useContributors();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const own = !hilt.packId;
+  if (editing) {
+    return (
+      <form className="row" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); onCreator(draft.trim()); setEditing(false); }}>
+        <span className="input sans grow" style={{ height: 28 }}><input type="text" autoFocus value={draft} placeholder="Who made this hilt" aria-label={`Who made ${title}`} onChange={(e) => setDraft(e.target.value)} /></span>
+        <button type="submit" className="btn sm pri"><span className="b"><span className="i">Save</span></span></button>
+        <button type="button" className="chip" aria-label="Cancel" onClick={() => setEditing(false)}><Icon name="x" /></button>
+      </form>
+    );
+  }
+  if (!hilt.creator) return own ? <button type="button" className="holo small" style={{ alignSelf: 'flex-start' }} onClick={() => { setDraft(''); setEditing(true); }}>Credit who made this hilt</button> : null;
+  return (
+    <span className="row" style={{ gap: 8 }}>
+      <ContributorLogo name={hilt.creator} logo={people.logoFor(hilt.creator)} size={24} />
+      <span className="hint grow">{title} by {hilt.creator}{licence ? `, ${licence}` : ''}</span>
+      {own && <button type="button" className="holo small" onClick={() => { setDraft(hilt.creator ?? ''); setEditing(true); }}>Edit</button>}
+    </span>
   );
 }
 

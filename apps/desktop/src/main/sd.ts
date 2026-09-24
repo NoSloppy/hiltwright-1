@@ -57,7 +57,7 @@ async function candidateRoots(): Promise<{ root: string; label: string | null; f
  */
 const CORE_SOUND = /^(hum\d*|font\d*|out\d*|poweron\d*|in\d*)\.wav$/i;
 const CORE_FOLDER = /^(hum|font|out|poweron|in)$/i;
-async function looksLikeFont(dir: string): Promise<boolean> {
+export async function looksLikeFont(dir: string): Promise<boolean> {
   try {
     const names = await readdir(dir);
     if (names.some((n) => CORE_SOUND.test(n))) return true;
@@ -88,14 +88,14 @@ export async function ejectVolume(root: string): Promise<{ ok: boolean; detail: 
 }
 
 /** The sounds a listen needs. Everything else in a font (tracks, ini files, quotes) stays on the card. */
-const PLAYABLE = /^(hum|humm|out|poweron|in|poweroff|clsh|clash|blst|blaster|stab|force|font|boot|lock|lockup|bgnlock|endlock|drag|bgndrag|enddrag|lb|bgnlb|endlb|swingl|swingh|lswing|hswing|swng|swing|tr)$/i;
+const PLAYABLE = /^(hum|humm|out|poweron|fastout|preon|in|poweroff|pwroff|pstoff|clsh|clash|blst|blaster|stab|force|font|boot|lock|lockup|bgnlock|endlock|drag|bgndrag|enddrag|lb|bgnlb|endlb|swingl|swingh|lswing|hswing|swng|swing|tr)$/i;
 const FONT_BYTES_CAP = 120 * 1024 * 1024;
 
 export interface FontSounds { name: string; files: Record<string, ArrayBuffer>; ini: Record<string, string>; smoothsw: Record<string, string>; bytes: number; skipped: number }
 
 function parseIni(text: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const line of text.split(/\r?\n/)) { const m = /^\s*([A-Za-z0-9_]+)\s*=\s*(.+?)\s*$/.exec(line); if (m) out[m[1]] = m[2]; }
+  for (const line of text.split(/\r?\n/)) { const m = /^\s*([A-Za-z0-9_.]+)\s*=\s*(.+?)\s*$/.exec(line); if (m) out[m[1]] = m[2]; }
   return out;
 }
 

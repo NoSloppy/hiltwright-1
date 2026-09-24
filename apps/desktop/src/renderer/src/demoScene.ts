@@ -78,8 +78,18 @@ export interface SceneSettings {
 }
 export const DEFAULT_SCENE: SceneSettings = { glow: 1.2, glowSpread: 0.5, bladeBrightness: 1.2, bladeLight: 1, roomLight: 1, haze: 0.09, grid: true, bladeInches: 36, bladeDiameter: '1', ledsPerMetre: 144, staff: false, bladeWhenOff: true };
 
-export interface Motion { swing: number; tilt: number; turn: number; twist: number; on: boolean }
+export interface Motion { swing: number; tilt: number; turn: number; twist: number; on: boolean; /** Preon is playing: the blade lights when it ends. */ preon?: boolean }
 /** What the saber did, for whoever makes its sounds. `motion` comes every frame with the blade's turn rate. */
+/**
+ * What the font decides about ignition and retraction, in seconds: preon runs before the blade lights, and
+ * EFFECT_POSTOFF follows the retraction sound when the font has pstoff (hybrid_font.h SB_Preon, Loop, SB_Off).
+ */
+export interface IgnitionSound {
+  preon(): { preon: number; out: number };
+  cancelPreon(): void;
+  retract(): { in: number; postoff: number };
+}
+
 export type SaberEvent = { kind: 'on' } | { kind: 'off' } | { kind: 'clash' } | { kind: 'blast' } | { kind: 'stab' } | { kind: 'lockup'; type: LockupType | null } | { kind: 'motion'; degPerSec: number; dt: number } | { kind: 'sound'; n: number };
 
 export class DemoScene {
@@ -152,6 +162,10 @@ export class DemoScene {
   private roomLamps: { light: THREE.Light; base: number }[] = [];
   onMotion: ((m: Motion) => void) | null = null;
   onEvent: ((e: SaberEvent) => void) | null = null;
+  /** The loaded font's side of ignition and retraction; without one the blade lights at once. */
+  sound: IgnitionSound | null = null;
+  private preonTimer: ReturnType<typeof setTimeout> | null = null;
+  private postoffTimer: ReturnType<typeof setTimeout> | null = null;
   private lastReport = 0;
 
   constructor(private readonly host: HTMLElement, lookId: string, leds = ledsFor(BLADE_LENGTH, 144)) {
@@ -426,20 +440,45 @@ export class DemoScene {
   }
   /** Every simulator the saber is running: the main blade, and the staff blade when there is one. */
   private sims(): BladeSim[] { return this.staffSim ? [this.sim, this.staffSim] : [this.sim]; }
-  get isOn(): boolean { return this.sim.isOn; }
+  /** On, or waiting out preon (prop_base's IsOn counts on_pending_ too, so pressing again cancels). */
+  get isOn(): boolean { return this.sim.isOn || this.preonTimer !== null; }
   /**
    * The main blade's simulator is the saber: whatever turns it on or off, raises an effect or asks for a sound, whether
    * the panel or the style itself (TrDoEffect), shows up on its bus and is passed on from here.
    */
   private listen(sim: BladeSim): void {
     sim.onEffect = (e) => {
-      if (e.type === 'EFFECT_IGNITION') { this.staffSim?.setOn(true); this.onEvent?.({ kind: 'on' }); }
-      else if (e.type === 'EFFECT_RETRACTION') { this.staffSim?.setOn(false); for (const s of this.sims()) s.setLockup(null); this.onEvent?.({ kind: 'lockup', type: null }); this.onEvent?.({ kind: 'off' }); }
+      if (e.type === 'EFFECT_IGNITION') { this.staffSim?.setOn(true, e.soundLength); this.onEvent?.({ kind: 'on' }); }
+      else if (e.type === 'EFFECT_RETRACTION') { this.staffSim?.setOn(false, e.soundLength); for (const s of this.sims()) s.setLockup(null); this.onEvent?.({ kind: 'lockup', type: null }); this.onEvent?.({ kind: 'off' }); }
       else if (e.type === 'clash' || e.type === 'blast' || e.type === 'stab') this.onEvent?.({ kind: e.type });
       else if (e.type === 'EFFECT_TRANSITION_SOUND') this.onEvent?.({ kind: 'sound', n: e.wavnum });
     };
   }
-  setOn(on: boolean): void { this.sim.setOn(on); }
+  /**
+   * The owner turns the saber on or off, as the prop's On() and Off() do. On: EFFECT_PREON and the preon sound,
+   * the blade lighting only when preon ends; pressing again during preon cancels it. Off: the retraction, then
+   * EFFECT_POSTOFF once the retraction sound has played, when the font has pstoff.
+   */
+  setOn(on: boolean): void {
+    if (on) {
+      if (this.sim.isOn || this.preonTimer) return;
+      const s = this.sound?.preon() ?? null;
+      const light = () => { this.preonTimer = null; this.sim.setOn(true, s ? s.out : undefined); };
+      if (s && s.preon > 0) {
+        for (const sim of this.sims()) sim.doEffect('EFFECT_PREON', 0, -1, s.preon);
+        this.preonTimer = setTimeout(light, s.preon * 1000);
+      } else light();
+      return;
+    }
+    if (this.preonTimer) { clearTimeout(this.preonTimer); this.preonTimer = null; this.sound?.cancelPreon(); return; }
+    if (!this.sim.isOn) return;
+    const r = this.sound?.retract() ?? null;
+    this.sim.setOn(false, r ? r.in : undefined);
+    if (r && r.postoff > 0) {
+      if (this.postoffTimer) clearTimeout(this.postoffTimer);
+      this.postoffTimer = setTimeout(() => { this.postoffTimer = null; for (const sim of this.sims()) sim.doEffect('EFFECT_POSTOFF', 0, -1, r.postoff); }, r.in * 1000);
+    }
+  }
   /** A clash's strength follows the swing behind it, as the accelerometer would report. */
   trigger(type: EffectType, pos = 0.35 + Math.random() * 0.45, hard = false): void { if (!this.sim.isOn) return; const g = hard ? CLASH_G.hard : Math.min(CLASH_G.hard, CLASH_G.soft + (this.swing / 600) * (CLASH_G.hard - CLASH_G.soft)); for (const sim of this.sims()) sim.trigger(type, pos, g); }
   /** A prop-level effect by its ProffieOS name: the special abilities (EFFECT_USER1..4), force, and so on. */
@@ -599,7 +638,7 @@ export class DemoScene {
     this.renderGlow();
     this.composer.render();
 
-    if (this.onMotion && now - this.lastReport > 120) { this.lastReport = now; this.onMotion({ swing: Math.round(this.swing / 10) * 10, tilt: Math.round(tilt), turn: Math.round(this.pose.turn), twist: Math.round(this.twist), on: this.sim.isOn }); }
+    if (this.onMotion && now - this.lastReport > 120) { this.lastReport = now; this.onMotion({ swing: Math.round(this.swing / 10) * 10, tilt: Math.round(tilt), turn: Math.round(this.pose.turn), twist: Math.round(this.twist), on: this.sim.isOn, preon: this.preonTimer !== null }); }
   };
 
   /** The blade alone, on black, blurred: everything else in the room is blacked out for this pass and then put back. */
@@ -678,6 +717,8 @@ export class DemoScene {
   }
 
   dispose(): void {
+    if (this.preonTimer) clearTimeout(this.preonTimer);
+    if (this.postoffTimer) clearTimeout(this.postoffTimer);
     this.disposed = true;
     cancelAnimationFrame(this.raf);
     this.scene.traverse((o) => {

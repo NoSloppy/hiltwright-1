@@ -7,16 +7,22 @@
 // loop in step with the hum, and turning the blade rotates a pair of transition windows through the swing angle;
 // what you hear is the pair crossfaded by where the window sits, at a volume set by swing speed, while the hum ducks.
 // smoothsw.ini and config.ini are honoured for the numbers that matter.
+//
+// Ignition and retraction follow hybrid_font.h: a preon sound plays first with the blade still off, `out` is
+// chained to start the moment it ends, and only then does the blade ignite (SB_Preon, Loop, SB_On). On retraction
+// `in` plays and `pstoff` follows it, and EFFECT_POSTOFF is raised when `in` ends (SB_Off, Loop). A fast on (a
+// style's FAST_ON, a preset change while lit) skips preon and prefers `fastout`; a fast off skips pstoff.
 
 export interface FontFiles { name: string; files: Record<string, ArrayBuffer>; ini: Record<string, string>; smoothsw: Record<string, string> }
 
 const EFFECT_ALIASES: Record<string, string[]> = {
-  hum: ['hum', 'humm'], out: ['out', 'poweron'], in: ['in', 'poweroff'], clash: ['clsh', 'clash'], blast: ['blst', 'blaster'],
+  hum: ['hum', 'humm'], out: ['out', 'poweron'], in: ['in', 'poweroff', 'pwroff'], clash: ['clsh', 'clash'], blast: ['blst', 'blaster'],
   stab: ['stab', 'clsh', 'clash'], force: ['force'], font: ['font', 'boot'], boot: ['boot'],
   lock: ['lock', 'lockup'], bgnlock: ['bgnlock'], endlock: ['endlock'],
   drag: ['drag', 'lock', 'lockup'], bgndrag: ['bgndrag', 'bgnlock'], enddrag: ['enddrag', 'endlock'],
   lb: ['lb', 'lock', 'lockup'], bgnlb: ['bgnlb', 'bgnlock'], endlb: ['endlb', 'endlock'],
   swingl: ['swingl', 'lswing'], swingh: ['swingh', 'hswing'], swng: ['swng', 'swing'],
+  preon: ['preon'], pstoff: ['pstoff'], fastout: ['fastout'],
 };
 
 /** Sort a font's file names into effects: `clsh03.wav` and `clsh/003.wav` are both the third clash. */
@@ -39,13 +45,14 @@ class Voice {
   private gain: GainNode;
   private src: AudioBufferSourceNode | null = null;
   constructor(private ctx: AudioContext, dest: AudioNode, volume = 1) { this.gain = ctx.createGain(); this.gain.gain.value = volume; this.gain.connect(dest); }
-  play(buf: AudioBuffer, opts: { loop?: boolean; offset?: number; onEnd?: () => void } = {}): void {
+  /** `at` is an AudioContext time to start at, for sounds chained end to end as the saber's wav players do. */
+  play(buf: AudioBuffer, opts: { loop?: boolean; offset?: number; at?: number; onEnd?: () => void } = {}): void {
     this.stop();
     const s = this.ctx.createBufferSource();
     s.buffer = buf; s.loop = !!opts.loop;
     s.connect(this.gain);
     s.onended = () => { if (this.src === s) { this.src = null; opts.onEnd?.(); } };
-    s.start(0, opts.offset != null && opts.offset > 0 ? opts.offset % buf.duration : 0);
+    s.start(opts.at ?? 0, opts.offset != null && opts.offset > 0 ? opts.offset % buf.duration : 0);
     this.src = s;
   }
   /** Play `once`, then loop `loop` from where `once` ends, as the saber's PlayOnce + PlayLoop does. */
@@ -86,6 +93,7 @@ export class FontEngine {
   /** From config.ini: ProffieOSHumDelay is ms after ignition; humstart is ms before the END of the ignition sound. */
   private humDelayMs = -1;
   private humStartBeforeEndMs = 0;
+  private readonly ini: Record<string, string>;
   readonly name: string;
   readonly monophonic: boolean;
   readonly hasSmoothSwing: boolean;
@@ -99,6 +107,7 @@ export class FontEngine {
     this.hasSmoothSwing = !!(this.groups.swingl || this.groups.lswing);
     const s = font.smoothsw;
     this.cfg = { sensitivity: num(s, 'SwingSensitivity', 450), ducking: num(s, 'MaximumHumDucking', 75), sharpness: num(s, 'SwingSharpness', 1.75), threshold: num(s, 'SwingStrengthThreshold', 20), t1: num(s, 'Transition1Degrees', 45), t2: num(s, 'Transition2Degrees', 160), sepL2H: num(s, 'Low2HighSeparationDegrees', 180), sepH2L: num(s, 'High2LowSeparationDegrees', 180), maxVol: num(s, 'MaxSwingVolume', 3), accentThreshold: num(s, 'AccentSwingSpeedThreshold', 0) };
+    this.ini = font.ini;
     this.humDelayMs = num(font.ini, 'ProffieOSHumDelay', -1);
     this.humStartBeforeEndMs = num(font.ini, 'humstart', 0);
     this.hum = new Voice(this.ctx, this.master); this.lock = new Voice(this.ctx, this.master);
@@ -120,6 +129,21 @@ export class FontEngine {
     return engine;
   }
 
+  /**
+   * A sound for `effect`, and which file it was. After `prev`, the same-numbered file when the font's config.ini
+   * pairs `prev` with it (`SFX.preon.paired=1`) and both have as many files, as Effect::GetFollowing does.
+   */
+  private choose(effect: string, prev?: { alias: string; index: number } | null): { buf: AudioBuffer; alias: string; index: number } | null {
+    for (const alias of EFFECT_ALIASES[effect] ?? [effect]) {
+      const list = this.groups[alias];
+      if (!list?.length) continue;
+      const paired = prev && Number(this.ini[`SFX.${prev.alias}.paired`]) > 0.5 && this.groups[prev.alias]?.length === list.length;
+      const index = paired ? prev.index : Math.floor(Math.random() * list.length);
+      const buf = this.buffers.get(list[index]);
+      if (buf) return { buf, alias, index };
+    }
+    return null;
+  }
   private pick(effect: string): AudioBuffer | null {
     for (const alias of EFFECT_ALIASES[effect] ?? [effect]) {
       const list = this.groups[alias];
@@ -132,7 +156,8 @@ export class FontEngine {
     return null;
   }
   private count(effect: string): number { for (const alias of EFFECT_ALIASES[effect] ?? [effect]) { const list = this.groups[alias]; if (list?.length) return list.length; } return 0; }
-  private freeFx(): Voice { return this.fx.find((v) => !v.playing) ?? this.fx[0]; }
+  private freeFx(): Voice { return this.fx.find((v) => !v.playing && v !== this.outV && v !== this.pstoffV) ?? this.fx[0]; }
+  private freeFxExcept(not: Voice): Voice { return this.fx.find((v) => !v.playing && v !== not) ?? this.fx.find((v) => v !== not) ?? this.fx[0]; }
 
   get isOn(): boolean { return this.on; }
   setVolume(v: number): void { this.master.gain.value = Math.max(0, Math.min(1, v)); }
@@ -140,12 +165,56 @@ export class FontEngine {
   /** The font's name sound, as when a preset is chosen. */
   announce(): void { void this.ready.then(() => { const b = this.pick('font'); if (b) this.freeFx().play(b); }); }
 
+  /** Voices for preon and the ignition sound chained after it, and for in and the pstoff chained after it. */
+  private preonV: Voice | null = null;
+  private outV: Voice | null = null;
+  private pending: { out: { buf: AudioBuffer; alias: string; index: number } | null; scheduled: boolean } | null = null;
+  private pstoffV: Voice | null = null;
+
+  /**
+   * The owner asked for ignition (prop_base On): play preon if the font has one and chain the ignition sound to
+   * its end. Returns how long preon lasts (0 without one: ignite at once) and how long the ignition sound is, both
+   * in seconds, so the blade can wait for preon and styles can read WavLen. Call ignite() when the blade lights.
+   */
+  preon(): { preon: number; out: number } {
+    if (this.on) return { preon: 0, out: 0 };
+    void this.ctx.resume();
+    this.cancelPreon();
+    const pre = this.choose('preon');
+    const out = this.choose('out', pre);
+    if (!pre) { this.pending = { out, scheduled: false }; return { preon: 0, out: out?.buf.duration ?? 0 }; }
+    this.preonV = this.freeFx(); this.preonV.setVolume(1, 0.001); this.preonV.play(pre.buf);
+    if (out) { this.outV = this.freeFxExcept(this.preonV); this.outV.setVolume(1, 0.001); this.outV.play(out.buf, { at: this.ctx.currentTime + pre.buf.duration }); }
+    this.pending = { out, scheduled: true };
+    return { preon: pre.buf.duration, out: out?.buf.duration ?? 0 };
+  }
+
+  /** Turned off before preon finished (OFF_CANCEL_PREON). */
+  cancelPreon(): void {
+    if (!this.pending) return;
+    if (this.pending.scheduled) { this.preonV?.stop(); this.outV?.stop(); }
+    this.pending = null; this.preonV = null; this.outV = null;
+  }
+
+  /**
+   * The blade lights (SB_On). After preon() the ignition sound is already chosen, and already playing when preon
+   * came first; otherwise this is a fast on (a style's FAST_ON, a preset change while lit), which uses `fastout`
+   * when the font has it.
+   */
   ignite(): void {
     if (this.on) return;
     this.on = true;
     void this.ctx.resume();
-    const out = this.pick('out'); const hum = this.pick('hum');
-    if (out) this.freeFx().play(out);
+    const pending = this.pending; this.pending = null; this.preonV = null; this.outV = null;
+    let out: AudioBuffer | null = null;
+    if (pending) {
+      out = pending.out?.buf ?? null;
+      if (out && !pending.scheduled) this.freeFx().play(out);
+    } else {
+      out = this.pick('fastout') ?? this.pick('out');
+      if (out) this.freeFx().play(out);
+    }
+    const hum = this.pick('hum');
     if (hum) {
       // As the firmware does (hybrid_font.h SB_On): the hum starts at once, silent, and fades in over 0.2 s from
       // `hum_start_`, which is ignition, or ignition + ProffieOSHumDelay, or `humstart` ms before the ignition
@@ -166,14 +235,31 @@ export class FontEngine {
     this.pickRandomSwing(true);
   }
 
-  retract(): void {
-    if (!this.on) return;
+  /**
+   * The blade goes out (SB_Off). A polyphonic font plays `in` and the hum fades over 0.2 s; a monophonic one plays
+   * `poweroff` and the hum fades over its length. Unless `fast`, `pstoff` is chained to the end of `in`. Returns the
+   * retraction sound's length and, when pstoff follows, its length: EFFECT_POSTOFF is due when the first ends.
+   */
+  retract(fast = false): { in: number; postoff: number } {
+    if (!this.on) return { in: 0, postoff: 0 };
     this.on = false;
     this.endLockup();
-    const inn = this.pick('in');
-    if (inn) this.freeFx().play(inn);
-    this.hum.fadeAndStop(inn ? Math.min(0.6, inn.duration) : 0.3);
+    const inn = this.choose('in');
+    let postoff = 0;
+    if (inn) {
+      this.freeFx().play(inn.buf);
+      const poly = inn.alias === 'in';
+      this.hum.fadeAndStop(poly ? 0.2 : inn.buf.duration);
+      // ProffieOS chains pstoff only after SFX_in, the polyphonic retraction.
+      const pst = poly && !fast ? this.choose('pstoff', inn) : null;
+      if (pst) {
+        this.pstoffV = this.freeFx(); this.pstoffV.setVolume(1, 0.001);
+        this.pstoffV.play(pst.buf, { at: this.ctx.currentTime + inn.buf.duration });
+        postoff = pst.buf.duration;
+      }
+    } else this.hum.fadeAndStop(0.2);
     this.sw.on = false; this.swingA.fadeAndStop(0.2); this.swingB.fadeAndStop(0.2);
+    return { in: inn?.buf.duration ?? 0, postoff };
   }
 
   /** A style's transition sound: trNN.wav or tr/NNN/000.wav, as EFFECT_TRANSITION_SOUND with that number plays it. */

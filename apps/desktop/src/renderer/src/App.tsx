@@ -5,7 +5,9 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { registerLookSim, type LookDef } from '@hiltwright/core';
 import { useBoard } from './board';
-import { Icon, Mark } from './Icon';
+import { Icon } from './Icon';
+import logoIcon from './assets/hiltwright-icon.svg';
+import logoWordmark from './assets/hiltwright-wordmark.svg';
 import { Presets } from './Presets';
 import { Fonts } from './Fonts';
 import { Build } from './Build';
@@ -16,11 +18,13 @@ import { SaberControls } from './Controls';
 import { guessBlades, infoFromRecord, queuedLookIds } from './saberModel';
 import { usePendingLookColours } from './pendingColours';
 import { StyleEditor } from './StyleEditor';
+import { FontLibrary } from './FontLibrary';
+import { Contributors } from './Contributors';
 import { flowStatus, nextStep, useWorkspace, type Workspace } from './workspace';
 // three.js is only needed in the demo room, so it loads when that page is first opened.
 const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
 
-type Page = 'armory' | 'wiring' | 'presets' | 'fonts' | 'build' | 'looks' | 'editor' | 'demo' | 'diag';
+type Page = 'armory' | 'wiring' | 'presets' | 'fonts' | 'build' | 'looks' | 'editor' | 'library' | 'contributors' | 'demo' | 'diag';
 const NAV: { section: string; pages: { id: Page; title: string; icon: Parameters<typeof Icon>[0]['name']; step?: number }[] }[] = [
   { section: 'Saber', pages: [
     { id: 'armory', title: 'Armory', icon: 'armory' },
@@ -30,14 +34,16 @@ const NAV: { section: string; pages: { id: Page; title: string; icon: Parameters
     { id: 'build', title: 'Build & Install', icon: 'build', step: 4 },
   ] },
   { section: 'Workshop', pages: [
-    { id: 'looks', title: 'Looks', icon: 'looks' },
+    { id: 'looks', title: 'Styles', icon: 'looks' },
     { id: 'editor', title: 'Style editor', icon: 'gear' },
+    { id: 'library', title: 'Font library', icon: 'fonts' },
+    { id: 'contributors', title: 'Contributors', icon: 'people' },
     { id: 'demo', title: 'Demo room', icon: 'play' },
   ] },
   { section: 'Tools', pages: [{ id: 'diag', title: 'Diagnostics', icon: 'diag' }] },
 ];
 const PAGES = NAV.flatMap((g) => g.pages);
-const TITLE: Record<Page, string> = { armory: 'Armory', wiring: 'Wiring', presets: 'Presets', fonts: 'Fonts & SD', build: 'Build & Install', looks: 'Looks', editor: 'Style editor', demo: 'Demo room', diag: 'Diagnostics' };
+const TITLE: Record<Page, string> = { armory: 'Armory', wiring: 'Wiring', presets: 'Presets', fonts: 'Fonts & SD', build: 'Build & Install', looks: 'Styles', editor: 'Style editor', library: 'Font library', contributors: 'Contributors', demo: 'Demo room', diag: 'Diagnostics' };
 
 export function App() {
   const real = useBoard();
@@ -48,8 +54,20 @@ export function App() {
   const lib0 = real.library[0];
   const board: typeof real = fake && import.meta.env.DEV && lib0 ? { ...real, status: 'connected', portName: 'FAKE', saber: lib0, info: { ...infoFromRecord(lib0), currentPreset: 0, battery: 3.91, volume: 1800 } } : real;
   const ws = useWorkspace(board);
-  const [page, setPage] = useState<Page>('armory');
+  const [page, setPageNow] = useState<Page>('armory');
+  // A page with unsaved work (the Style editor) can hold navigation: it gets a proceed callback, and calls it once the
+  // owner has saved or chosen to leave. Every page change goes through here.
+  const leaveGuard = useRef<((proceed: () => void) => void) | null>(null);
+  const pageRef = useRef(page); pageRef.current = page;
+  const setPage = (p: Page, then?: () => void) => {
+    const move = () => { then?.(); setPageNow(p); };
+    if (p !== pageRef.current && leaveGuard.current) leaveGuard.current(move); else move();
+  };
+  const setPageRef = useRef(setPage); setPageRef.current = setPage;
   const [demoLook, setDemoLook] = useState<string | null>(null);
+  const [demoFont, setDemoFont] = useState<string | null>(null);
+  // The Styles page opened from the Contributors page shows that person's styles.
+  const [styleCreator, setStyleCreator] = useState<string | null>(null);
   const [editingLook, setEditingLook] = useState<LookDef | null>(null);
   // Saved looks get a simulator at startup (built ones from their layers, pasted ones from their code), so they preview like library looks.
   useEffect(() => { void window.hiltwright.looks.list().then((ls) => { for (const l of ls) registerLookSim(l); }); }, []);
@@ -60,7 +78,7 @@ export function App() {
   useEffect(() => { (window as unknown as { hiltwrightGoto?: (p: string) => void }).hiltwrightGoto = (p) => { setFake(p.startsWith('fake:')); setPage(p.replace('fake:', '') as Page); }; }, []);
   // Ctrl+1..9 switch pages, in the order shown.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (!e.ctrlKey || e.altKey || e.shiftKey) return; const p = PAGES[Number(e.key) - 1]; if (p) { e.preventDefault(); setPage(p.id); } };
+    const onKey = (e: KeyboardEvent) => { if (!e.ctrlKey || e.altKey || e.shiftKey) return; const p = PAGES[Number(e.key) - 1]; if (p) { e.preventDefault(); setPageRef.current(p.id); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -70,16 +88,16 @@ export function App() {
   return (
     <div className="app">
       <aside className="side" aria-label="Primary">
-        <div className="brand"><Mark /><span>HILTWRIGHT</span></div>
+        <div className="brand"><img src={logoIcon} alt="" width={28} height={28} /><img src={logoWordmark} alt="Hiltwright" className="wordmark" /></div>
         <nav className="nav" aria-label="Sections">
           {NAV.map((g) => (
             <div key={g.section} className="col" style={{ gap: 2 }}>
               <span className="sec">{g.section}</span>
               {g.pages.map((p) => (
-                <a key={p.id} href="#" className={page === p.id ? 'on' : ''} aria-current={page === p.id ? 'page' : undefined} title={`Ctrl+${PAGES.indexOf(p) + 1}`} onClick={(e) => { e.preventDefault(); setPage(p.id); }}>
+                <a key={p.id} href="#" className={page === p.id ? 'on' : ''} aria-current={page === p.id ? 'page' : undefined} title={`Ctrl+${PAGES.indexOf(p) + 1}`} onClick={(e) => { e.preventDefault(); setPage(p.id, () => setStyleCreator(null)); }}>
                   {p.step ? <span className="stepn">{p.step}</span> : <Icon name={p.icon} />}<span>{p.title}</span>
                   {p.id === 'presets' && ws.live && !ws.model?.presetsFrom && <span className="tier">live</span>}
-                  {p.id === 'build' && (queued > 0 ? <span className="badge" title="Looks waiting for a build">{queued} queued</span> : null)}
+                  {p.id === 'build' && (queued > 0 ? <span className="badge" title="Styles waiting for a build">{queued} queued</span> : null)}
                 </a>
               ))}
             </div>
@@ -111,11 +129,13 @@ export function App() {
           {page === 'armory' ? <Armory board={board} ws={ws} go={go} />
             : page === 'wiring' ? <Wiring ws={ws} board={board} go={go} />
             : page === 'presets' ? <Presets ws={ws} board={board} go={go} />
-            : page === 'fonts' ? <Fonts board={board} />
+            : page === 'fonts' ? <Fonts board={board} ws={ws} go={go} />
             : page === 'build' ? <Build ws={ws} board={board} go={go} />
-            : page === 'looks' ? <Looks ws={ws} board={board} onPresets={() => setPage('presets')} onBuild={() => setPage('build')} onDemo={(id) => { setDemoLook(id); setPage('demo'); }} onEdit={(l) => { setEditingLook(l); setPage('editor'); }} onNew={() => { setEditingLook(null); setPage('editor'); }} />
-            : page === 'editor' ? <StyleEditor key={editingLook?.id ?? 'new'} editing={editingLook} onSaved={() => undefined} onDemo={(id) => { setDemoLook(id); setPage('demo'); }} />
-            : page === 'demo' ? <Suspense fallback={<span className="hint">Opening the demo room…</span>}><Demo initialLook={demoLook} board={board} /></Suspense>
+            : page === 'looks' ? <Looks ws={ws} board={board} initialCreator={styleCreator} onPresets={() => setPage('presets')} onBuild={() => setPage('build')} onDemo={(id) => { setDemoLook(id); setPage('demo'); }} onEdit={(l) => { setEditingLook(l); setPage('editor'); }} onNew={() => { setEditingLook(null); setPage('editor'); }} />
+            : page === 'editor' ? <StyleEditor key={editingLook?.id ?? 'new'} editing={editingLook} onSaved={() => undefined} onDemo={(id) => setPage('demo', () => setDemoLook(id))} onLeaveGuard={(g) => { leaveGuard.current = g; }} />
+            : page === 'library' ? <FontLibrary onDemo={(folder) => { setDemoFont(folder); setPage('demo'); }} />
+            : page === 'contributors' ? <Contributors onFonts={() => setPage('library')} onLooks={(name) => { setStyleCreator(name); setPage('looks'); }} onDemo={() => setPage('demo')} />
+            : page === 'demo' ? <Suspense fallback={<span className="hint">Opening the demo room…</span>}><Demo initialLook={demoLook} initialFont={demoFont} board={board} /></Suspense>
             : <Diagnostics board={board} />}
         </ErrorBoundary>
       </main>
@@ -170,7 +190,7 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
           </div>
           {ws.live && board.info && board.info.rejected.length > 0 && <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="warn" /><span>This firmware does not know {board.info.rejected.join(', ')}. Hiltwright adapts to what the board supports.</span></div>}
           {adoptable && (
-            <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="info" /><span>Is this a saber you set up ahead? {plans.map((p) => <button key={p.id} type="button" className="holo" style={{ marginRight: 10 }} onClick={() => void board.adoptPlan(p.id)}>It is "{p.name}"</button>)}Its wiring, presets and looks move onto this saber, ready to install.</span></div>
+            <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="info" /><span>Is this a saber you set up ahead? {plans.map((p) => <button key={p.id} type="button" className="holo" style={{ marginRight: 10 }} onClick={() => void board.adoptPlan(p.id)}>It is "{p.name}"</button>)}Its wiring, presets and styles move onto this saber, ready to install.</span></div>
           )}
         </section>
 
@@ -178,7 +198,7 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
           <div className="ph"><h2>Your sabers</h2>
             {planning
               ? <form className="row" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); void plan(); }}><span className="input sans" style={{ height: 30, width: 200 }}><input type="text" value={planName} autoFocus placeholder="Name the saber" aria-label="Name for the new saber" onChange={(e) => setPlanName(e.target.value)} /></span><button type="submit" className="btn sm pri"><span className="b"><span className="i">Start</span></span></button><button type="button" className="chip" onClick={() => setPlanning(false)}><Icon name="x" /></button></form>
-              : <button type="button" className="btn sm pri" title="Set a saber up before it is plugged in: wiring, presets and looks, ready to install when it arrives" onClick={() => setPlanning(true)}><span className="b"><span className="i"><Icon name="plus" />New saber</span></span></button>}
+              : <button type="button" className="btn sm pri" title="Set a saber up before it is plugged in: wiring, presets and styles, ready to install when it arrives" onClick={() => setPlanning(true)}><span className="b"><span className="i"><Icon name="plus" />New saber</span></span></button>}
           </div>
           <div className="list" style={{ overflow: 'auto' }}>
             {board.library.length === 0 && <div className="li hint" style={{ minHeight: 44 }}>No sabers yet. Plug one in and it is remembered, or start a new one to set up ahead.</div>}
@@ -225,7 +245,7 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
               );
             })}
             <button type="button" className="btn pri full" onClick={() => go(stepPage[next])}><span className="b"><span className="i"><Icon name="chev" />Continue with {stepTitle[next]}</span></span></button>
-            <span className="hint">Looks are chosen on the Presets step; make and try new ones in the Workshop.</span>
+            <span className="hint">Styles are chosen on the Presets step; make and try new ones in the Workshop.</span>
           </>
         )}
       </aside>

@@ -1,8 +1,8 @@
 // IPC surface. Every handler validates its arguments; the renderer is sandboxed and untrusted by design.
 
 import { app, dialog, ipcMain, shell, BrowserWindow } from 'electron';
-import { join, resolve } from 'node:path';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { generateConfig, isBank, isStyleDoc, isTreeDoc, validateModel, type PresetBank, type PresetRecord, type SaberConfigModel } from '@hiltwright/core';
 import { Library, libraryPath } from './library';
 import { LooksStore, looksPath } from './looksStore';
@@ -13,11 +13,13 @@ import { proffieSerials } from './usb';
 import { checkFontDir, copyFont, listFonts, listTracks, locateCards, readVoicePack, ejectVolume, readFontSounds } from './sd';
 import { defaultToolchainRoot, installToolchain, toolchainStatus } from './toolchain';
 import { listPacks, packFont, packMesh, userPacksDir } from './packs';
+import { FontLibrary, type ImportResult } from './fontLibrary';
+import { ContributorStore } from './contributors';
 import { buildFirmware } from './build';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { backupFlash, describeBootloader, listBackups, restoreBackup, usbState, waitFor, writeFirmware } from './flash';
-import type { JobEvent } from '../shared/api';
+import type { FontLibraryStatus, JobEvent } from '../shared/api';
 import type { FirmwareManifest } from '@hiltwright/core';
 import type { SaberIdentity } from '../shared/api';
 
@@ -91,7 +93,7 @@ export function registerIpc(): void {
   const looksStore = new LooksStore(looksPath(userData));
   const look = (v: unknown): LookDef => {
     const l = v as LookDef;
-    if (!l || typeof l !== 'object' || !/^[A-Za-z_][A-Za-z0-9_]{0,60}$/.test(String(l.id)) || typeof l.code !== 'string') throw new Error('Expected a look');
+    if (!l || typeof l !== 'object' || !/^[A-Za-z_][A-Za-z0-9_]{0,60}$/.test(String(l.id)) || typeof l.code !== 'string') throw new Error('Expected a style');
     return {
       id: l.id, name: str(l.name, 120), source: l.source === 'built' ? 'built' : 'pasted', by: str(l.by ?? '', 120), code: str(l.code, 200000), header: l.header == null ? null : str(l.header, 20000),
       roles: Array.isArray(l.roles) ? l.roles.filter((r): r is LookDef['roles'][number] => ['main', 'crystal', 'accent', 'side', 'motor'].includes(String(r))) : ['main'],
@@ -114,7 +116,7 @@ export function registerIpc(): void {
   ipcMain.handle('looks:list', () => looksStore.list());
   ipcMain.handle('looks:add', (_e, l: unknown) => looksStore.add(look(l)));
   ipcMain.handle('looks:remove', (_e, id: unknown) => looksStore.remove(str(id, 80)));
-  ipcMain.handle('looks:update', (_e, id: unknown, l: unknown) => { const v = look(l); if (v.id !== str(id, 80)) throw new Error('Look id mismatch'); return looksStore.add(v); });
+  ipcMain.handle('looks:update', (_e, id: unknown, l: unknown) => { const v = look(l); if (v.id !== str(id, 80)) throw new Error('Style id mismatch'); return looksStore.add(v); });
 
   ipcMain.handle('snapshots:list', (_e, id: unknown) => snapshots.list(str(id, 40)));
   ipcMain.handle('snapshots:save', (_e, id: unknown, label: unknown, list: unknown) => snapshots.save(str(id, 40), str(label, 120), presets(list)));
@@ -128,33 +130,104 @@ export function registerIpc(): void {
   ipcMain.handle('sd:locate', async () => { const cards = await locateCards(); knownRoots = new Set(cards.map((c) => c.root)); return cards; });
   ipcMain.handle('sd:listFonts', (_e, r: unknown) => listFonts(root(r)));
   ipcMain.handle('sd:eject', (_e, r: unknown) => ejectVolume(root(r)));
-  // The font bank: a folder of fonts on this computer, remembered in a small file beside the library.
-  const bankFile = join(app.getPath('userData'), 'fontbank.json');
-  let bankRoot: string | null = null;
-  try { bankRoot = (JSON.parse(readFileSync(bankFile, 'utf8')) as { root?: string }).root ?? null; } catch { /* none chosen yet */ }
-  if (process.env.HILTWRIGHT_FONT_BANK) bankRoot = process.env.HILTWRIGHT_FONT_BANK; // dev aid
-  // A font's sounds, for playing in the app. The font sits on a known card, or in the font bank the owner chose.
+  // The font library: fonts the owner added, in a folder of their choosing (default userData/fonts).
+  const libSettingsFile = join(userData, 'fontlibrary.json');
+  let libSettings: { root?: string; legacyDismissed?: boolean } = {};
+  try { libSettings = JSON.parse(readFileSync(libSettingsFile, 'utf8')) as typeof libSettings; } catch { /* defaults */ }
+  const defaultLibRoot = join(userData, 'fonts');
+  const fontLib = new FontLibrary(process.env.HILTWRIGHT_FONT_LIBRARY || libSettings.root || defaultLibRoot, (p) => shell.trashItem(p));
+  const saveLibSettings = () => { try { writeFileSync(libSettingsFile, JSON.stringify(libSettings)); } catch { /* kept for this run */ } };
+  // Before the library there was the "font bank", a folder the owner pointed at. Offered once as something to import.
+  let legacyBank: string | null = null;
+  try { legacyBank = (JSON.parse(readFileSync(join(userData, 'fontbank.json'), 'utf8')) as { root?: string }).root ?? null; } catch { /* never chosen */ }
+  const libStatus = (): FontLibraryStatus => ({ root: fontLib.root, isDefault: resolve(fontLib.root) === resolve(defaultLibRoot), legacyBank: libSettings.legacyDismissed || !legacyBank || !existsSync(legacyBank) ? null : legacyBank });
+  const folder = (v: unknown) => str(v, 120);
+  const libEmit = (line: string) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('fontlib:progress', line); };
+  ipcMain.handle('fontlib:status', () => libStatus());
+  ipcMain.handle('fontlib:list', () => fontLib.list());
+  ipcMain.handle('fontlib:detail', (_e, f: unknown) => fontLib.detail(folder(f)));
+  ipcMain.handle('fontlib:setMeta', (_e, f: unknown, patch: unknown) => {
+    const p = (patch ?? {}) as Record<string, unknown>;
+    const out: { name?: string; maker?: string; notes?: string; bundle?: string } = {};
+    if (typeof p.name === 'string') out.name = str(p.name, 120).trim() || folder(f);
+    if (typeof p.maker === 'string') out.maker = str(p.maker, 120).trim();
+    if (typeof p.notes === 'string') out.notes = str(p.notes, 4000);
+    if (typeof p.bundle === 'string') out.bundle = str(p.bundle, 120).trim();
+    return fontLib.setMeta(folder(f), out);
+  });
+  // Contributors: font makers and look authors, with a logo and a link each. Logos the font library kept for its
+  // makers before this list existed are brought over once, at start.
+  const contributors = new ContributorStore(userData);
+  const contributorsReady = (async () => {
+    try { for (const l of await fontLib.legacyLogos()) if (!(await contributors.has(l.name)) && existsSync(l.file)) await contributors.setLogo(l.name, l.file); } catch (err) { console.log(`[contributors] bringing over font makers' logos: ${String(err)}`); }
+  })();
+  ipcMain.handle('contributors:list', async () => { await contributorsReady; return contributors.list(); });
+  // A logo comes only from a file the owner picked in the dialog.
+  ipcMain.handle('contributors:setLogo', async (_e, who: unknown) => {
+    const name = str(who, 120);
+    const r = await dialog.showOpenDialog({ title: `Choose a logo for ${name}`, properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'] }] });
+    return r.canceled || !r.filePaths[0] ? null : contributors.setLogo(name, r.filePaths[0]);
+  });
+  ipcMain.handle('contributors:clearLogo', (_e, who: unknown) => contributors.clearLogo(str(who, 120)));
+  ipcMain.handle('contributors:setUrl', (_e, who: unknown, url: unknown) => contributors.setUrl(str(who, 120), str(url, 500)));
+  // Opens only the link saved for that person, in the system browser.
+  ipcMain.handle('contributors:open', async (_e, who: unknown) => { const url = await contributors.urlOf(str(who, 120)); if (url) await shell.openExternal(url); });
+  ipcMain.handle('fontlib:remove', (_e, f: unknown) => fontLib.remove(folder(f)));
+  ipcMain.handle('fontlib:readSound', (_e, f: unknown, rel: unknown) => fontLib.readSound(folder(f), str(rel, 400)));
+  ipcMain.handle('fontlib:readFont', (e, f: unknown) => fontLib.readFont(folder(f), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total })));
+  ipcMain.handle('fontlib:copyToCard', (_e, f: unknown, r: unknown, replace: unknown) => fontLib.copyToCard(folder(f), root(r), replace === true));
+  ipcMain.handle('fontlib:open', async (_e, f: unknown) => { await shell.openPath(f == null ? fontLib.root : join(fontLib.root, basename(folder(f)))); });
+  // Adding: the owner picks .zip packages or folders; only paths the dialog returned are ever read.
+  const importPicked = async (paths: string[]): Promise<ImportResult> => {
+    const all: ImportResult = { added: [], skipped: [] };
+    for (const p of paths) {
+      try { const r = await fontLib.importFrom(p, libEmit); all.added.push(...r.added); all.skipped.push(...r.skipped); } catch (err) { all.skipped.push({ name: basename(p), why: String(err).replace(/^Error: /, '') }); }
+    }
+    return all;
+  };
+  ipcMain.handle('fontlib:addZip', async () => {
+    const r = await dialog.showOpenDialog({ title: 'Add sound font packages', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Font packages', extensions: ['zip'] }] });
+    return r.canceled ? null : importPicked(r.filePaths);
+  });
+  ipcMain.handle('fontlib:addFolder', async () => {
+    const r = await dialog.showOpenDialog({ title: 'Add a font folder (or a folder of fonts)', properties: ['openDirectory', 'multiSelections'] });
+    return r.canceled ? null : importPicked(r.filePaths);
+  });
+  ipcMain.handle('fontlib:importLegacy', async () => { if (!legacyBank) return null; const r = await importPicked([legacyBank]); libSettings.legacyDismissed = true; saveLibSettings(); return r; });
+  ipcMain.handle('fontlib:dismissLegacy', () => { libSettings.legacyDismissed = true; saveLibSettings(); return libStatus(); });
+  ipcMain.handle('fontlib:chooseRoot', async () => {
+    const r = await dialog.showOpenDialog({ title: 'Where should the font library live?', properties: ['openDirectory', 'createDirectory'] });
+    if (r.canceled || !r.filePaths[0] || resolve(r.filePaths[0]) === resolve(fontLib.root)) return libStatus();
+    const next = r.filePaths[0];
+    const have = (await fontLib.list()).length;
+    let move = false;
+    if (have) {
+      const ask = await dialog.showMessageBox({ type: 'question', title: 'Font library', message: `Move your ${have} font${have === 1 ? '' : 's'} to ${next}?`, detail: 'Or leave them where they are and use whatever fonts the new folder already holds.', buttons: ['Move them', 'Use the new folder as it is', 'Cancel'], defaultId: 0, cancelId: 2 });
+      if (ask.response === 2) return libStatus();
+      move = ask.response === 0;
+    }
+    await fontLib.moveTo(next, move, libEmit);
+    libSettings.root = resolve(next) === resolve(defaultLibRoot) ? undefined : next;
+    saveLibSettings();
+    return libStatus();
+  });
+  ipcMain.handle('fontlib:resetRoot', async () => {
+    if (resolve(fontLib.root) === resolve(defaultLibRoot)) return libStatus();
+    await fontLib.moveTo(defaultLibRoot, false);
+    libSettings.root = undefined; saveLibSettings();
+    return libStatus();
+  });
+  // A font's sounds, for playing in the app, from a known card.
   ipcMain.handle('sd:readFont', async (e, r: unknown, fontName: unknown) => {
-    const base = String(r);
     const name = String(fontName);
     if (!/^[^\\/:*?"<>|]+$/.test(name)) throw new Error('Bad font name');
-    if (!knownRoots.has(base) && base !== bankRoot) throw new Error('Not a known card or font bank');
-    return readFontSounds(join(base, name), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total }));
+    return readFontSounds(join(root(r), name), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total }));
   });
-  ipcMain.handle('sd:fontBank', () => bankRoot);
   // Packs: encrypted hilts and fonts. Payloads are decrypted here and handed over in memory, never as files.
   ipcMain.handle('packs:list', () => listPacks());
   ipcMain.handle('packs:dir', () => userPacksDir());
   ipcMain.handle('packs:mesh', (_e, id: unknown) => packMesh(str(id, 200)));
   ipcMain.handle('packs:font', (_e, id: unknown) => packFont(str(id, 200)));
-  ipcMain.handle('sd:pickFontBank', async () => {
-    const r = await dialog.showOpenDialog({ title: 'Choose a folder of sound fonts', properties: ['openDirectory'] });
-    if (r.canceled || !r.filePaths[0]) return bankRoot;
-    bankRoot = r.filePaths[0];
-    try { writeFileSync(bankFile, JSON.stringify({ root: bankRoot })); } catch { /* remembered for this run only */ }
-    return bankRoot;
-  });
-  ipcMain.handle('sd:bankFonts', async () => (bankRoot ? listFonts(bankRoot) : []));
   ipcMain.handle('sd:listTracks', (_e, r: unknown) => listTracks(root(r)));
   ipcMain.handle('sd:voicePack', (_e, r: unknown) => readVoicePack(root(r)));
   let pickedFonts = new Set<string>();

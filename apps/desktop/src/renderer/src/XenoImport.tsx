@@ -99,7 +99,7 @@ export function XenoImport({ card, board, onChanged }: { card: CardInfo | null; 
               {progress && <span className="hint">{progress}</span>}
             </div>
             {!card && <span className="hint">Put the ProffieOS card in a reader to copy onto it.</span>}
-            <span className="hint">Xenopixel blade effects (fire, unstable, rainbow and so on) are part of its firmware and do not carry over. The colour does, when the preset's look takes one; pick looks on the Presets and Looks pages afterwards.</span>
+            <span className="hint">Xenopixel blade effects (fire, unstable, rainbow and so on) are part of its firmware and do not carry over. The colour does, when the preset's style takes one; pick styles on the Presets and Styles pages afterwards.</span>
           </>
         )}
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}</span></div>}
