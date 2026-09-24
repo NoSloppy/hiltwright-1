@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 606 96" width="606" height="96" role="img" aria-labelledby="t"><title id="t">Hiltwright</title><defs>
+  <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6f8396"/><stop offset=".45" stop-color="#c9d6e2"/><stop offset="1" stop-color="#6f8396"/></linearGradient>
+  <linearGradient id="grip" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1a232d"/><stop offset=".5" stop-color="#34424f"/><stop offset="1" stop-color="#1a232d"/></linearGradient>
+  <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#101720"/><stop offset="1" stop-color="#0a0e13"/></linearGradient>
+  <radialGradient id="halo" cx=".62" cy=".38" r=".6"><stop offset="0" stop-color="#5fd3ff" stop-opacity=".22"/><stop offset="1" stop-color="#5fd3ff" stop-opacity="0"/></radialGradient>
+  <clipPath id="inside"><path d="M52.46 6H250V203.54L203.54 250H6V52.46Z"/></clipPath>
+</defs><g transform="scale(0.375)">
+  <path d="M44 0H256V212L212 256H0V44Z" fill="#3b4c5e"/>
+  <path d="M52.46 6H250V203.54L203.54 250H6V52.46Z" fill="url(#tile)"/>
+  <path d="M52.46 6H250V203.54L203.54 250H6V52.46Z" fill="url(#halo)"/>
+  <g clip-path="url(#inside)"><g transform="translate(128 128) rotate(45) scale(1.12) translate(-128 -109.5)" fill="none"><path d="M128 104V-4" stroke="#5fd3ff" stroke-opacity=".14" stroke-width="46" stroke-linecap="round"/>
+    <path d="M128 104V-4" stroke="#5fd3ff" stroke-opacity=".28" stroke-width="31" stroke-linecap="round"/>
+    <path d="M128 104V-4" stroke="#5fd3ff" stroke-width="18" stroke-linecap="round"/>
+    <path d="M128 100V0" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+    <path d="M110 102h36v8l-4 12h-28l-4-12z" fill="url(#steel)"/>
+    <rect x="117" y="122" width="22" height="10" fill="#1c2833"/>
+    <rect x="113" y="132" width="30" height="68" fill="url(#grip)"/>
+    <rect x="113" y="142" width="30" height="4" fill="#6f8396"/><rect x="113" y="154" width="30" height="4" fill="#6f8396"/><rect x="113" y="166" width="30" height="4" fill="#6f8396"/><rect x="113" y="178" width="30" height="4" fill="#6f8396"/><rect x="113" y="190" width="30" height="4" fill="#6f8396"/>
+    <rect x="143" y="146" width="7" height="14" fill="#ffb547"/>
+    <path d="M111 200h34v22l-8 10h-18l-8-10z" fill="url(#steel)"/></g></g>
+  <path d="M44 0L0 44M256 212L212 256" stroke="#5fd3ff" stroke-width="7" stroke-linecap="square"/></g><g transform="translate(129.565 29.4) scale(1.55)" fill="none" stroke="#e6edf3" stroke-width="4.6" stroke-linejoin="miter" stroke-miterlimit="4" stroke-linecap="square"><path transform="translate(0 0)" d="M0 0V24M26 0V24M0 12H26"/><path transform="translate(37 0)" d="M0 0V24"/><path transform="translate(48 0)" d="M0 0V24H23"/><path transform="translate(74 0)" d="M0 0H26M13 0V24"/><path transform="translate(111 0)" d="M0 0L8 24L18 5L28 24L36 0"/><path transform="translate(158 0)" d="M0 24V0H19L25 6V9L21 13H0M15.5 14.5L25 24"/><path transform="translate(194 0)" d="M0 0V24"/><path transform="translate(205 0)" d="M26 5L21 0H6L0 6V18L6 24H26V13H15"/><path transform="translate(242 0)" d="M0 0V24M26 0V24M0 12H26"/><path transform="translate(279 0)" d="M0 0H26M13 0V24"/></g></svg>
