@@ -10,6 +10,7 @@ Firmware-side findings that are real but belong after Beta 2.
 
 - **FW19:** Use the existing config parser to import a hand-written `config.h` ("import as text, edit what we understand"), or retire it.
 - **FW30:** Installing on macOS and Linux (USB state, bootloader detection, no driver step).
+- **SF32** (from `baseline-sd-fonts`): Ejecting a shared card on Linux, part of the same "other platforms" work as FW30.
 
 ## Non-goals
 

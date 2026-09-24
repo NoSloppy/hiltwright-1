@@ -29,6 +29,12 @@ A scripted pass in the real app, recording board, date and result for each scena
   - firmware-build 4.1, 4.2, 4.3, 4.5, 4.6, 4.8
   - firmware-install 5.1 (after the FW1 fix)
 - **From `baseline-firmware`, on hote2:** a fresh install started from the bootloader (5.7), and a saber that is slow to return (5.11).
+- **From `baseline-sd-fonts`, with a real card on hote2 or in a reader:**
+  - sd-card 2.1, 2.2, 2.8, 2.9, 2.10, 2.12 (vendor firmware, after restoring a vendor backup), 2.13 and 2.14
+- **From `baseline-sd-fonts`, checked by hand:**
+  - font-library 1.1, 1.3 (move to another drive), 1.5, 1.12, 1.14, 1.16 (the real recycle bin), 1.17
+- **Listening pass** (a person listening, with the V2.2 or none): library playback (1.15) and the Presets font picker.
+- **SF9:** Removing a font to the recycle bin from a library on a USB drive.
 
 ## Non-goals
 

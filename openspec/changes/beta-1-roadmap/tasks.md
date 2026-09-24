@@ -57,11 +57,27 @@
     | firmware-side-later | M5+ | FW19, FW30 | |
     | blade-id-verification (task 5.1) | M4 | FW21 | 6.1 |
   - Inputs from baseline-sd-fonts: the Findings table in `baseline-sd-fonts/design.md` (SF1–SF34), and the scenarios marked neither or partial in `baseline-sd-fonts/tasks.md` (14 neither and 8 partial of 33).
+  - **Triage of the baseline-sd-fonts batch, 2026-09-24:**
+
+    | Change | Milestone | Findings | Scenarios |
+    |---|---|---|---|
+    | font-library-integrity | M2 | SF1, SF2, SF3, SF4, SF5, SF6, SF7, SF8 | |
+    | card-safety | M2 | SF22, SF23, SF24, SF25, SF26, SF27, SF28 | |
+    | font-check-alignment | M2 | SF13, SF14, SF21 | |
+    | sd-fonts-test-coverage | M2 | | 1.2, 1.3, 1.5, 1.11, 2.4, 2.7, 2.8, 2.9, 2.10, 2.14, 3.1 |
+    | hardware-verification-v2 (extended) | M2 | SF9 | 8 real-card scenarios, 7 hand checks, a listening pass |
+    | v3-verification (extended) | M2 | | 2.11, 2.13 |
+    | license-and-notices (task 3.2) | M2 | SF30 (config and source pointer on the card) | |
+    | hide-for-beta-1 (task 3.1) | M2 | SF34 (Xenopixel still visible) | |
+    | sd-fonts-polish | M4 | SF10, SF11, SF12, SF15, SF16, SF17, SF18, SF19, SF20, SF29, SF31, SF33 | |
+    | firmware-side-later (extended) | M5+ | SF32 | |
 
 ## 3. M2 Beta 1 blockers
 
 - [ ] 3.1 `hide-for-beta-1`: one switch hides Blade ID and the Xenopixel import; verify neither appears in a packaged build and both reappear when the switch is flipped
+  - Also covers SF34 from `baseline-sd-fonts`: the Xenopixel panel on Fonts & SD is still visible.
 - [ ] 3.2 `license-and-notices`: add a GPL-3.0 LICENSE, third-party notices (ProffieOS, fonts, styles, hilts) in the app and installer, and a source link to the tagged release; verify the About screen shows the notices and a working link in a packaged build
+  - Also decide SF30 from `baseline-sd-fonts`: the plan ties GPL compliance to keeping the exact config and a pointer to the ProffieOS source on the saber's card; do that at install, or record why the release link is enough.
 - [ ] 3.3 `unsigned-install-guide`: spike on a PC with Smart App Control on (install, toolchain, build, flash), then write the guide (browser download warning, Unblock, SmartScreen, SAC, Defender, S mode, the driver's UAC prompt) and a first-run check that names blocked tools; verify by following the guide on a clean Windows 11 PC
 - [ ] 3.4 `hardware-verification-v2`: run the unverified scenarios on hote2 (live presets since the rewrite, adopting a planned saber and installing it, staged presets including the edge case where the board is already in its bootloader, pending colours, installing a pasted style, SD eject, style editor output on a blade, a sample of styles against the simulator, fonts heard); verify each scenario's evidence is recorded as hardware with the date
 - [ ] 3.5 `v3-verification`: compile, flash budget on the V3 scale, backup, DFU, write, reconnect, a live preset edit, restore; verify each on the owner's V3 with the evidence recorded
