@@ -17,6 +17,25 @@
 - [ ] 2.5 Propose, audit and archive `baseline-showroom` (demo-room, hwpack, contributors); verify as in 2.1, and that `hwpack` records the key open question from design.md
 - [ ] 2.6 Triage every scenario marked neither on an F capability: each gets a blocker change, joins `hardware-verification-v2`/`v3-verification`, or is moved past Beta 1 with a reason; decide here whether a support bundle / log export is a blocker; verify `openspec list` shows a change for every item kept, and the moves are recorded in this file
   - Inputs from baseline-board: the Findings table in `baseline-board/design.md` (F1–F47; after archive under `openspec/changes/archive/`), and the scenarios marked neither or partial in `baseline-board/tasks.md` (44 neither and 14 partial of 78).
+  - **Triage of the baseline-board batch, 2026-09-24** (owner asked to triage this batch now; the other four baselines are triaged as they archive):
+
+    | Change | Milestone | Findings | Scenarios |
+    |---|---|---|---|
+    | connection-robustness | M2 | F1, F2, F3, F5, F7 | |
+    | library-integrity | M2 | F14, F15, F16, F17 | |
+    | wiring-confirmation-gate | M2 | F18 | needs `baseline-firmware` archived first |
+    | safe-staged-install | M2 | F31, F32, F47 | |
+    | preset-history-restore | M2 | F33, F34 | |
+    | preset-editor-fixes | M2 | F36, F37, F38, F41, F43, F44, F45 | |
+    | sets-safety | M2 (could move to M4) | F35, F39 | |
+    | diagnostics-feedback | M2 (could move to M4) | F6, F9, F11, F12, F13 | |
+    | release-hardening | M2 | F25, F26, F27, F28, F29 | |
+    | board-side-test-coverage | M2 | | 1.1, 1.2, 1.4-1.7, 1.9, 1.15, 1.18, 1.20, 3.3, 3.14, 5.3, 6.14, 6.16 |
+    | hardware-verification-v2 | M2 | F10 | 15 board scenarios + 28 hand-checked screen scenarios |
+    | v3-verification | M2 | | all 23 board-marked scenarios + OS 8 framing (3.10, 3.13) |
+    | board-side-polish | M4 | F4, F19, F20, F21, F23, F24, F40, F42 | |
+    | board-side-later | M5+ | F22, F30, F46 | |
+    | blade-id-verification (task 5.1) | M4 | F8 (connect re-runs blade detection) | |
 
 ## 3. M2 Beta 1 blockers
 
