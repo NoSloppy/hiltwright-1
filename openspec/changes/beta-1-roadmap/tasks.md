@@ -2,10 +2,11 @@
 
 ## 1. M0 Checkpoint
 
-- [ ] 1.1 Commit the uncommitted working tree in logical commits (font library, contributors, flow and presets, Styles rename, brand and icons, OpenSpec tooling); verify `git status` shows nothing but files deliberately left untracked, and that `npm test` passes at the resulting commit
-- [ ] 1.2 Fill `openspec/config.yaml` `context` with the project background from design.md D4; verify `openspec instructions proposal --change beta-1-roadmap --json` returns it under `context`
-- [ ] 1.3 Add the D4 `rules` (proposal, tasks, specs, Beta 1 freeze) to `openspec/config.yaml`; verify `openspec instructions proposal|tasks|specs --change beta-1-roadmap --json` each return their rules
-- [ ] 1.4 Add a note at the top of `docs/00-plan.md` saying the roadmap now lives in OpenSpec (`openspec/changes/beta-1-roadmap`); verify the note and the path it names both exist
+- [x] 1.1 Commit the uncommitted working tree in logical commits (font library, contributors, flow and presets, Styles rename, brand and icons, OpenSpec tooling); verify `git status` shows nothing but files deliberately left untracked, and that `npm test` passes at the resulting commit
+  - Done on branch `beta-1-roadmap` as 530e80e (OpenSpec), d406220 (brand sources), 94b47fc (app). The app features share files (IPC, preload, styles, shared controls), so they are one commit that builds rather than several that do not. `npm test` 276 passed (gated skipped), typecheck clean. Left untracked: root `hiltwright-logo.svg`, `hiltwright.png` (owner to decide).
+- [x] 1.2 Fill `openspec/config.yaml` `context` with the project background from design.md D4; verify `openspec instructions proposal --change beta-1-roadmap --json` returns it under `context`
+- [x] 1.3 Add the D4 `rules` (proposal, tasks, specs, Beta 1 freeze) to `openspec/config.yaml`; verify `openspec instructions proposal|tasks|specs --change beta-1-roadmap --json` each return their rules
+- [x] 1.4 Add a note at the top of `docs/00-plan.md` saying the roadmap now lives in OpenSpec (`openspec/changes/beta-1-roadmap`); verify the note and the path it names both exist
 
 ## 2. M1 Baseline
 

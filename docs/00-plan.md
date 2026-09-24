@@ -4,6 +4,8 @@
 **Status:** Path A, desktop-only, Electron + TypeScript. Committed.
 **Baseline:** `hiltwright_bionic/docs/planning/proffie-configurator-planning.md` (the other agent's plan). This document keeps that plan's structure and decision and merges in the recon in [01](01-proffieos-recon.md), [02](02-toolchain-usb-recon.md), [03](03-ecosystem-and-users.md) plus the review changes listed in §0.
 
+> **Roadmap moved, 2026-09-23.** From here on the roadmap, milestones and Beta 1 scope live in OpenSpec: [openspec/changes/beta-1-roadmap](../openspec/changes/beta-1-roadmap/proposal.md) (after archive, `openspec/changes/archive/`). What the app does is specified under [openspec/specs](../openspec/specs/). This document remains the technical record and history up to that date; §6's phases are superseded by the roadmap's milestones.
+
 ---
 
 ## 0. Changes from the baseline
