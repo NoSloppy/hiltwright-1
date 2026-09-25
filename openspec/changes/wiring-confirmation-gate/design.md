@@ -71,6 +71,8 @@ The app has no way to point at a separate data folder, so driving the real page 
 - [Role changes now withdraw the confirmation] → Accepted (D2). Better one extra click than a gap.
 - [Record fields grow the saber file] → The layout is a few hundred bytes per saber, and the IPC validator caps it.
 
+- [The owner found on hardware that Build stays available without a confirmation] → Kept by design: building cannot touch the saber, and `firmware-build` requires no confirmation to build. Only Install is gated. Owner asked, 2026-09-24; recorded here.
+
 ## Migration Plan
 
 No data migration step. Old `wiringConfirmedAt` values are ignored and dropped on the next save (D5). Firmware records without `wiring` stay valid. The next install adds it.

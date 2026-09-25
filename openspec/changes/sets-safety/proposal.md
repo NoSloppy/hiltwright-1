@@ -10,6 +10,7 @@ Loading a preset set can quietly go wrong. Warnings about missing styles, blade 
 
 - **F35:** Show a set's problems before it is loaded. Confirm before replacing staged edits. Let sets be renamed, and stop saving duplicates.
 - **F39:** Match styles to presets by name when saving a set from a saber, as the rest of the app does.
+- **HW-2026-09-24d** (hote2): loading a set that names a style since deleted from the library threw an error. Swapping the style out worked. The set's problems must be shown before loading, as F35 asks, and a missing style must never throw.
 
 ## Non-goals
 

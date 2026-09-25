@@ -58,15 +58,24 @@
 
 ## 5. Hardware check on the V2.2 (hote2)
 
-- [ ] 5.1 With hote2 connected (installed before this change): Wiring says it needs confirming once. Confirm it, build and install. Verify that the install succeeds and that the saber's firmware record now holds its board and blade layout.
-- [ ] 5.2 On hote2, change one blade's data pin in Wiring. Install is locked, and the Armory shows the wiring as not confirmed. Change it back. Verify that Install unlocks again without a new confirmation, then leave hote2's wiring as it was.
-- [ ] 5.3 The FW1 path on hardware:
+- [x] 5.1 With hote2 connected (installed before this change): Wiring says it needs confirming once. Confirm it, build and install. Verify that the install succeeds and that the saber's firmware record now holds its board and blade layout.
+  - **Result, 2026-09-24, owner, V2.2 hote2:** as expected. Wiring asked to confirm once, then the build and install succeeded.
+- [x] 5.2 On hote2, change one blade's data pin in Wiring. Install is locked, and the Armory shows the wiring as not confirmed. Change it back. Verify that Install unlocks again without a new confirmation, then leave hote2's wiring as it was.
+  - **Result, 2026-09-24, owner, V2.2 hote2:** as expected. Changing a data pin locked Install and the Armory showed "not confirmed"; changing it back unlocked Install. The owner noticed that Build stays available without a confirmation. That is by design: `firmware-build` says a build needs no confirmation, because building cannot touch the saber. Kept as is (design, Risks). Also seen: rebooting into the bootloader varies from an instant to 30 s or more, filed to `install-safety-nets`.
+- [x] 5.3 The FW1 path on hardware:
   1. Put back hote2's pre-Hiltwright backup, so the board runs vendor firmware with no Hiltwright record.
   2. Plan a saber with hote2's wiring and adopt hote2 when it connects.
   3. Confirm, build and install.
 
   Verify that Install unlocks after the confirmation and the install succeeds. Record the evidence, and note that this also runs `baseline-board`'s adoption scenario (1.19).
 
+  - **Result, 2026-09-24, owner, V2.2 hote2:**
+    - Adoption onto a plan worked, and the install completed.
+    - The real library (read through `\localhost\C$`, because the Claude app's package view redirects `AppData`) holds "hotetest" with its firmware record at 01:50:44 UTC, with `wiring` V2 and 3 blades, its confirmation, and staged presets cleared.
+    - A concurrent second write to the library failed with ENOENT, filed to `library-integrity`.
+    - The page showed that failure as "Stopped", with clipped text, filed to `install-safety-nets`.
+    - Loading a set that named a deleted style threw, filed to `sets-safety`.
+    - This also ran `baseline-board`'s adopt-on-connect scenario (1.19) on hardware.
 ## 6. Close
 
 - [x] 6.1 Run `npm test` and `npm run typecheck`; verify both pass.
