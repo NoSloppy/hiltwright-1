@@ -7,7 +7,8 @@
 
 ## 2. Version, CSP, folders, error screen
 
-- [ ] 2.1 Take the preload's `appVersion` from a build-time constant defined from `apps/desktop/package.json` (design D3). Verify in task 3.1 that the built preload contains the package version, and that `npm run dev` still shows it in the sidebar.
+- [x] 2.1 Take the preload's `appVersion` from a build-time constant defined from `apps/desktop/package.json` (design D3). Verify in task 3.1 that the built preload contains the package version, and that `npm run dev` still shows it in the sidebar.
+  - **Result, 2026-09-25.** The development sidebar reads "Hiltwright 0.1.0 alpha", and `window.hiltwright.appVersion` is "0.1.0". The built preload has `appVersion: "0.1.0"` (task 3.1).
 - [x] 2.2 Add a renderer build plugin that removes `ws: wss:` from the CSP in production builds only (design D4). Verify in task 3.1 that the built `out/renderer/index.html` has no `ws:`, and that `npm run dev` still live-reloads.
 - [x] 2.3 Add `insideFolder(root, target)` in `apps/desktop/src/main/paths.ts` and use it in `app:openPath` (design D5). Verify with `apps/desktop/test/paths.test.ts` covering: a folder inside (allowed), the data folder itself (allowed), a sibling with a longer name (refused), `..` climbing out (refused), and another drive (refused).
 - [x] 2.4 Change the page error screen's text to claim nothing about the saber (design D6). Verify by reading `ErrorBoundary.tsx` and seeing the screen in `npm run dev` with a page made to throw (for example via the developer tools).
@@ -24,10 +25,12 @@
     - the built CSP reads `connect-src 'self' blob:`
     - the preload has `appVersion: "0.1.0"`, and no `__APP_VERSION__` is left
     - development live reload still connects (`[vite] connected` in the dev runs after the plugin)
-- [ ] 3.2 Start `release/win-unpacked/Hiltwright.exe` with `HILTWRIGHT_DUMP=<file>` and `HILTWRIGHT_USER_DATA=<scratch folder>` set, wait 30 s, and close it. Verify that no dump file is written and that nothing is created in the scratch folder.
+- [x] 3.2 Start `release/win-unpacked/Hiltwright.exe` with `HILTWRIGHT_DUMP=<file>` and `HILTWRIGHT_USER_DATA=<scratch folder>` set, wait 30 s, and close it. Verify that no dump file is written and that nothing is created in the scratch folder.
+  - **Result, 2026-09-25, no board connected.** The packaged app ran for 30 s with `HILTWRIGHT_DUMP`, `HILTWRIGHT_USER_DATA` and `HILTWRIGHT_OFFSCREEN` set. No dump file was written, the scratch folder stayed empty (0 items), and the window showed on screen, so the offscreen switch was ignored too.
 - [ ] 3.3 Owner check: install from `npm run dist`'s installer and see the version in the sidebar footer. Verify by the owner's report.
 
 ## 4. Close
 
-- [ ] 4.1 Run `npm test` and `npm run typecheck`; verify both pass.
+- [x] 4.1 Run `npm test` and `npm run typecheck`; verify both pass.
+  - **Result, 2026-09-25.** 119 desktop tests passed (7 gated skipped), and the type check is clean, at 0fd4974.
 - [ ] 4.2 After archive, tick roadmap task 3.2 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.

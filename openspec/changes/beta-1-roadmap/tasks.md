@@ -110,6 +110,7 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 - [ ] 3.2 Deliver `release-hardening`: development aids off in packaged builds, before any packaged verification; verify it is archived
 - [ ] 3.3 Deliver `support-bundle`: a log and a diagnostics file, useful for every hardware check that follows; verify it is archived
 - [ ] 3.4 Deliver `hide-for-beta-1`: covers SF34 and FW21; verify it is archived
+- [ ] 3.4a Deliver `dev-no-board-switch`: filed 2026-09-25 after verification runs reached hote2; do it before the next verification run that could see a board; verify it is archived
 
 ### Wave B: nothing the owner made is lost
 
