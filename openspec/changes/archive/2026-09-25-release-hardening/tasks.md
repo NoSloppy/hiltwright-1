@@ -34,4 +34,4 @@
 
 - [x] 4.1 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-25.** 119 desktop tests passed (7 gated skipped), and the type check is clean, at 0fd4974.
-- [ ] 4.2 After archive, tick roadmap task 3.2 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 4.2 After archive, tick roadmap task 3.2 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
