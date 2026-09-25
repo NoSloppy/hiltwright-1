@@ -34,4 +34,5 @@
   - **Result, 2026-09-25.** The scratch harness `run-app.ps1` sets `HILTWRIGHT_NO_BOARD=1` unless called with `-Board`. The project note on test runs says so.
 - [x] 4.2 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-25.** 175 core and 121 desktop tests pass (7 gated skipped), and the type check is clean.
-- [ ] 4.3 After archive, tick roadmap task 3.4a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 4.3 After archive, tick roadmap task 3.4a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-25.** Archived as `2026-09-25-dev-no-board-switch` with the app-shell requirement synced; roadmap 3.4a is ticked.
