@@ -411,6 +411,7 @@ export function useBoard() {
 
   // Dev-only end-to-end check (HILTWRIGHT_E2E=1): edit a preset's font on the real board, verify, restore.
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     (window as unknown as { hiltwrightE2E?: (mode?: string) => Promise<string> }).hiltwrightE2E = async (mode?: string) => {
       // A board running behind can take half a minute to identify; wait for it.
       for (let n = 0; n < 180 && !(client.current && infoRef.current); n++) await new Promise((r) => setTimeout(r, 500));

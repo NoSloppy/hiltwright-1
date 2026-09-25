@@ -235,6 +235,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
 
   // Dev aid: main calls this to run a compile-only pass against the connected board.
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     (window as unknown as { hiltwrightBuildE2E?: () => Promise<string> }).hiltwrightBuildE2E = async () => {
       if (!model) return 'no model';
       setConfirmedWiring(true);

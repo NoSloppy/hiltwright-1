@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { HiltwrightApi, JobEvent } from '../shared/api';
 
+/** The package's version, set at build time (electron.vite.config.ts). */
+declare const __APP_VERSION__: string;
+
 // Thin, typed bridge. Each method maps to one ipcMain.handle in src/main/ipc.ts.
 const api: HiltwrightApi = {
-  appVersion: '0.1.0',
+  appVersion: __APP_VERSION__,
   platform: process.platform,
   library: {
     list: () => ipcRenderer.invoke('library:list'),

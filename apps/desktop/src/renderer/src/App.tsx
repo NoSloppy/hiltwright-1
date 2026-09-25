@@ -75,7 +75,7 @@ export function App() {
   const connected = status === 'connected';
   const configName = info?.version?.config?.replace(/^config\//, '').replace(/\.h$/, '') ?? null;
   // Dev aid: lets main switch pages for screenshots.
-  useEffect(() => { (window as unknown as { hiltwrightGoto?: (p: string) => void }).hiltwrightGoto = (p) => { setFake(p.startsWith('fake:')); setPage(p.replace('fake:', '') as Page); }; }, []);
+  useEffect(() => { if (!import.meta.env.DEV) return; (window as unknown as { hiltwrightGoto?: (p: string) => void }).hiltwrightGoto = (p) => { setFake(p.startsWith('fake:')); setPage(p.replace('fake:', '') as Page); }; }, []);
   // Ctrl+1..9 switch pages, in the order shown.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (!e.ctrlKey || e.altKey || e.shiftKey) return; const p = PAGES[Number(e.key) - 1]; if (p) { e.preventDefault(); setPageRef.current(p.id); } };

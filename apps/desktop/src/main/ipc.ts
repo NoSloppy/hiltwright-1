@@ -17,6 +17,7 @@ import { FontLibrary, type ImportResult } from './fontLibrary';
 import { ContributorStore } from './contributors';
 import { buildFirmware } from './build';
 import { cleanFirmware, hexMap } from './firmwareRecord';
+import { insideFolder } from './paths';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { backupFlash, describeBootloader, listBackups, restoreBackup, usbState, waitFor, writeFirmware } from './flash';
@@ -310,7 +311,7 @@ export function registerIpc(): void {
   });
   ipcMain.handle('app:openPath', async (_e, p: unknown) => {
     const target = str(p, 1000);
-    if (!target.startsWith(userData)) throw new Error('Only app data paths can be opened');
+    if (!insideFolder(userData, target)) throw new Error('Only app data paths can be opened');
     await shell.openPath(target);
   });
 }

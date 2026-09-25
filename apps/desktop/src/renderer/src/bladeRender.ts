@@ -203,7 +203,7 @@ export function addPreview(c: PreviewClient): () => void {
 }
 
 // Dev aid: with the display asleep requestAnimationFrame never fires, so probes drive a frame by hand.
-(window as unknown as { hiltwrightPreviewTick?: () => unknown }).hiltwrightPreviewTick = () => {
+if (import.meta.env.DEV) (window as unknown as { hiltwrightPreviewTick?: () => unknown }).hiltwrightPreviewTick = () => {
   const now = performance.now();
   for (const c of clients) if (c.visible()) c.tick(now);
   return { ready: bladeRenderer.ready, failed: bladeRenderer.unavailable, clients: clients.size };
