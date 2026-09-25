@@ -144,8 +144,8 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 - [ ] 3.27 Deliver `editor-output-safety`; verify it is archived
 - [ ] 3.28 Deliver `demo-sound-fidelity`; verify it is archived
 - [ ] 3.29 Deliver `demo-room-fixes`; verify it is archived
-- [ ] 3.30 Deliver `diagnostics-feedback`: candidate for M4 (design D7); verify it is archived
-- [ ] 3.31 Deliver `sets-safety`: candidate for M4 (design D7); verify it is archived
+- [ ] 3.30 Deliver `diagnostics-feedback`: kept in Beta 1 by the owner, 2026-09-24; verify it is archived
+- [ ] 3.31 Deliver `sets-safety`: kept in Beta 1 by the owner, 2026-09-24; verify it is archived
 
 ### Wave E: credit and licence
 

@@ -109,7 +109,7 @@ The five baselines produced 37 M2 changes: 33 from triage, `support-bundle` (own
 | F | Prove it | 3 changes and the dry run | The hardware passes verify the fixes, so they come after them. The unsigned-install spike can start any time. |
 
 - **Test coverage opens each area.** Each area's test-coverage change (characterisation tests) comes at the start of its wave, before the fixes that touch the same code.
-- **Candidates for M4:** `diagnostics-feedback` and `sets-safety` hold only Med findings. They are last in wave D and are the first to move if Beta 1 must shrink. That move is the owner's call.
+- **Kept in Beta 1:** `diagnostics-feedback` and `sets-safety` hold only Med findings and were offered for M4. The owner kept both in Beta 1 on 2026-09-24. They stay last in wave D.
 - *Rejected:* ordering by capability (all board-side changes, then all firmware-side). Themes put what hurts testers most first, and let data safety share one fix.
 - *Rejected:* running the hardware passes first. They would fail on known defects and need re-running.
 

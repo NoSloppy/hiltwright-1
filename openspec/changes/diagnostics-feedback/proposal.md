@@ -1,6 +1,6 @@
 # Proposal
 
-**Milestone:** M2 (Beta 1 blocker; candidate to move to M4 if Beta 1 scope needs trimming). Triaged on 2026-09-24 from the findings of `baseline-board` (archived as `openspec/changes/archive/2026-09-24-baseline-board/`, design.md Findings table).
+**Milestone:** M2 (Beta 1 blocker; kept in Beta 1 by the owner on 2026-09-24). Triaged on 2026-09-24 from the findings of `baseline-board` (archived as `openspec/changes/archive/2026-09-24-baseline-board/`, design.md Findings table).
 
 ## Why
 
