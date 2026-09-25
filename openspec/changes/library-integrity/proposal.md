@@ -13,6 +13,7 @@ The saber library is the owner's record of every saber, and its build model, sna
 - **F16:** Offer adoption only to a saber without a saved build model, or warn before replacing one.
 - **F17:** "New saber" while a saber is plugged in makes that plan's steps reachable, or explains why the plugged-in saber stays the working one.
 - **FW26** (from `baseline-firmware`): Before adoption replaces a saber's compiled styles with Hiltwright's, tell the owner. That includes presets whose styles will point elsewhere.
+- **Shared safe store** (roadmap design D8): build F14's fix as one safe store (write via a temporary file, keep the last good copy, set a damaged file aside and report it) that `font-library-integrity`, `style-save-integrity` and `contributors-integrity` reuse, and use it for the preset-sets store too, which has the same flaw but was never flagged.
 
 ## Non-goals
 

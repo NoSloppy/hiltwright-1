@@ -96,6 +96,29 @@ Blade ID ("Do you swap blades?") and the Xenopixel import are hidden by a single
 | Source offer | Link to the tagged release in the public repo | Repo is public and stays so |
 | Hilts shipped | PunkSaber only (built in) | Shadowfoil hilts need their permission |
 
+### D7. M2 is delivered in six waves (added 2026-09-24, after M1)
+The five baselines produced 37 M2 changes: 33 from triage, `support-bundle` (owner's decision), and the three the roadmap named from the start. They are delivered in waves, each unblocking the next. The full list is in tasks.md section 3.
+
+| Wave | Theme | Changes | Why this position |
+|---|---|---|---|
+| A | Unblock and equip | 4 | FW1 blocks every first install. Development aids must be off before packaged builds are tested. The log helps every later check. |
+| B | Nothing the owner made is lost | 6 | Data loss is the least forgivable failure. One shared fix (D8) covers four of its High findings. |
+| C | The right firmware on the right board | 8 | The riskiest area for hardware. Each step depends on the one before: connection, then toolchain, build, wiring, target, safety nets, presets. |
+| D | The saber does what the app shows | 13 | Presets, styles, card, preview and demo room. These are mostly independent of each other once A-C are in. |
+| E | Credit and licence | 3 | The notices need the attribution and pack decisions first. Can run beside C and D. |
+| F | Prove it | 3 changes and the dry run | The hardware passes verify the fixes, so they come after them. The unsigned-install spike can start any time. |
+
+- **Test coverage opens each area.** Each area's test-coverage change (characterisation tests) comes at the start of its wave, before the fixes that touch the same code.
+- **Candidates for M4:** `diagnostics-feedback` and `sets-safety` hold only Med findings. They are last in wave D and are the first to move if Beta 1 must shrink. That move is the owner's call.
+- *Rejected:* ordering by capability (all board-side changes, then all firmware-side). Themes put what hurts testers most first, and let data safety share one fix.
+- *Rejected:* running the hardware passes first. They would fail on known defects and need re-running.
+
+### D8. Shared roots fixed once
+- **Safe stores.** The saber library, font details, styles, contributors and preset sets each read their JSON file the same way: a parse error reads as empty, and the next save overwrites the file (F14, SF2, ST8, SR33; the preset-sets store was never flagged but has the same code). `library-integrity` builds one safe store (write via a temporary file, keep the last good copy, set a damaged file aside and report it), and 3.7-3.9 reuse it.
+- **The firmware record.** `wiring-confirmation-gate` adds the installed board and blade layout to the firmware record. `install-target-safety` reuses them to check the target board.
+- **Queued versus live styles.** `preset-editor-fixes` (F37) and `style-to-saber-fixes` (ST3-ST5) both change how a queued style and a live choice meet in the saber's model, so they are done together.
+- **Development-only switches.** `release-hardening` gates every `HILTWRIGHT_*` aid (F25, FW33, SR22). `pack-integrity` also disables developer tools in packaged builds (SR18).
+
 ## Risks / Trade-offs
 
 - [The baseline becomes its own refinement loop] → Depth caps from D2; a baseline describes, it never fixes; each domain change is reviewed once and archived.

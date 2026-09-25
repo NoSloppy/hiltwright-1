@@ -15,7 +15,8 @@
 - [x] 2.3 Propose, audit and archive `baseline-sd-fonts` (sd-card, font-library, xenopixel-import stub); verify as in 2.1
 - [x] 2.4 Propose, audit and archive `baseline-styles` (style-library, style-simulator, style-editor, blade-preview); verify as in 2.1
 - [x] 2.5 Propose, audit and archive `baseline-showroom` (demo-room, hwpack, contributors); verify as in 2.1, and that `hwpack` records the key open question from design.md
-- [ ] 2.6 Triage every scenario marked neither on an F capability: each gets a blocker change, joins `hardware-verification-v2`/`v3-verification`, or is moved past Beta 1 with a reason; decide here whether a support bundle / log export is a blocker; verify `openspec list` shows a change for every item kept, and the moves are recorded in this file
+- [x] 2.6 Triage every scenario marked neither on an F capability: each gets a blocker change, joins `hardware-verification-v2`/`v3-verification`, or is moved past Beta 1 with a reason; decide here whether a support bundle / log export is a blocker; verify `openspec list` shows a change for every item kept, and the moves are recorded in this file
+  - Closed 2026-09-24: all five batches triaged (198 findings, each placed once), and the owner decided the support bundle is a Beta 1 blocker (`support-bundle`).
   - Inputs from baseline-board: the Findings table in `baseline-board/design.md` (F1–F47; after archive under `openspec/changes/archive/`), and the scenarios marked neither or partial in `baseline-board/tasks.md` (44 neither and 14 partial of 78).
   - **Triage of the baseline-board batch, 2026-09-24** (owner asked to triage this batch now; the other four baselines are triaged as they archive):
 
@@ -99,17 +100,65 @@
     | hardware-verification-v2 (extended) | M2 | | demo-room listening pass + 15 hand checks + a real GLB |
     | showroom-polish | M4 | SR7, SR8, SR14, SR15, SR16, SR20, SR23, SR25, SR27-SR31, SR37, SR38, SR40 | |
 
-## 3. M2 Beta 1 blockers
+## 3. M2 Beta 1 blockers, in waves (design D7)
 
-- [ ] 3.1 `hide-for-beta-1`: one switch hides Blade ID and the Xenopixel import; verify neither appears in a packaged build and both reappear when the switch is flipped
-  - Also covers SF34 from `baseline-sd-fonts`: the Xenopixel panel on Fonts & SD is still visible.
-- [ ] 3.2 `license-and-notices`: add a GPL-3.0 LICENSE, third-party notices (ProffieOS, fonts, styles, hilts) in the app and installer, and a source link to the tagged release; verify the About screen shows the notices and a working link in a packaged build
-  - Also decide SF30 from `baseline-sd-fonts`: the plan ties GPL compliance to keeping the exact config and a pointer to the ProffieOS source on the saber's card; do that at install, or record why the release link is enough.
-- [ ] 3.3 `unsigned-install-guide`: spike on a PC with Smart App Control on (install, toolchain, build, flash), then write the guide (browser download warning, Unblock, SmartScreen, SAC, Defender, S mode, the driver's UAC prompt) and a first-run check that names blocked tools; verify by following the guide on a clean Windows 11 PC
-- [ ] 3.4 `hardware-verification-v2`: run the unverified scenarios on hote2 (live presets since the rewrite, adopting a planned saber and installing it, staged presets including the edge case where the board is already in its bootloader, pending colours, installing a pasted style, SD eject, style editor output on a blade, a sample of styles against the simulator, fonts heard); verify each scenario's evidence is recorded as hardware with the date
-- [ ] 3.5 `v3-verification`: compile, flash budget on the V3 scale, backup, DFU, write, reconnect, a live preset edit, restore; verify each on the owner's V3 with the evidence recorded
-- [ ] 3.6 Deliver every blocker change created in 2.6; verify each is archived
-- [ ] 3.7 Dry run: someone other than the owner installs from the packaged installer on a clean PC using only the guide, and runs the promise end to end; verify their notes are triaged into changes or rejected
+Each "Deliver" task means: complete the change's specs, design and tasks with `/opsx:propose` (or continue it), apply it, and archive it after its own verification. Changes that touch the board link, build, install or the SD card carry their own hardware check (config rule), so hardware time is spread across waves B-D, not saved for wave F. Within a wave, the order given is the recommended one. Waves B-E share no code except where noted in design D8, so separate sessions can work on them in parallel once wave A is done.
+
+### Wave A: unblock and equip
+
+- [ ] 3.1 Deliver `wiring-confirmation-gate`: first, because FW1 blocks every first install; verify it is archived
+- [ ] 3.2 Deliver `release-hardening`: development aids off in packaged builds, before any packaged verification; verify it is archived
+- [ ] 3.3 Deliver `support-bundle`: a log and a diagnostics file, useful for every hardware check that follows; verify it is archived
+- [ ] 3.4 Deliver `hide-for-beta-1`: covers SF34 and FW21; verify it is archived
+
+### Wave B: nothing the owner made is lost
+
+- [ ] 3.5 Deliver `board-side-test-coverage`: characterisation tests before the library and presets are touched; verify it is archived
+- [ ] 3.6 Deliver `library-integrity`: builds the shared safe store (design D8) that 3.7-3.9 reuse; also covers the unflagged preset-sets store; verify it is archived
+- [ ] 3.7 Deliver `font-library-integrity`; verify it is archived
+- [ ] 3.8 Deliver `style-save-integrity`; verify it is archived
+- [ ] 3.9 Deliver `contributors-integrity`; verify it is archived
+- [ ] 3.10 Deliver `demo-hilt-safety`; verify it is archived
+
+### Wave C: the right firmware on the right board
+
+- [ ] 3.11 Deliver `firmware-side-test-coverage`: seams and tests for the flasher before it is changed; verify it is archived
+- [ ] 3.12 Deliver `connection-robustness`: unplug and silence handling that installs rely on; verify it is archived
+- [ ] 3.13 Deliver `toolchain-integrity`: pinned, verified toolchain before builds are relied on; verify it is archived
+- [ ] 3.14 Deliver `build-correctness`; verify it is archived
+- [ ] 3.15 Deliver `wiring-validation`; verify it is archived
+- [ ] 3.16 Deliver `install-target-safety`: after 3.1, reusing the board and blade layout it adds to the firmware record; verify it is archived
+- [ ] 3.17 Deliver `install-safety-nets`; verify it is archived
+- [ ] 3.18 Deliver `safe-staged-install`; verify it is archived
+
+### Wave D: the saber does what the app shows
+
+- [ ] 3.19 Deliver `sd-fonts-test-coverage`; verify it is archived
+- [ ] 3.20 Deliver `styles-test-coverage`; verify it is archived
+- [ ] 3.21 Deliver `preset-editor-fixes`: together with 3.23; both change how queued and live styles meet in the model; verify it is archived
+- [ ] 3.22 Deliver `preset-history-restore`; verify it is archived
+- [ ] 3.23 Deliver `style-to-saber-fixes`; verify it is archived
+- [ ] 3.24 Deliver `card-safety`: blocks preset writes while the card is shared, so after 3.21-3.22; verify it is archived
+- [ ] 3.25 Deliver `font-check-alignment`; verify it is archived
+- [ ] 3.26 Deliver `preview-honesty`; verify it is archived
+- [ ] 3.27 Deliver `editor-output-safety`; verify it is archived
+- [ ] 3.28 Deliver `demo-sound-fidelity`; verify it is archived
+- [ ] 3.29 Deliver `demo-room-fixes`; verify it is archived
+- [ ] 3.30 Deliver `diagnostics-feedback`: candidate for M4 (design D7); verify it is archived
+- [ ] 3.31 Deliver `sets-safety`: candidate for M4 (design D7); verify it is archived
+
+### Wave E: credit and licence
+
+- [ ] 3.32 Deliver `style-attribution`; verify it is archived
+- [ ] 3.33 Deliver `pack-integrity`: decides the hwpack key question before the Shadowfoil conversation; verify it is archived
+- [ ] 3.34 Deliver `license-and-notices`: last in the wave, taking the statements from 3.32 and 3.33; decides SF30; verify it is archived
+
+### Wave F: prove it
+
+- [ ] 3.35 Deliver `unsigned-install-guide`: its Smart App Control spike needs only a clean Windows 11 PC and can run at any time from wave A on; verify it is archived
+- [ ] 3.36 Deliver `hardware-verification-v2`: after waves B-D, re-running on hote2 everything they changed plus the remaining scenarios; verify it is archived
+- [ ] 3.37 Deliver `v3-verification`: after 3.13, 3.14 and 3.16, which set up V3 builds and board detection; verify it is archived
+- [ ] 3.38 Dry run: someone other than the owner installs from the packaged installer on a clean PC using only the guide, and runs the promise end to end; verify their notes are triaged into changes or rejected
 
 ## 4. M3 Beta 1 ship
 
