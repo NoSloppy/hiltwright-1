@@ -86,6 +86,18 @@
     | v3-verification (extended) | M2 | | the blade sample on the V3 |
     | styles-polish | M4 | ST11, ST12, ST24-ST28, ST35-ST39 | |
   - Inputs from baseline-showroom: the Findings table in `baseline-showroom/design.md` (SR1–SR40), and the scenarios marked neither or partial in `baseline-showroom/tasks.md` (16 neither and 5 partial of 33).
+  - **Triage of the baseline-showroom batch, 2026-09-24:**
+
+    | Change | Milestone | Findings | Scenarios |
+    |---|---|---|---|
+    | demo-hilt-safety | M2 | SR1, SR2, SR3, SR4, SR5 | |
+    | demo-room-fixes | M2 | SR6, SR9, SR12 | |
+    | demo-sound-fidelity | M2 | SR10, SR11, SR13 | |
+    | pack-integrity | M2 | SR17, SR18, SR19, SR21, SR24, SR26, SR32 | decides the hwpack key question |
+    | contributors-integrity | M2 | SR33, SR34, SR35, SR36, SR39 | |
+    | release-hardening (extended) | M2 | SR22 | |
+    | hardware-verification-v2 (extended) | M2 | | demo-room listening pass + 15 hand checks + a real GLB |
+    | showroom-polish | M4 | SR7, SR8, SR14, SR15, SR16, SR20, SR23, SR25, SR27-SR31, SR37, SR38, SR40 | |
 
 ## 3. M2 Beta 1 blockers
 

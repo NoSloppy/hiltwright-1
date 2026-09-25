@@ -41,6 +41,12 @@ A scripted pass in the real app, recording board, date and result for each scena
   - style-simulator 2.10, 2.12
   - blade-preview 3.2, 3.3, 3.4
   - style-editor 4.1, 4.2, 4.3, 4.6, 4.7, 4.11, 4.12, 4.13, 4.15, 4.16
+- **From `baseline-showroom`, a listening pass in the demo room:** loading a library font (1.11), SmoothSwing (1.12), pre-on and post-off (1.13), effects including melt, a pack font playing (2.4), and a font without SmoothSwing.
+- **From `baseline-showroom`, checked by hand:**
+  - demo-room 1.1, 1.2, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.14
+  - hwpack 2.6 (the built-in hilt on a fresh install), 2.7
+  - contributors 3.4, 3.6, 3.7
+  - loading a real `.glb` hilt
 
 ## Non-goals
 

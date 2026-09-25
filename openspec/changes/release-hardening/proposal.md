@@ -14,6 +14,7 @@ Beta 1 ships a packaged installer to testers. Several development conveniences a
 - **F28:** Opening a folder checks the real path is inside the app's data folder, not a string prefix.
 - **F29:** The page error screen says only what it knows.
 - **FW33** (from `baseline-firmware`): The build end-to-end hook that confirms the wiring as a side effect is removed from packaged builds along with the other development aids.
+- **SR22** (from `baseline-showroom`): The pack folder override (`HILTWRIGHT_PACKS`) is development-only, along with the other development aids.
 
 ## Non-goals
 
