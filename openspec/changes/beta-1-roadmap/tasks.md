@@ -14,7 +14,7 @@
 - [x] 2.2 Propose, audit and archive `baseline-firmware` (hardware-wiring, config-generation, toolchain, firmware-build, firmware-install, blade-id stub); verify as in 2.1
 - [x] 2.3 Propose, audit and archive `baseline-sd-fonts` (sd-card, font-library, xenopixel-import stub); verify as in 2.1
 - [x] 2.4 Propose, audit and archive `baseline-styles` (style-library, style-simulator, style-editor, blade-preview); verify as in 2.1
-- [ ] 2.5 Propose, audit and archive `baseline-showroom` (demo-room, hwpack, contributors); verify as in 2.1, and that `hwpack` records the key open question from design.md
+- [x] 2.5 Propose, audit and archive `baseline-showroom` (demo-room, hwpack, contributors); verify as in 2.1, and that `hwpack` records the key open question from design.md
 - [ ] 2.6 Triage every scenario marked neither on an F capability: each gets a blocker change, joins `hardware-verification-v2`/`v3-verification`, or is moved past Beta 1 with a reason; decide here whether a support bundle / log export is a blocker; verify `openspec list` shows a change for every item kept, and the moves are recorded in this file
   - Inputs from baseline-board: the Findings table in `baseline-board/design.md` (F1–F47; after archive under `openspec/changes/archive/`), and the scenarios marked neither or partial in `baseline-board/tasks.md` (44 neither and 14 partial of 78).
   - **Triage of the baseline-board batch, 2026-09-24** (owner asked to triage this batch now; the other four baselines are triaged as they archive):
@@ -85,6 +85,7 @@
     | hardware-verification-v2 (extended) | M2 | | side-by-side blade pass (2.2, 1.13, 4.4) + 25 hand checks |
     | v3-verification (extended) | M2 | | the blade sample on the V3 |
     | styles-polish | M4 | ST11, ST12, ST24-ST28, ST35-ST39 | |
+  - Inputs from baseline-showroom: the Findings table in `baseline-showroom/design.md` (SR1–SR40), and the scenarios marked neither or partial in `baseline-showroom/tasks.md` (16 neither and 5 partial of 33).
 
 ## 3. M2 Beta 1 blockers
 
