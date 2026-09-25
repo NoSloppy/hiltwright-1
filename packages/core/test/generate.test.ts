@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bladeTables, generateConfig, getDefine, hasDefine, parseConfig, presetArrays, readGeneratedHeader, rowToBlades, validateModel, type SaberConfigModel } from '../src';
+import { bladeTables, generateConfig, getDefine, hasDefine, parseConfig, presetArrays, readGeneratedHeader, rowToBlades, validateModel, withWiringConfirmation, type SaberConfigModel } from '../src';
 
 const hote2: SaberConfigModel = {
   name: 'hiltwright_hote2', board: 'V2', buttons: 2, prop: 'fett263',
@@ -43,6 +43,14 @@ describe('generateConfig', () => {
 
   it('is deterministic', () => {
     expect(generateConfig(hote2).text).toBe(generateConfig(hote2).text);
+  });
+
+  it('records the board and blades it was built for, and the wiring confirmation never reaches the firmware', () => {
+    const plain = generateConfig(hote2);
+    expect(plain.manifest.wiring).toEqual({ board: 'V2', blades: hote2.blades });
+    const confirmed = generateConfig(withWiringConfirmation(hote2, true, '2026-09-24T10:00:00.000Z'));
+    expect(confirmed.text).toBe(plain.text);
+    expect(confirmed.hash).toBe(plain.hash);
   });
 
   it('chained blades become SubBlade rows and a motor gets the motor look', () => {

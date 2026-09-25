@@ -45,7 +45,12 @@ export interface SaberConfigModel {
   presets: { font: string; track: string; name: string; looks?: (string | null)[]; lookArgs?: (string | null)[] }[];
   /** Set when the presets came from a bank rather than the saber: the draft keeps them, and the install replaces the saber's own. */
   presetsFrom?: { bank?: string; name: string; at: string };
-  /** When the owner confirmed the wiring against the installer's notes; the build waits for it once per wiring change. */
+  /**
+   * The owner's "I checked the wiring": when, and for which board and blade layout (a fingerprint). It counts only
+   * while the layout still matches; see `wiringConfirmed` in ./wiring.
+   */
+  wiringConfirmation?: { at: string; layout: string };
+  /** @deprecated Timestamp-only confirmation from before 2026-09-24. It never said what it confirmed and no longer counts. */
   wiringConfirmedAt?: string;
   /** Looks beyond the starters that presets may reference (pasted library styles). */
   looks?: LookDef[];
@@ -196,6 +201,7 @@ export function generateConfig(m: SaberConfigModel): GeneratedConfig {
     bladeId: swapping,
     looks: usedLooks.map((l) => ({ id: l.id, name: l.name, args: l.args, ...(l.defaults ? { defaults: l.defaults } : {}) })),
     presets: slotLooks.map((row, pi) => ({ name: m.presets[pi].name, looks: row.map((l) => l.id) })),
+    wiring: { board: m.board, blades: m.blades },
   };
 
   const rowText = rows.map((r) => `  { ${r.id}, ${bladesToExprs(r.blades).map(emitBladeExpr).join(',\n    ')},\n    CONFIGARRAY(presets) },${swapping ? ` // ${r.name.replace(/[\r\n]+/g, ' ')}` : ''}`);

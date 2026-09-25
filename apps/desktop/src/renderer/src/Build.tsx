@@ -2,7 +2,7 @@
 // this page shows the config they make, builds it, and installs: backup → bootloader → write → verify.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { voicePackFromSerial, voicePackVerdict, type VoicePackStatus } from '@hiltwright/core';
+import { voicePackFromSerial, voicePackVerdict, wiringConfirmed, withWiringConfirmation, type VoicePackStatus } from '@hiltwright/core';
 import { queuedLookIds } from './saberModel';
 import { PROPS } from './Wiring';
 import type { Workspace } from './workspace';
@@ -90,8 +90,9 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const queuedLooks = queuedLookIds(model ?? undefined, saber?.firmware);
   useEffect(() => { if (model) void api().build.preview(model).then(setPreview); }, [model]);
   const prop = model?.prop ?? 'fett263';
-  const confirmedWiring = !!model?.wiringConfirmedAt || !!saber?.firmware;
-  const setConfirmedWiring = (v: boolean) => { if (model) void ws.saveModel(v ? { ...model, wiringConfirmedAt: new Date().toISOString() } : (({ wiringConfirmedAt: _x, ...rest }) => rest)(model)); };
+  // One rule for every page: confirmed only while the board and blades are the layout the owner checked.
+  const confirmedWiring = wiringConfirmed(model);
+  const setConfirmedWiring = (v: boolean) => { if (model) void ws.saveModel(withWiringConfirmation(model, v)); };
 
   const [installError, setInstallError] = useState<string | null>(null);
   const [installStarted, setInstallStarted] = useState<number | null>(null);

@@ -16,6 +16,7 @@ import { listPacks, packFont, packMesh, userPacksDir } from './packs';
 import { FontLibrary, type ImportResult } from './fontLibrary';
 import { ContributorStore } from './contributors';
 import { buildFirmware } from './build';
+import { cleanFirmware, hexMap } from './firmwareRecord';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { backupFlash, describeBootloader, listBackups, restoreBackup, usbState, waitFor, writeFirmware } from './flash';
@@ -70,22 +71,13 @@ export function registerIpc(): void {
   ipcMain.handle('library:plan', (_e, name: unknown, model: unknown) => { const errors = validateModel(model as SaberConfigModel).filter((e) => !/preset/i.test(e)); if (errors.length) throw new Error(errors[0]); return library.plan(str(name, 80), model as SaberConfigModel); });
   ipcMain.handle('library:adopt', (_e, plannedId: unknown, targetId: unknown) => library.adopt(str(plannedId, 40), str(targetId, 40)));
   ipcMain.handle('library:remove', (_e, id: unknown) => library.remove(str(id, 40)));
-  const hexMap = (v: unknown): Record<number, string> => {
-    const out: Record<number, string> = {};
-    if (v && typeof v === 'object') for (const [k, x] of Object.entries(v as Record<string, unknown>)) if (/^\d+$/.test(k) && /^#[0-9a-fA-F]{6}$/.test(String(x))) out[Number(k)] = String(x);
-    return out;
-  };
   ipcMain.handle('library:update', (_e, id: unknown, patch: unknown) => {
     const p = (patch ?? {}) as Record<string, unknown>;
     const out: { model?: SaberConfigModel | null; firmware?: FirmwareManifest | null } = {};
     if ('model' in p) out.model = p.model === null ? null : model(p.model);
     if ('firmware' in p) {
       if (p.firmware === null) out.firmware = null;
-      else {
-        const f = p.firmware as FirmwareManifest;
-        if (!f || typeof f !== 'object' || typeof f.hash !== 'string' || !Array.isArray(f.looks) || !Array.isArray(f.presets)) throw new Error('Expected a firmware manifest');
-        out.firmware = { hash: str(f.hash, 40), bladeId: f.bladeId === true, os: str(f.os ?? '', 40), at: str(f.at ?? new Date().toISOString(), 40), looks: f.looks.map((l) => ({ id: str(l.id, 80), name: str(l.name, 120), args: Array.isArray(l.args) ? l.args.map(Number).filter(Number.isFinite) : [], ...(l.defaults ? { defaults: hexMap(l.defaults) } : {}) })), presets: f.presets.map((x) => ({ name: str(x.name, 200), looks: Array.isArray(x.looks) ? x.looks.map((s) => str(s, 80)) : [] })) };
-      }
+      else out.firmware = cleanFirmware(p.firmware);
     }
     return library.update(str(id, 40), out);
   });

@@ -3,7 +3,7 @@
 // it is changed; Build & Install compiles from it.
 
 import { useEffect, useRef, useState } from 'react';
-import { parseId, type BladeVariant, type BoardModel, type ModelBlade, type Prop, type SaberConfigModel } from '@hiltwright/core';
+import { parseId, wiringConfirmed, withWiringConfirmation, type BladeVariant, type BoardModel, type ModelBlade, type Prop, type SaberConfigModel } from '@hiltwright/core';
 import { HardwareEditor } from './Hardware';
 import type { Board } from './board';
 import { Icon } from './Icon';
@@ -21,24 +21,27 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { setDraft(model); }, [saber?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (model && !draft) setDraft(model); }, [model, draft]);
-  const change = (patch: Partial<SaberConfigModel>, unconfirm = true) => {
+  // A confirmation records the layout it was given for, so a board or blade change withdraws it by itself and
+  // changing back restores it; nothing here has to clear it.
+  const update = (fn: (d: SaberConfigModel) => SaberConfigModel) => {
     setDraft((d) => {
       if (!d) return d;
-      const next: SaberConfigModel = { ...d, ...patch };
-      if (unconfirm) delete next.wiringConfirmedAt;
+      const next = fn(d);
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => { void ws.saveModel(next); }, 300);
       return next;
     });
   };
+  const change = (patch: Partial<SaberConfigModel>) => update((d) => ({ ...d, ...patch }));
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
 
   if (!saber || !info || !draft) {
     return <section className="panel"><div className="pb col" style={{ gap: 6 }}><h3>No saber to wire yet</h3><span className="dim small">Plug a saber in, or start one in the Armory, and describe its wiring here.</span> <button type="button" className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => go('armory')}><span className="b"><span className="i">Go to the Armory</span></span></button></div></section>;
   }
 
-  // Wiring that has been installed counts as confirmed until it is changed.
-  const confirmed = !!draft.wiringConfirmedAt || (!!saber.firmware && JSON.stringify(draft.blades) === JSON.stringify(saber.model?.blades ?? draft.blades));
+  const confirmed = wiringConfirmed(draft);
+  // Confirmed or installed before confirmations recorded what they checked: ask once, and say why.
+  const confirmOnce = !confirmed && !draft.wiringConfirmation && (!!saber.model?.wiringConfirmedAt || !!saber.firmware);
   const detected = info.pixelBlades;
   const measureBlocked = !live ? 'Connect the saber to measure a blade.' : !saber.firmware?.bladeId ? 'Turn this on, then build and install once; readings only count from firmware that scans with the blade powered.' : null;
 
@@ -58,18 +61,18 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
             </label>
             <label className="field"><span className="label">Buttons</span>
               <div className="seg" role="radiogroup" aria-label="How many buttons" style={{ height: 32 }}>
-                {([1, 2, 3] as const).map((n) => <button key={n} type="button" role="radio" aria-checked={draft.buttons === n} className={draft.buttons === n ? 'on' : ''} style={{ height: 30 }} onClick={() => change({ buttons: n }, false)}>{n}</button>)}
+                {([1, 2, 3] as const).map((n) => <button key={n} type="button" role="radio" aria-checked={draft.buttons === n} className={draft.buttons === n ? 'on' : ''} style={{ height: 30 }} onClick={() => change({ buttons: n })}>{n}</button>)}
               </div>
             </label>
             <label className="field grow" style={{ minWidth: 260 }}><span className="label">Prop file (how the buttons behave)</span>
               <span className="input sans" style={{ height: 32 }}><span className="ellip">{PROPS.find((p) => p.value === draft.prop)?.label}</span><span className="caret"><Icon name="down" /></span>
-                <Select value={draft.prop} aria-label="Prop file" onChange={(e) => change({ prop: e.target.value as Prop }, false)}>{PROPS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select></span>
+                <Select value={draft.prop} aria-label="Prop file" onChange={(e) => change({ prop: e.target.value as Prop })}>{PROPS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select></span>
             </label>
           </div>
           <HardwareEditor blades={draft.blades} board={draft.board} detected={detected} locked={board.busy} onChange={(b: ModelBlade[]) => change({ blades: b })}
             swap={{
               variants: draft.bladeId?.variants ?? [],
-              onVariants: (v: BladeVariant[]) => change(v.length ? { bladeId: { variants: v } } : { bladeId: undefined }, false),
+              onVariants: (v: BladeVariant[]) => change(v.length ? { bladeId: { variants: v } } : { bladeId: undefined }),
               measureBlocked,
               measure: async () => { const r = await board.send('scanid', { idleMs: 1500 }); return parseId([...r.lines, ...r.events]); },
             }} />
@@ -80,10 +83,11 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
         <div className={`stepc ${confirmed ? 'done' : 'now'}`}>
           <div className="head"><span className="nbox">{confirmed ? <Icon name="check" /> : 1}</span><b>Check it</b><span className="what">{draft.blades.length} blade{draft.blades.length === 1 ? '' : 's'}</span></div>
           <label className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
-            <button type="button" className={`tog ${confirmed ? 'on' : ''}`} role="switch" aria-checked={confirmed} aria-label="I checked the wiring" onClick={() => change(confirmed ? { wiringConfirmedAt: undefined } : { wiringConfirmedAt: new Date().toISOString() }, false)}><i /></button>
+            <button type="button" className={`tog ${confirmed ? 'on' : ''}`} role="switch" aria-checked={confirmed} aria-label="I checked the wiring" onClick={() => update((d) => withWiringConfirmation(d, !confirmed))}><i /></button>
             <span className="small dim">I checked every data pin and power pin against the installer's wiring.</span>
           </label>
-          <span className="hint">A wrong pin can leave a blade dark or drive one that is not there. The build waits for this once per wiring change.</span>
+          {confirmOnce && <span className="note amber" style={{ padding: '6px 8px' }}><Icon name="warn" /><span>Hiltwright now records which wiring you checked. Check it once more to go on.</span></span>}
+          <span className="hint">A wrong pin can leave a blade dark or drive one that is not there. This stays checked until the board or a blade changes.</span>
         </div>
         <div className="stepc">
           <div className="head"><span className="nbox">2</span><b>Next</b><span className="what">presets</span></div>

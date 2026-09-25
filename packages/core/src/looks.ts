@@ -5,7 +5,7 @@
 // and `~` means "keep the compiled default". Colours are 16-bit `r,g,b`. Hiltwright knows which arguments a look
 // uses because it either wrote the look (starters) or analysed the pasted code, and records that per build.
 
-import type { BladeRole } from './config/generate';
+import type { BladeRole, BoardModel, ModelBlade } from './config/generate';
 import { LIBRARY_LOOKS, LOOK_FX } from './lookLibrary';
 
 export type ArgKind = 'color' | 'option' | 'time' | 'size';
@@ -221,6 +221,8 @@ export interface FirmwareManifest {
   bladeId?: boolean;
   /** Per preset, the look id compiled into each blade slot (index 0 = blade 1). */
   presets: { name: string; looks: string[] }[];
+  /** The board and blade layout this firmware was built for. Absent on records from before 2026-09-24. */
+  wiring?: { board: BoardModel; blades: ModelBlade[] };
 }
 
 /** Where a look is compiled: every (preset, blade) slot holding it, as 0-based preset and 1-based blade. */

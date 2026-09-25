@@ -6,6 +6,10 @@ import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { registerIpc } from './ipc';
 
+// Dev aid: HILTWRIGHT_USER_DATA=<folder> runs the app on a scratch data folder (sabers, styles, fonts, page storage),
+// so a test can never touch the owner's own. Ignored in packaged builds.
+if (!app.isPackaged && process.env.HILTWRIGHT_USER_DATA) app.setPath('userData', process.env.HILTWRIGHT_USER_DATA);
+
 const PROFFIE_VID = 0x1209;
 const PROFFIE_PID = 0x6668;
 

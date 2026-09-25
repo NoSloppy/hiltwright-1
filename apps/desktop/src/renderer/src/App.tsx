@@ -3,7 +3,7 @@
 // the Workshop, off to the side, and picked from the Presets step.
 
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { registerLookSim, type LookDef } from '@hiltwright/core';
+import { registerLookSim, wiringConfirmed, type LookDef } from '@hiltwright/core';
 import { useBoard } from './board';
 import { Icon } from './Icon';
 import logoIcon from './assets/hiltwright-icon.svg';
@@ -236,7 +236,7 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
           <>
             <div className="row between" style={{ minHeight: 24 }}><b style={{ fontWeight: 600 }} className="ellip">{cur.name}</b><span className="hint">{ws.live ? 'plugged in' : cur.planned ? 'set up ahead' : 'unplugged'}</span></div>
             {steps.map((st, i) => {
-              const done = (st.step === 'wiring' && (!!ws.model?.wiringConfirmedAt || !!cur.firmware)) || (st.step === 'presets' && !!ws.model?.presets.length) || (st.step === 'build' && !!cur.firmware && !queuedLookIds(ws.model ?? undefined, cur.firmware).length && !ws.model?.presetsFrom);
+              const done = (st.step === 'wiring' && wiringConfirmed(ws.model)) || (st.step === 'presets' && !!ws.model?.presets.length) || (st.step === 'build' && !!cur.firmware && !queuedLookIds(ws.model ?? undefined, cur.firmware).length && !ws.model?.presetsFrom);
               const now = st.step === next;
               return (
                 <button key={st.step} type="button" className={`stepc ${done ? 'done' : now ? 'now' : ''}`} style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go(stepPage[st.step])}>

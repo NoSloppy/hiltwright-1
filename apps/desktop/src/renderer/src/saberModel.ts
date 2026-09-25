@@ -55,6 +55,8 @@ export function draftModel(info: BoardInfo, saber: SaberRecord, overrides: { bla
     }),
     looks: saved?.looks ?? [],
     ...(saved?.presetsFrom ? { presetsFrom: saved.presetsFrom } : {}),
+    // The owner's wiring confirmation travels with the model; it only counts while the layout matches (see wiringConfirmed).
+    ...(saved?.wiringConfirmation ? { wiringConfirmation: saved.wiringConfirmation } : {}),
     ...((overrides.variants ?? saved?.bladeId?.variants ?? []).length ? { bladeId: { variants: overrides.variants ?? saved!.bladeId!.variants } } : {}),
     generator: `hiltwright ${window.hiltwright.appVersion}`,
   };

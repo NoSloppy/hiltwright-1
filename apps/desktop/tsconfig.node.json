@@ -10,5 +10,7 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/main", "src/preload", "src/shared", "electron.vite.config.ts", "vitest.config.ts", "test"]
+  "include": ["src/main", "src/preload", "src/shared", "electron.vite.config.ts", "vitest.config.ts", "test"],
+  // Tests of renderer modules that reach the browser APIs are checked with the renderer config instead.
+  "exclude": ["test/draftModel.test.ts"]
 }
