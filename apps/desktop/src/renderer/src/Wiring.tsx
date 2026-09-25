@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { parseId, wiringConfirmed, withWiringConfirmation, type BladeVariant, type BoardModel, type ModelBlade, type Prop, type SaberConfigModel } from '@hiltwright/core';
 import { HardwareEditor } from './Hardware';
+import { FEATURES } from './features';
 import type { Board } from './board';
 import { Icon } from './Icon';
 import type { Workspace } from './workspace';
@@ -70,12 +71,12 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
             </label>
           </div>
           <HardwareEditor blades={draft.blades} board={draft.board} detected={detected} locked={board.busy} onChange={(b: ModelBlade[]) => change({ blades: b })}
-            swap={{
+            swap={FEATURES.bladeId ? {
               variants: draft.bladeId?.variants ?? [],
               onVariants: (v: BladeVariant[]) => change(v.length ? { bladeId: { variants: v } } : { bladeId: undefined }),
               measureBlocked,
               measure: async () => { const r = await board.send('scanid', { idleMs: 1500 }); return parseId([...r.lines, ...r.events]); },
-            }} />
+            } : undefined} />
         </div>
       </section>
 

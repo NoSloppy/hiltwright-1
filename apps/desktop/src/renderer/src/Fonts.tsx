@@ -7,6 +7,7 @@ import type { CardInfo, FontEntry, LibraryFont } from '../../shared/api';
 import type { Workspace } from './workspace';
 import type { Board } from './board';
 import { XenoImport } from './XenoImport';
+import { FEATURES } from './features';
 import { Icon } from './Icon';
 
 const api = () => window.hiltwright;
@@ -227,7 +228,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
             </div>
           </section>
 
-          <XenoImport card={card} board={board} onChanged={() => void scan()} />
+          {FEATURES.xenopixelImport && <XenoImport card={card} board={board} onChanged={() => void scan()} />}
 
           <section className="panel" aria-label="Font detail" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <div className="ph"><h2>{sel ? sel.name : 'Tracks'}</h2><span className="hint">{sel ? `${sel.report.type} · ${sel.report.files} files` : `${tracks.length} on the card`}</span></div>
