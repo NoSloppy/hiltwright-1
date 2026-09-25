@@ -17,6 +17,7 @@ Beta 1 promises Proffieboard V3 support, and nothing has ever been compiled for,
 - Scenarios from later baselines, as they are archived.
 - **From `baseline-firmware`, every board-marked scenario on the V3:** version after install (4.4), backup (5.4), reboot (5.6), driver (5.8), install (5.10) and restore (5.14). Also a V3 build from the app with its flash budget (3.3, FW13), and an install started from the V3's bootloader (5.7).
 - **From `baseline-sd-fonts`, on the V3:** sharing its card over USB (2.11) and giving it back (2.13).
+- **From `baseline-styles`:** the same side-by-side blade sample on the V3 (2.2), since the V3's LEDs and power path differ.
 
 ## Non-goals
 

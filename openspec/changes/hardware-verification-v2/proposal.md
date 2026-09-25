@@ -35,6 +35,12 @@ A scripted pass in the real app, recording board, date and result for each scena
   - font-library 1.1, 1.3 (move to another drive), 1.5, 1.12, 1.14, 1.16 (the real recycle bin), 1.17
 - **Listening pass** (a person listening, with the V2.2 or none): library playback (1.15) and the Presets font picker.
 - **SF9:** Removing a font to the recycle bin from a library on a USB drive.
+- **From `baseline-styles`, a side-by-side blade pass on hote2 (2.2):** a sample of built-in styles (both early and late), two pasted library styles, and two editor-built styles, compared with the app's preview. Include the Styles-page "Use it in" (1.13) and changing a built style's colours on Presets without a rebuild (4.4).
+- **From `baseline-styles`, checked by hand:**
+  - style-library 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11, 1.14, 1.15
+  - style-simulator 2.10, 2.12
+  - blade-preview 3.2, 3.3, 3.4
+  - style-editor 4.1, 4.2, 4.3, 4.6, 4.7, 4.11, 4.12, 4.13, 4.15, 4.16
 
 ## Non-goals
 

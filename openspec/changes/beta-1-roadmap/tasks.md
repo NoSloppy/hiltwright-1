@@ -72,6 +72,19 @@
     | sd-fonts-polish | M4 | SF10, SF11, SF12, SF15, SF16, SF17, SF18, SF19, SF20, SF29, SF31, SF33 | |
     | firmware-side-later (extended) | M5+ | SF32 | |
   - Inputs from baseline-styles: the Findings table in `baseline-styles/design.md` (ST1–ST40), and the scenarios marked neither or partial in `baseline-styles/tasks.md` (18 neither and 15 partial of 49).
+  - **Triage of the baseline-styles batch, 2026-09-24:**
+
+    | Change | Milestone | Findings | Scenarios |
+    |---|---|---|---|
+    | style-save-integrity | M2 | ST1, ST2, ST8, ST9, ST10, ST29, ST30, ST31 | |
+    | style-to-saber-fixes | M2 | ST3, ST4, ST5, ST6, ST7 | |
+    | style-attribution | M2 | ST13, ST14, ST15, ST16, ST17, ST18, ST40 | feeds license-and-notices (task 3.2) |
+    | preview-honesty | M2 | ST19, ST20, ST21, ST22, ST23 | |
+    | editor-output-safety | M2 | ST32, ST33, ST34 | |
+    | styles-test-coverage | M2 | | 1.2, 1.12, 2.4, 2.13 |
+    | hardware-verification-v2 (extended) | M2 | | side-by-side blade pass (2.2, 1.13, 4.4) + 25 hand checks |
+    | v3-verification (extended) | M2 | | the blade sample on the V3 |
+    | styles-polish | M4 | ST11, ST12, ST24-ST28, ST35-ST39 | |
 
 ## 3. M2 Beta 1 blockers
 
