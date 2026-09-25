@@ -22,4 +22,5 @@
   - **Result, 2026-09-25, owner's installed build.** The installer was built after the switch commit, and its bundle has `xenopixelImport: false`, with Blade ID compiled out. The owner installed it. On Wiring, with the main blade's card open, there is no swap question. On Fonts & SD there is no Xenopixel panel.
 - [x] 3.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-25.** 176 core and 141 desktop tests pass (7 gated skipped), and the type check is clean.
-- [ ] 3.5 After archive, tick roadmap task 3.4 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 3.5 After archive, tick roadmap task 3.4 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-25.** Archived as `2026-09-25-hide-for-beta-1`. blade-id and xenopixel-import were synced, and roadmap 3.4 is ticked.
