@@ -9,6 +9,7 @@ import {
 } from '@hiltwright/core';
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
 import { PROFFIE_FILTER, WebSerialTransport, describePort, grantedProffiePorts } from './serial';
+import { setConnectionSnapshot } from './support';
 
 export interface BoardInfo {
   version: VersionInfo | null;
@@ -54,6 +55,21 @@ export function useBoard() {
   const log = useCallback((kind: ConsoleLine['kind'], text: string) => {
     setLines((ls) => [...ls, { kind, text, at: Date.now() }].slice(-400));
   }, []);
+
+  // Every connection state and its error go into the run log, and into what a diagnostics file reports.
+  useEffect(() => {
+    console.log(`[board] status ${status}${error ? `: ${error}` : ''}`);
+  }, [status, error]);
+  useEffect(() => {
+    const v = info?.version ?? null;
+    setConnectionSnapshot({
+      status, error, port: portName,
+      board: info ? {
+        version: v?.version ?? null, config: v?.config ?? null, prop: v?.prop ?? null, buttons: v?.buttons ?? null,
+        battery: info.battery, volume: info.volume, presets: info.presets.length, fonts: info.fonts.length, tracks: info.tracks.length, blades: info.pixelBlades,
+      } : null,
+    });
+  }, [status, error, portName, info]);
 
   const refreshLibrary = useCallback(async () => {
     try { setLibrary(await api().library.list()); } catch (err) { console.log(`[library] list failed: ${String(err)}`); }
@@ -187,7 +203,8 @@ export function useBoard() {
       return;
     }
     transport.current = t;
-    client.current = new BoardClient(t, { onEvent: (l) => log('event', l) });
+    // The run log gets the whole conversation, including the probe, polls and helper commands the console leaves out.
+    client.current = new BoardClient(t, { onEvent: (l) => log('event', l), onTraffic: (d, text) => console.log(`[board] ${d === 'sent' ? '>' : '<'} ${text}`) });
     setPortName(describePort(port));
     console.log('[board] port opened', describePort(port));
     try {

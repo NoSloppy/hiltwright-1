@@ -153,6 +153,20 @@ export interface FlashStepResult { ok: boolean; ms: number; detail: string; file
 /** Progress lines from long-running main-process jobs. */
 export interface JobEvent { job: 'toolchain' | 'build' | 'flash'; line: string; at: number }
 
+/** What the page knows about the connection and the saber being worked on, for the diagnostics file. */
+export interface ConnectionSnapshot {
+  status: string;
+  error: string | null;
+  /** vid:pid of the open port. */
+  port: string | null;
+  board: {
+    version: string | null; config: string | null; prop: string | null; buttons: number | null;
+    battery: number | null; volume: number | null; presets: number; fonts: number; tracks: number; blades: number[];
+  } | null;
+  /** The saber every page is about (the connected one, or the one chosen in the Armory). */
+  saberId: string | null;
+}
+
 export interface HiltwrightApi {
   appVersion: string;
   platform: string;
@@ -287,6 +301,10 @@ export interface HiltwrightApi {
     waitForRuntime(timeoutMs: number): Promise<boolean>;
   };
   onJobEvent(cb: (e: JobEvent) => void): () => void;
+  support: {
+    /** Write a diagnostics file into <userData>/support, show it in its folder, and return its name. Nothing is sent. */
+    save(snapshot: ConnectionSnapshot): Promise<{ file: string }>;
+  };
   app: {
     userDataPath(): Promise<string>;
     /** False when a development run was started with HILTWRIGHT_NO_BOARD: no board can be reached. */

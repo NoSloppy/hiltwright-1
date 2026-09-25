@@ -105,6 +105,9 @@ const api: HiltwrightApi = {
     ipcRenderer.on('job:event', listener);
     return () => { ipcRenderer.removeListener('job:event', listener); };
   },
+  support: {
+    save: (snapshot) => ipcRenderer.invoke('support:save', snapshot),
+  },
   app: {
     userDataPath: () => ipcRenderer.invoke('app:userDataPath'),
     boardAccess: () => ipcRenderer.invoke('app:boardAccess'),

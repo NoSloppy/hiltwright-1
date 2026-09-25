@@ -14,6 +14,7 @@ import { Build } from './Build';
 import { Looks } from './Looks';
 import { Wiring } from './Wiring';
 import { ErrorBoundary } from './ErrorBoundary';
+import { SaveDiagnostics } from './SaveDiagnostics';
 import { SaberControls } from './Controls';
 import { guessBlades, infoFromRecord, queuedLookIds } from './saberModel';
 import { usePendingLookColours } from './pendingColours';
@@ -76,6 +77,10 @@ export function App() {
   const configName = info?.version?.config?.replace(/^config\//, '').replace(/\.h$/, '') ?? null;
   // Dev aid: lets main switch pages for screenshots.
   useEffect(() => { if (!import.meta.env.DEV) return; (window as unknown as { hiltwrightGoto?: (p: string) => void }).hiltwrightGoto = (p) => { setFake(p.startsWith('fake:')); setPage(p.replace('fake:', '') as Page); }; }, []);
+  // Dev aid: hiltwrightFault() makes the current page throw while rendering, to check the fault screen and its log line.
+  // The fault belongs to the page it was raised on, so moving to another page shows that page normally.
+  const [faultPage, setFaultPage] = useState<Page | null>(null);
+  useEffect(() => { if (!import.meta.env.DEV) return; (window as unknown as { hiltwrightFault?: () => void }).hiltwrightFault = () => setFaultPage(pageRef.current); }, []);
   // Ctrl+1..9 switch pages, in the order shown.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (!e.ctrlKey || e.altKey || e.shiftKey) return; const p = PAGES[Number(e.key) - 1]; if (p) { e.preventDefault(); setPageRef.current(p.id); } };
@@ -126,6 +131,7 @@ export function App() {
 
       <main className="main">
         <ErrorBoundary key={page} what={`the ${TITLE[page]} page`}>
+          {faultPage === page && <FaultForDev />}
           {page === 'armory' ? <Armory board={board} ws={ws} go={go} />
             : page === 'wiring' ? <Wiring ws={ws} board={board} go={go} />
             : page === 'presets' ? <Presets ws={ws} board={board} go={go} />
@@ -253,6 +259,10 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
   );
 }
 
+function FaultForDev(): never {
+  throw new Error('A fault forced by hiltwrightFault() (development only)');
+}
+
 function Diagnostics({ board }: { board: ReturnType<typeof useBoard> }) {
   const [cmd, setCmd] = useState('');
   const end = useRef<HTMLDivElement>(null);
@@ -265,6 +275,7 @@ function Diagnostics({ board }: { board: ReturnType<typeof useBoard> }) {
       <SaberControls board={board} />
       <section className="panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div className="ph"><h2>Console</h2><div className="row wrap" style={{ gap: 6 }}>{quick.map((q) => <button key={q} type="button" className="chip" disabled={!connected} onClick={() => void board.send(q, q === 'show_current_preset' ? { until: board.isPresetBlockEnd } : { idleMs: 700 })}>{q}</button>)}</div></div>
+        <div className="row" style={{ padding: '8px 12px', borderBottom: '1px solid var(--line)' }}><SaveDiagnostics small /></div>
         <div className="console grow" style={{ border: 0, minHeight: 0 }}>
           {board.lines.length === 0 && <span className="mute">Connect a saber, then type a command. Events the board prints on its own show in amber.</span>}
           {board.lines.map((l, i) => <div key={i} className={l.kind}>{l.text}</div>)}

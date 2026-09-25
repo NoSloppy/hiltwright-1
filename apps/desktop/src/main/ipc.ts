@@ -1,6 +1,7 @@
 // IPC surface. Every handler validates its arguments; the renderer is sandboxed and untrusted by design.
 
 import { app, dialog, ipcMain, shell, BrowserWindow } from 'electron';
+import { arch, release, version as osVersion } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { generateConfig, isBank, isStyleDoc, isTreeDoc, validateModel, type PresetBank, type PresetRecord, type SaberConfigModel } from '@hiltwright/core';
@@ -21,6 +22,9 @@ import { insideFolder } from './paths';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { backupFlash, describeBootloader, listBackups, restoreBackup, usbState, waitFor, writeFirmware } from './flash';
+import { logged } from './ipcLog';
+import { runLog, runLogs } from './log';
+import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
 import type { FontLibraryStatus, JobEvent } from '../shared/api';
 import type { FirmwareManifest } from '@hiltwright/core';
 import type { SaberIdentity } from '../shared/api';
@@ -53,13 +57,18 @@ function identity(v: unknown): SaberIdentity {
   };
 }
 
+// Every handler goes through logged(): a request that fails is written to the run log before the page sees it.
+function handle(channel: string, fn: Parameters<typeof ipcMain.handle>[1]): void {
+  ipcMain.handle(channel, logged(channel, fn));
+}
+
 export function registerIpc(): void {
   const userData = app.getPath('userData');
   const library = new Library(libraryPath(userData));
   const snapshots = new Snapshots(userData);
 
-  ipcMain.handle('library:list', () => library.list());
-  ipcMain.handle('library:upsert', (_e, input: unknown) => {
+  handle('library:list', () => library.list());
+  handle('library:upsert', (_e, input: unknown) => {
     const o = (input ?? {}) as Record<string, unknown>;
     return library.upsert({
       identity: identity(o.identity), presets: presets(o.presets ?? []),
@@ -68,11 +77,11 @@ export function registerIpc(): void {
       ...(typeof o.name === 'string' ? { name: str(o.name) } : {}),
     });
   });
-  ipcMain.handle('library:rename', (_e, id: unknown, name: unknown) => library.rename(str(id, 40), str(name, 80)));
-  ipcMain.handle('library:plan', (_e, name: unknown, model: unknown) => { const errors = validateModel(model as SaberConfigModel).filter((e) => !/preset/i.test(e)); if (errors.length) throw new Error(errors[0]); return library.plan(str(name, 80), model as SaberConfigModel); });
-  ipcMain.handle('library:adopt', (_e, plannedId: unknown, targetId: unknown) => library.adopt(str(plannedId, 40), str(targetId, 40)));
-  ipcMain.handle('library:remove', (_e, id: unknown) => library.remove(str(id, 40)));
-  ipcMain.handle('library:update', (_e, id: unknown, patch: unknown) => {
+  handle('library:rename', (_e, id: unknown, name: unknown) => library.rename(str(id, 40), str(name, 80)));
+  handle('library:plan', (_e, name: unknown, model: unknown) => { const errors = validateModel(model as SaberConfigModel).filter((e) => !/preset/i.test(e)); if (errors.length) throw new Error(errors[0]); return library.plan(str(name, 80), model as SaberConfigModel); });
+  handle('library:adopt', (_e, plannedId: unknown, targetId: unknown) => library.adopt(str(plannedId, 40), str(targetId, 40)));
+  handle('library:remove', (_e, id: unknown) => library.remove(str(id, 40)));
+  handle('library:update', (_e, id: unknown, patch: unknown) => {
     const p = (patch ?? {}) as Record<string, unknown>;
     const out: { model?: SaberConfigModel | null; firmware?: FirmwareManifest | null } = {};
     if ('model' in p) out.model = p.model === null ? null : model(p.model);
@@ -103,26 +112,26 @@ export function registerIpc(): void {
   // Preset banks: checked for shape, then kept as given (names and font paths are the owner's own text).
   const banksStore = new BanksStore(banksPath(userData));
   const bank = (v: unknown): PresetBank => { if (!isBank(v) || !/^bank_[a-z0-9]{1,40}$/.test(v.id)) throw new Error('Expected a preset bank'); return { id: v.id, name: str(v.name, 120), updated: str(v.updated ?? new Date().toISOString(), 40), presets: v.presets.slice(0, 200).map((p) => ({ name: str(p.name, 120), font: str(p.font, 200), track: str(p.track, 300), looks: Object.fromEntries(Object.entries(p.looks).filter(([r, id]) => ['main', 'crystal', 'accent', 'side', 'motor'].includes(r) && typeof id === 'string').map(([r, id]) => [r, str(id as string, 80)])), ...(p.lookArgs ? { lookArgs: Object.fromEntries(Object.entries(p.lookArgs).filter(([r, a]) => ['main', 'crystal', 'accent', 'side', 'motor'].includes(r) && typeof a === 'string').map(([r, a]) => [r, str(a as string, 2000)])) } : {}) })) }; };
-  ipcMain.handle('banks:list', () => banksStore.list());
-  ipcMain.handle('banks:save', (_e, b: unknown) => banksStore.save(bank(b)));
-  ipcMain.handle('banks:remove', (_e, id: unknown) => banksStore.remove(str(id, 80)));
-  ipcMain.handle('looks:list', () => looksStore.list());
-  ipcMain.handle('looks:add', (_e, l: unknown) => looksStore.add(look(l)));
-  ipcMain.handle('looks:remove', (_e, id: unknown) => looksStore.remove(str(id, 80)));
-  ipcMain.handle('looks:update', (_e, id: unknown, l: unknown) => { const v = look(l); if (v.id !== str(id, 80)) throw new Error('Style id mismatch'); return looksStore.add(v); });
+  handle('banks:list', () => banksStore.list());
+  handle('banks:save', (_e, b: unknown) => banksStore.save(bank(b)));
+  handle('banks:remove', (_e, id: unknown) => banksStore.remove(str(id, 80)));
+  handle('looks:list', () => looksStore.list());
+  handle('looks:add', (_e, l: unknown) => looksStore.add(look(l)));
+  handle('looks:remove', (_e, id: unknown) => looksStore.remove(str(id, 80)));
+  handle('looks:update', (_e, id: unknown, l: unknown) => { const v = look(l); if (v.id !== str(id, 80)) throw new Error('Style id mismatch'); return looksStore.add(v); });
 
-  ipcMain.handle('snapshots:list', (_e, id: unknown) => snapshots.list(str(id, 40)));
-  ipcMain.handle('snapshots:save', (_e, id: unknown, label: unknown, list: unknown) => snapshots.save(str(id, 40), str(label, 120), presets(list)));
-  ipcMain.handle('snapshots:read', (_e, id: unknown, file: unknown) => snapshots.read(str(id, 40), str(file, 200)));
+  handle('snapshots:list', (_e, id: unknown) => snapshots.list(str(id, 40)));
+  handle('snapshots:save', (_e, id: unknown, label: unknown, list: unknown) => snapshots.save(str(id, 40), str(label, 120), presets(list)));
+  handle('snapshots:read', (_e, id: unknown, file: unknown) => snapshots.read(str(id, 40), str(file, 200)));
 
-  ipcMain.handle('usb:proffieSerials', () => proffieSerials());
+  handle('usb:proffieSerials', () => proffieSerials());
 
   // SD card via a card reader. Roots must come from locate() so the renderer cannot point us at arbitrary folders.
   let knownRoots = new Set<string>();
   const root = (v: unknown) => { const r = str(v, 500); if (!knownRoots.has(r)) throw new Error('Unknown card'); return r; };
-  ipcMain.handle('sd:locate', async () => { const cards = await locateCards(); knownRoots = new Set(cards.map((c) => c.root)); return cards; });
-  ipcMain.handle('sd:listFonts', (_e, r: unknown) => listFonts(root(r)));
-  ipcMain.handle('sd:eject', (_e, r: unknown) => ejectVolume(root(r)));
+  handle('sd:locate', async () => { const cards = await locateCards(); knownRoots = new Set(cards.map((c) => c.root)); return cards; });
+  handle('sd:listFonts', (_e, r: unknown) => listFonts(root(r)));
+  handle('sd:eject', (_e, r: unknown) => ejectVolume(root(r)));
   // The font library: fonts the owner added, in a folder of their choosing (default userData/fonts).
   const libSettingsFile = join(userData, 'fontlibrary.json');
   let libSettings: { root?: string; legacyDismissed?: boolean } = {};
@@ -136,10 +145,10 @@ export function registerIpc(): void {
   const libStatus = (): FontLibraryStatus => ({ root: fontLib.root, isDefault: resolve(fontLib.root) === resolve(defaultLibRoot), legacyBank: libSettings.legacyDismissed || !legacyBank || !existsSync(legacyBank) ? null : legacyBank });
   const folder = (v: unknown) => str(v, 120);
   const libEmit = (line: string) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('fontlib:progress', line); };
-  ipcMain.handle('fontlib:status', () => libStatus());
-  ipcMain.handle('fontlib:list', () => fontLib.list());
-  ipcMain.handle('fontlib:detail', (_e, f: unknown) => fontLib.detail(folder(f)));
-  ipcMain.handle('fontlib:setMeta', (_e, f: unknown, patch: unknown) => {
+  handle('fontlib:status', () => libStatus());
+  handle('fontlib:list', () => fontLib.list());
+  handle('fontlib:detail', (_e, f: unknown) => fontLib.detail(folder(f)));
+  handle('fontlib:setMeta', (_e, f: unknown, patch: unknown) => {
     const p = (patch ?? {}) as Record<string, unknown>;
     const out: { name?: string; maker?: string; notes?: string; bundle?: string } = {};
     if (typeof p.name === 'string') out.name = str(p.name, 120).trim() || folder(f);
@@ -154,22 +163,22 @@ export function registerIpc(): void {
   const contributorsReady = (async () => {
     try { for (const l of await fontLib.legacyLogos()) if (!(await contributors.has(l.name)) && existsSync(l.file)) await contributors.setLogo(l.name, l.file); } catch (err) { console.log(`[contributors] bringing over font makers' logos: ${String(err)}`); }
   })();
-  ipcMain.handle('contributors:list', async () => { await contributorsReady; return contributors.list(); });
+  handle('contributors:list', async () => { await contributorsReady; return contributors.list(); });
   // A logo comes only from a file the owner picked in the dialog.
-  ipcMain.handle('contributors:setLogo', async (_e, who: unknown) => {
+  handle('contributors:setLogo', async (_e, who: unknown) => {
     const name = str(who, 120);
     const r = await dialog.showOpenDialog({ title: `Choose a logo for ${name}`, properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'] }] });
     return r.canceled || !r.filePaths[0] ? null : contributors.setLogo(name, r.filePaths[0]);
   });
-  ipcMain.handle('contributors:clearLogo', (_e, who: unknown) => contributors.clearLogo(str(who, 120)));
-  ipcMain.handle('contributors:setUrl', (_e, who: unknown, url: unknown) => contributors.setUrl(str(who, 120), str(url, 500)));
+  handle('contributors:clearLogo', (_e, who: unknown) => contributors.clearLogo(str(who, 120)));
+  handle('contributors:setUrl', (_e, who: unknown, url: unknown) => contributors.setUrl(str(who, 120), str(url, 500)));
   // Opens only the link saved for that person, in the system browser.
-  ipcMain.handle('contributors:open', async (_e, who: unknown) => { const url = await contributors.urlOf(str(who, 120)); if (url) await shell.openExternal(url); });
-  ipcMain.handle('fontlib:remove', (_e, f: unknown) => fontLib.remove(folder(f)));
-  ipcMain.handle('fontlib:readSound', (_e, f: unknown, rel: unknown) => fontLib.readSound(folder(f), str(rel, 400)));
-  ipcMain.handle('fontlib:readFont', (e, f: unknown) => fontLib.readFont(folder(f), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total })));
-  ipcMain.handle('fontlib:copyToCard', (_e, f: unknown, r: unknown, replace: unknown) => fontLib.copyToCard(folder(f), root(r), replace === true));
-  ipcMain.handle('fontlib:open', async (_e, f: unknown) => { await shell.openPath(f == null ? fontLib.root : join(fontLib.root, basename(folder(f)))); });
+  handle('contributors:open', async (_e, who: unknown) => { const url = await contributors.urlOf(str(who, 120)); if (url) await shell.openExternal(url); });
+  handle('fontlib:remove', (_e, f: unknown) => fontLib.remove(folder(f)));
+  handle('fontlib:readSound', (_e, f: unknown, rel: unknown) => fontLib.readSound(folder(f), str(rel, 400)));
+  handle('fontlib:readFont', (e, f: unknown) => fontLib.readFont(folder(f), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total })));
+  handle('fontlib:copyToCard', (_e, f: unknown, r: unknown, replace: unknown) => fontLib.copyToCard(folder(f), root(r), replace === true));
+  handle('fontlib:open', async (_e, f: unknown) => { await shell.openPath(f == null ? fontLib.root : join(fontLib.root, basename(folder(f)))); });
   // Adding: the owner picks .zip packages or folders; only paths the dialog returned are ever read.
   const importPicked = async (paths: string[]): Promise<ImportResult> => {
     const all: ImportResult = { added: [], skipped: [] };
@@ -178,17 +187,17 @@ export function registerIpc(): void {
     }
     return all;
   };
-  ipcMain.handle('fontlib:addZip', async () => {
+  handle('fontlib:addZip', async () => {
     const r = await dialog.showOpenDialog({ title: 'Add sound font packages', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Font packages', extensions: ['zip'] }] });
     return r.canceled ? null : importPicked(r.filePaths);
   });
-  ipcMain.handle('fontlib:addFolder', async () => {
+  handle('fontlib:addFolder', async () => {
     const r = await dialog.showOpenDialog({ title: 'Add a font folder (or a folder of fonts)', properties: ['openDirectory', 'multiSelections'] });
     return r.canceled ? null : importPicked(r.filePaths);
   });
-  ipcMain.handle('fontlib:importLegacy', async () => { if (!legacyBank) return null; const r = await importPicked([legacyBank]); libSettings.legacyDismissed = true; saveLibSettings(); return r; });
-  ipcMain.handle('fontlib:dismissLegacy', () => { libSettings.legacyDismissed = true; saveLibSettings(); return libStatus(); });
-  ipcMain.handle('fontlib:chooseRoot', async () => {
+  handle('fontlib:importLegacy', async () => { if (!legacyBank) return null; const r = await importPicked([legacyBank]); libSettings.legacyDismissed = true; saveLibSettings(); return r; });
+  handle('fontlib:dismissLegacy', () => { libSettings.legacyDismissed = true; saveLibSettings(); return libStatus(); });
+  handle('fontlib:chooseRoot', async () => {
     const r = await dialog.showOpenDialog({ title: 'Where should the font library live?', properties: ['openDirectory', 'createDirectory'] });
     if (r.canceled || !r.filePaths[0] || resolve(r.filePaths[0]) === resolve(fontLib.root)) return libStatus();
     const next = r.filePaths[0];
@@ -204,34 +213,34 @@ export function registerIpc(): void {
     saveLibSettings();
     return libStatus();
   });
-  ipcMain.handle('fontlib:resetRoot', async () => {
+  handle('fontlib:resetRoot', async () => {
     if (resolve(fontLib.root) === resolve(defaultLibRoot)) return libStatus();
     await fontLib.moveTo(defaultLibRoot, false);
     libSettings.root = undefined; saveLibSettings();
     return libStatus();
   });
   // A font's sounds, for playing in the app, from a known card.
-  ipcMain.handle('sd:readFont', async (e, r: unknown, fontName: unknown) => {
+  handle('sd:readFont', async (e, r: unknown, fontName: unknown) => {
     const name = String(fontName);
     if (!/^[^\\/:*?"<>|]+$/.test(name)) throw new Error('Bad font name');
     return readFontSounds(join(root(r), name), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total }));
   });
   // Packs: encrypted hilts and fonts. Payloads are decrypted here and handed over in memory, never as files.
-  ipcMain.handle('packs:list', () => listPacks());
-  ipcMain.handle('packs:dir', () => userPacksDir());
-  ipcMain.handle('packs:mesh', (_e, id: unknown) => packMesh(str(id, 200)));
-  ipcMain.handle('packs:font', (_e, id: unknown) => packFont(str(id, 200)));
-  ipcMain.handle('sd:listTracks', (_e, r: unknown) => listTracks(root(r)));
-  ipcMain.handle('sd:voicePack', (_e, r: unknown) => readVoicePack(root(r)));
+  handle('packs:list', () => listPacks());
+  handle('packs:dir', () => userPacksDir());
+  handle('packs:mesh', (_e, id: unknown) => packMesh(str(id, 200)));
+  handle('packs:font', (_e, id: unknown) => packFont(str(id, 200)));
+  handle('sd:listTracks', (_e, r: unknown) => listTracks(root(r)));
+  handle('sd:voicePack', (_e, r: unknown) => readVoicePack(root(r)));
   let pickedFonts = new Set<string>();
-  ipcMain.handle('sd:pickFont', async () => {
+  handle('sd:pickFont', async () => {
     const res = await dialog.showOpenDialog({ title: 'Choose a sound font folder', properties: ['openDirectory'] });
     if (res.canceled || !res.filePaths[0]) return null;
     const entry = await checkFontDir(res.filePaths[0]);
     pickedFonts.add(entry.path);
     return entry;
   });
-  ipcMain.handle('sd:copyFont', (_e, src: unknown, r: unknown, replace: unknown) => {
+  handle('sd:copyFont', (_e, src: unknown, r: unknown, replace: unknown) => {
     const s = str(src, 1000);
     if (!pickedFonts.has(s)) throw new Error('Pick the font folder first');
     return copyFont(s, root(r), replace === true);
@@ -239,14 +248,14 @@ export function registerIpc(): void {
 
   // Import from a Xenopixel card. The owner picks the folder; only fonts found by that scan can be imported.
   let xenoFonts = new Map<string, XenoFontInfo>();
-  ipcMain.handle('import:pickXeno', async () => {
+  handle('import:pickXeno', async () => {
     const res = await dialog.showOpenDialog({ title: 'Choose the Xenopixel SD card (or a copy of it)', properties: ['openDirectory'] });
     if (res.canceled || !res.filePaths[0]) return null;
     const fonts = await scanXenoCard(res.filePaths[0]);
     xenoFonts = new Map(fonts.map((f) => [f.path, f]));
     return { root: res.filePaths[0], fonts };
   });
-  ipcMain.handle('import:xenoFont', (_e, src: unknown, r: unknown, folder: unknown, replace: unknown) => {
+  handle('import:xenoFont', (_e, src: unknown, r: unknown, folder: unknown, replace: unknown) => {
     const f = xenoFonts.get(str(src, 1000));
     if (!f) throw new Error('Choose the Xenopixel card first');
     return importXenoFont(f.path, root(r), str(folder, 60), replace === true);
@@ -266,52 +275,90 @@ export function registerIpc(): void {
     if (!m || typeof m !== 'object' || typeof m.name !== 'string' || !Array.isArray(m.blades) || !Array.isArray(m.presets)) throw new Error('Expected a saber model');
     return m;
   };
-  ipcMain.handle('toolchain:status', () => toolchainStatus(toolchainRoot));
-  ipcMain.handle('toolchain:install', () => installToolchain(toolchainRoot, (l) => emit('toolchain', l)));
-  ipcMain.handle('build:preview', (_e, m: unknown) => {
+  handle('toolchain:status', () => toolchainStatus(toolchainRoot));
+  handle('toolchain:install', () => installToolchain(toolchainRoot, (l) => emit('toolchain', l)));
+  handle('build:preview', (_e, m: unknown) => {
     const mm = model(m);
     const errors = validateModel(mm);
     const g = generateConfig(mm);
     return { text: g.text, hash: g.hash, warnings: g.warnings, errors };
   });
-  ipcMain.handle('build:run', (_e, saberId: unknown, m: unknown, force: unknown) => buildFirmware({ toolchainRoot, saberId: str(saberId, 40), model: model(m), force: force === true, onLine: (l) => emit('build', l) }));
-  ipcMain.handle('flash:usb', () => usbState());
-  ipcMain.handle('flash:waitForBootloader', async (_e, timeoutMs: unknown) => {
+  // The last build of this run, for the diagnostics file (the page forgets it when it changes page).
+  let lastBuild: LastBuild | null = null;
+  handle('build:run', async (_e, saberId: unknown, m: unknown, force: unknown) => {
+    const id = str(saberId, 40);
+    const at = new Date().toISOString();
+    try {
+      const r = await buildFirmware({ toolchainRoot, saberId: id, model: model(m), force: force === true, onLine: (l) => emit('build', l) });
+      lastBuild = { at, saberId: id, ok: r.ok, cached: r.cached, ms: r.ms, textBytes: r.textBytes, flashBytes: r.flashBytes, flashPct: r.flashPct, warnings: r.warnings, problems: r.problems };
+      console.log(`[build] result ok=${r.ok} cached=${r.cached} ms=${r.ms} flash=${r.flashPct ?? '?'}% warnings=${r.warnings.length} problems=${r.problems.length}${r.problems[0] ? `: ${r.problems[0]}` : ''}`);
+      return r;
+    } catch (err) {
+      lastBuild = { at, saberId: id, ok: false, cached: false, ms: Date.now() - Date.parse(at), textBytes: null, flashBytes: 0, flashPct: null, warnings: [], problems: [err instanceof Error ? err.message : String(err)] };
+      throw err;
+    }
+  });
+  // Install steps report failure in their result rather than by throwing, so each result is logged here.
+  const result = (step: string) => <T>(r: T): T => { console.log(`[flash] ${step} result: ${JSON.stringify(r)}`); return r; };
+  handle('flash:usb', () => usbState());
+  handle('flash:waitForBootloader', async (_e, timeoutMs: unknown) => result('waitForBootloader')(await (async () => {
     const s = await waitFor((u) => u.bootloaderPresent, Math.min(Number(timeoutMs) || 15000, 60000), (l) => emit('flash', l));
     if (!s) return { ok: false, text: 'The board did not switch to bootloader mode. Hold BOOT, tap RESET, release BOOT, then try again.' };
     // Give Windows a moment to bind the driver before judging it.
     const bound = (await waitFor((u) => u.bootloaderPresent && /winusb/i.test(u.bootloaderDriver ?? ''), 5000)) ?? s;
     return describeBootloader(bound);
-  });
-  ipcMain.handle('flash:backup', (_e, saberId: unknown, label: unknown) => backupFlash(toolchainRoot, join(userData, 'sabers', str(saberId, 40), 'backups'), str(label, 60), (l) => emit('flash', l)));
-  ipcMain.handle('flash:write', (_e, dfuPath: unknown) => {
+  })()));
+  handle('flash:backup', (_e, saberId: unknown, label: unknown) => backupFlash(toolchainRoot, join(userData, 'sabers', str(saberId, 40), 'backups'), str(label, 60), (l) => emit('flash', l)).then(result('backup')));
+  handle('flash:write', (_e, dfuPath: unknown) => {
     const p = str(dfuPath, 1000);
     // Paths arrive with whatever slashes the builder used; compare them resolved and case-folded (Windows).
     const norm = (x: string) => resolve(x).replace(/[\\/]+/g, '/').toLowerCase();
     if (!norm(p).startsWith(norm(toolchainRoot) + '/')) throw new Error('Only firmware built by Hiltwright can be written');
-    return writeFirmware(toolchainRoot, p, (l) => emit('flash', l));
+    return writeFirmware(toolchainRoot, p, (l) => emit('flash', l)).then(result('write'));
   });
   const backupsDir = (saberId: unknown) => join(userData, 'sabers', str(saberId, 40).replace(/[^A-Za-z0-9_-]/g, '_'), 'backups');
-  ipcMain.handle('flash:listBackups', (_e, saberId: unknown) => listBackups(backupsDir(saberId)));
-  ipcMain.handle('flash:restore', (_e, saberId: unknown, file: unknown) => {
+  handle('flash:listBackups', (_e, saberId: unknown) => listBackups(backupsDir(saberId)));
+  handle('flash:restore', (_e, saberId: unknown, file: unknown) => {
     const name = str(file, 200);
     // Only a plain file name from this saber's own backups folder; never a path.
     if (!/^[A-Za-z0-9._-]+\.bin$/.test(name)) throw new Error('Not a backup file name');
-    return restoreBackup(toolchainRoot, join(backupsDir(saberId), name), (l) => emit('flash', l));
+    return restoreBackup(toolchainRoot, join(backupsDir(saberId), name), (l) => emit('flash', l)).then(result('restore'));
   });
   // The installer is kept in the owner's own data folder, not the shared toolchain folder: it runs elevated.
-  ipcMain.handle('flash:installDriver', () => installBootloaderDriver(join(userData, 'drivers'), (l) => emit('flash', l)));
-  ipcMain.handle('flash:waitForRuntime', async (_e, timeoutMs: unknown) => !!(await waitFor((u) => u.runtimePresent && !u.bootloaderPresent, Math.min(Number(timeoutMs) || 20000, 60000), (l) => emit('flash', l))));
+  handle('flash:installDriver', () => installBootloaderDriver(join(userData, 'drivers'), (l) => emit('flash', l)).then(result('installDriver')));
+  handle('flash:waitForRuntime', async (_e, timeoutMs: unknown) => result('waitForRuntime')(!!(await waitFor((u) => u.runtimePresent && !u.bootloaderPresent, Math.min(Number(timeoutMs) || 20000, 60000), (l) => emit('flash', l)))));
 
-  ipcMain.handle('app:userDataPath', () => userData);
+  // Save diagnostics: compose the file from what main knows and the page's snapshot, write it, show it. Never sent.
+  handle('support:save', async (_e, snapshot: unknown) => {
+    const connection = cleanSnapshot(snapshot);
+    const fail = (err: unknown) => ({ error: err instanceof Error ? err.message : String(err) });
+    const [toolchain, usb, sabers] = await Promise.all([toolchainStatus(toolchainRoot).catch(fail), usbState().catch(fail), Promise.resolve(library.list()).catch(() => [])]);
+    const saber = connection.saberId ? sabers.find((x) => x.id === connection.saberId) ?? null : null;
+    console.log(`[support] saving diagnostics (status ${connection.status}, saber ${saber?.name ?? 'none'})`);
+    const logDir = join(userData, 'logs');
+    const current = runLog() ? basename(runLog()!.file) : null;
+    const previous = runLogs(logDir).filter((n) => n !== current).at(-1) ?? null;
+    const read = (name: string | null) => { if (!name) return null; try { return { name, text: readFileSync(join(logDir, name), 'utf8') }; } catch { return null; } };
+    const now = new Date();
+    const text = composeBundle({
+      now, connection, saber, lastBuild, toolchain, usb, currentLog: read(current), previousLog: read(previous),
+      about: { app: app.getVersion(), packaged: app.isPackaged, os: `${osVersion()} ${release()}`, arch: arch(), electron: process.versions.electron, chrome: process.versions.chrome },
+    });
+    const file = writeBundle(join(userData, 'support'), text, now);
+    shell.showItemInFolder(file);
+    console.log(`[support] saved ${basename(file)}`);
+    return { file: basename(file) };
+  });
+
+  handle('app:userDataPath', () => userData);
   // False in a development run started with HILTWRIGHT_NO_BOARD (packaged builds never have it).
-  ipcMain.handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);
-  ipcMain.handle('app:openHelp', async (_e, url: unknown) => {
+  handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);
+  handle('app:openHelp', async (_e, url: unknown) => {
     const u = new URL(str(url, 500));
     if (u.protocol !== 'https:' || !['pod.hubbe.net', 'fredrik.hubbe.net'].includes(u.hostname)) throw new Error('Only ProffieOS help pages can be opened');
     await shell.openExternal(u.toString());
   });
-  ipcMain.handle('app:openPath', async (_e, p: unknown) => {
+  handle('app:openPath', async (_e, p: unknown) => {
     const target = str(p, 1000);
     if (!insideFolder(userData, target)) throw new Error('Only app data paths can be opened');
     await shell.openPath(target);

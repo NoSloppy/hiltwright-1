@@ -9,6 +9,7 @@ import { wiringConfirmed, type SaberConfigModel } from '@hiltwright/core';
 import type { SaberRecord } from '../../shared/api';
 import type { Board } from './board';
 import { draftModel, infoFromRecord } from './saberModel';
+import { setWorkingSaber } from './support';
 
 export interface Workspace {
   /** The saber every step is about, or null when none is remembered yet. */
@@ -32,6 +33,7 @@ export function useWorkspace(board: Board): Workspace {
   const saber = live ? board.saber : board.library.find((s) => s.id === chosenId) ?? board.library[0] ?? null;
   const info = useMemo(() => (live ? board.info : saber ? infoFromRecord(saber) : null), [live, board.info, saber]);
   const model = useMemo(() => (saber && info ? draftModel(info, saber) : null), [saber, info]);
+  useEffect(() => { setWorkingSaber(saber?.id ?? null); }, [saber?.id]);
   const saveModel = useCallback(async (next: SaberConfigModel) => { if (saber) await board.updateSaber({ model: next }, saber.id); }, [board, saber]);
   return { saber, info, live, model, choose: setChosenId, saveModel, plans: board.library.filter((s) => s.planned) };
 }

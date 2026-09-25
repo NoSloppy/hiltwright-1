@@ -60,11 +60,14 @@ class TaggedBoard implements Transport {
   onData(cb: (chunk: string) => void) { this.cb = cb; return () => { this.cb = null; }; }
 }
 
-function setup() {
+function setup(traffic?: string[]) {
   const timers = new FakeTimers();
   const board = new TaggedBoard(timers);
   const events: string[] = [];
-  const client = new BoardClient(board, { now: () => timers.now, setTimer: (fn, ms) => timers.after(ms, fn), clearTimer: (h) => timers.cancel(h), onEvent: (l) => events.push(l) });
+  const client = new BoardClient(board, {
+    now: () => timers.now, setTimer: (fn, ms) => timers.after(ms, fn), clearTimer: (h) => timers.cancel(h), onEvent: (l) => events.push(l),
+    ...(traffic ? { onTraffic: (d: 'sent' | 'heard', t: string) => traffic.push(`${d === 'sent' ? '>' : '<'} ${t}`) } : {}),
+  });
   return { timers, board, client, events };
 }
 
@@ -159,6 +162,26 @@ describe('tagged framing (OS 8.10)', () => {
     expect(r2.lines).toEqual(['2']);
     expect(events.some((e) => /^\(late\) Whut\? :k\d+\|/.test(e))).toBe(true);
     expect(events.filter((e) => e.startsWith('(late h'))).toEqual([]);
+  });
+
+  it('reports every line sent, kicks and sentinels included, and every line heard, in order', async () => {
+    const traffic: string[] = [];
+    const { timers, board, client } = setup(traffic);
+    const d = client.detectTagging();
+    await timers.run(2000);
+    await d;
+    board.behind = 1;
+    const p = client.send('get_preset');
+    await timers.run(12000);
+    expect((await p).lines).toEqual(['2']);
+    expect(traffic.slice(0, 2)).toEqual(['> hwt| version', '< 1,24,hwt|v8.10 hiltwright ce12a06']);
+    expect(traffic).toContain('> h1| get_preset');
+    expect(traffic).toContain('> h1x| hw_end');
+    expect(traffic.some((t) => /^> k\d+\| hw_end$/.test(t))).toBe(true);
+    expect(traffic).toContain('< 1,1,h1|2');
+    expect(traffic).toContain('< Whut? :h1x|');
+    // Everything written is reported exactly once, in the order it was written.
+    expect(traffic.filter((t) => t.startsWith('> ')).map((t) => t.slice(2))).toEqual(board.sent);
   });
 
   it('does not kick a board that is still talking, however long the command takes', async () => {

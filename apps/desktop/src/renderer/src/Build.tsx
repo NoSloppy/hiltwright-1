@@ -9,6 +9,7 @@ import type { Workspace } from './workspace';
 import type { BackupInfo, BuildResult, JobEvent, ToolchainStatus } from '../../shared/api';
 import type { Board } from './board';
 import { Icon } from './Icon';
+import { SaveDiagnostics } from './SaveDiagnostics';
 import { readTransfer } from './transfer';
 
 const api = () => window.hiltwright;
@@ -267,7 +268,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
           </div>
           {lowSpace && <div className="note red"><Icon name="x" /><span>Not enough free space. Free up at least 2.5 GB, then try again.</span></div>}
           {tool.pathTooLong && <div className="note red"><Icon name="x" /><span>This folder path is too long for the compiler on Windows. Set HILTWRIGHT_TOOLCHAIN_DIR to a short path, or unset it to use the default.</span></div>}
-          {installError && <div className="note red"><Icon name="x" /><span>{installError}</span></div>}
+          {installError && <div className="note red"><Icon name="x" /><span className="col" style={{ gap: 8 }}><span>{installError}</span><SaveDiagnostics small /></span></div>}
           <button type="button" className={`btn full ${now ? 'pri' : ''}`} disabled={installing || tool.pathTooLong || lowSpace} onClick={() => void install()}><span className="b"><span className="i"><Icon name="import" />{installError ? 'Try again' : 'Download and install'}</span></span></button>
         </>
       )}
@@ -400,7 +401,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
           {step !== 'driver' && !busy && !(built && !confirmedWiring) && <span className="hint">{!built ? (confirmedWiring ? 'Build first.' : 'Build first. The wiring also needs confirming before anything is written.') : !canInstall ? (offline ? 'Plug the saber in to install. Everything up to here works without it.' : 'Reconnect the saber to install.') : inBootloader ? 'The board is in bootloader mode and ready to write.' : 'The whole flash is read to a backup file before anything is written.'}</span>}
         </div>
 
-        {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}</span></div>}
+        {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span className="col" style={{ gap: 8 }}><span>{note.text}</span>{(note.tone === 'red' || step === 'failed') && <SaveDiagnostics small />}</span></div>}
         {verdict && <div className={`note ${verdict.tone}`}><Icon name={verdict.ok ? 'check' : 'warn'} /><span>{verdict.text}</span></div>}
         {preview?.warnings.map((w) => <div key={w} className="note"><Icon name="info" /><span>{w}</span></div>)}
         {step === 'failed' && <span className="hint">If the saber does not show up after a reboot: hold BOOT, tap RESET, release BOOT, then press Install again. A backup can always be put back from the Backups tab.</span>}

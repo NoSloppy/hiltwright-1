@@ -52,6 +52,8 @@ export interface ClientOptions {
   /** Total timeout used in tagged mode, where the sentinel ends the response and only a dead board is left to wait for. */
   taggedTimeoutMs?: number;
   onEvent?: (line: string) => void;
+  /** Every line written to the board ('sent', kicks and sentinels included) and every line it sends ('heard'), raw. */
+  onTraffic?: (direction: 'sent' | 'heard', text: string) => void;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
@@ -88,6 +90,7 @@ export class BoardClient {
   /** When the board last sent anything at all. A board that is talking is not stuck, however long the command runs. */
   private lastHeard = 0;
   private readonly onEvent: (line: string) => void;
+  private readonly onTraffic: ((direction: 'sent' | 'heard', text: string) => void) | null;
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
@@ -100,6 +103,7 @@ export class BoardClient {
     this.kickMs = opts.kickMs ?? 800;
     this.maxKicks = opts.maxKicks ?? 30;
     this.onEvent = opts.onEvent ?? (() => {});
+    this.onTraffic = opts.onTraffic ?? null;
     this.now = opts.now ?? (() => Date.now());
     this.setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
@@ -116,6 +120,7 @@ export class BoardClient {
   /** Write to the transport; a failure (port gone) ends the current command instead of surfacing as an unhandled rejection. */
   private out(text: string): void {
     if (this.closed) return;
+    if (this.onTraffic) for (const l of text.split('\n')) if (l) this.onTraffic('sent', l);
     Promise.resolve()
       .then(() => this.transport.write(text))
       .catch((err) => { this.onEvent(`(write failed: ${String(err)})`); this.current?.resolve(false); });
@@ -140,6 +145,7 @@ export class BoardClient {
   private receive(chunk: string): void {
     this.lastHeard = this.now();
     for (const raw of this.lines.push(chunk)) {
+      this.onTraffic?.('heard', raw);
       const cur = this.current;
       const m = TAGGED.exec(raw);
       if (m) {

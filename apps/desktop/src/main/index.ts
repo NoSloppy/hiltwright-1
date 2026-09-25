@@ -4,9 +4,11 @@
 import { app, BrowserWindow, dialog, session } from 'electron';
 import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
+import { release, version as osVersion } from 'node:os';
 import { registerIpc } from './ipc';
 import { scrubDevEnv } from './devEnv';
 import { isProffie, serialAllowed } from './serialGate';
+import { startLog } from './log';
 
 // A packaged build ignores every HILTWRIGHT_* development switch: they are removed before anything reads one.
 scrubDevEnv(process.env, app.isPackaged);
@@ -14,6 +16,11 @@ scrubDevEnv(process.env, app.isPackaged);
 // Dev aid: HILTWRIGHT_USER_DATA=<folder> runs the app on a scratch data folder (sabers, styles, fonts, page storage),
 // so a test can never touch the owner's own.
 if (process.env.HILTWRIGHT_USER_DATA) app.setPath('userData', process.env.HILTWRIGHT_USER_DATA);
+
+// Every run writes a log in <userData>/logs (main's console, and the page's through console-message below).
+startLog(app.getPath('userData'));
+console.log(`[main] Hiltwright ${app.getVersion()} ${app.isPackaged ? 'packaged' : 'development'} build, Electron ${process.versions.electron}, ${osVersion()} ${release()}`);
+process.on('unhandledRejection', (reason) => console.error('[main] unhandled rejection', reason));
 
 // Dev aid: HILTWRIGHT_NO_BOARD=1 keeps this run away from every board: no serial device is granted or selected and
 // nothing connects on its own. For test runs that must never reach a real saber.
@@ -76,11 +83,16 @@ function createWindow(): void {
     if (choice === 1) e.preventDefault(); // go ahead and close
   });
   // Mirror renderer console output to the terminal so the walking skeleton can be checked headlessly.
+  // Electron 37 passes the level as a word on the event; older signatures passed a number (2 warning, 3 error) first.
   win.webContents.on('console-message', (event: unknown, ...rest: unknown[]) => {
     const details = (event as { message?: string; level?: string | number }) ?? {};
     const message = typeof rest[1] === 'string' ? rest[1] : details.message ?? String(rest[0] ?? '');
-    console.log('[renderer]', message);
+    const level = typeof rest[0] === 'number' ? rest[0] : details.level;
+    if (level === 'warning' || level === 2) console.warn('[renderer:warn]', message);
+    else if (level === 'error' || level === 3) console.error('[renderer:error]', message);
+    else console.log('[renderer]', message);
   });
+  win.webContents.on('render-process-gone', (_e, d) => console.error(`[main] the page's process ended: ${d.reason} (exit code ${d.exitCode})`));
   // Chromium requires a user gesture for navigator.serial.requestPort(). The renderer cannot fake one, but main can
   // run a script *as* a gesture, which is what makes "plug it in and it just connects" possible.
   win.webContents.on('did-finish-load', () => {
@@ -122,6 +134,8 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'));
 }
+
+app.on('child-process-gone', (_e, d) => console.error(`[main] a helper process ended: ${d.type} ${d.reason} (exit code ${d.exitCode})`));
 
 app.whenReady().then(() => {
   registerIpc();
