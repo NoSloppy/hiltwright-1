@@ -27,7 +27,8 @@
     - development live reload still connects (`[vite] connected` in the dev runs after the plugin)
 - [x] 3.2 Start `release/win-unpacked/Hiltwright.exe` with `HILTWRIGHT_DUMP=<file>` and `HILTWRIGHT_USER_DATA=<scratch folder>` set, wait 30 s, and close it. Verify that no dump file is written and that nothing is created in the scratch folder.
   - **Result, 2026-09-25, no board connected.** The packaged app ran for 30 s with `HILTWRIGHT_DUMP`, `HILTWRIGHT_USER_DATA` and `HILTWRIGHT_OFFSCREEN` set. No dump file was written, the scratch folder stayed empty (0 items), and the window showed on screen, so the offscreen switch was ignored too.
-- [ ] 3.3 Owner check: install from `npm run dist`'s installer and see the version in the sidebar footer. Verify by the owner's report.
+- [x] 3.3 Owner check: install from `npm run dist`'s installer and see the version in the sidebar footer. Verify by the owner's report.
+  - **Result, 2026-09-25, owner:** installed from the installer; the sidebar footer reads "Hiltwright 0.1.0 alpha".
 
 ## 4. Close
 
