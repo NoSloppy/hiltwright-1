@@ -79,10 +79,11 @@
   - the file shows hote2's identity, model, preset names and connection state
   - only read commands were sent
   - **Result, 2026-09-25, V2.2 hote2 (COM8), with `-Board` on a scratch folder.** The log shows the tagging probe and its answers, the identify commands, and `h17| battery` answered by `Battery voltage: 0.86`. The file shows hote2's identity (USB serial 209133815232), the connection (connected, 1209:6668, v8.10, 13 presets, 18 fonts, 22 tracks), and, after the fix in 3.2, all 13 preset names with their fonts and tracks. Only reads were sent: version, battery, get_volume, get_preset, list_presets, list_fonts, list_tracks, scanid, get_blade_dimming, get_clash_threshold, get_on, and the hw_end sentinels.
-- [ ] 5.3 Packaged build check: build the installer and have the owner install it and save diagnostics from Diagnostics. Verify:
+- [x] 5.3 Packaged build check: build the installer and have the owner install it and save diagnostics from Diagnostics. Verify:
   - the file appears in the installed app's `support` folder and opens selected
   - its header says packaged and shows 0.1.0
   - `%USERPROFILE%` appears in place of the owner's user folder
+  - **Result, 2026-09-25, owner's installed build, hote2 connected.** The owner saved diagnostics from Diagnostics, and the folder opened with the file selected. I read the file from the owner's real data folder. The header says "0.1.0 (packaged build)". All sections are present, with the connected hote2 (record "hotetest"), its model with the wiring confirmed and 13 presets, the installed firmware record, "No build in this run", and 207 board lines in the log. It has no previous-run section: this was the first run to keep a log. Neither the user name nor the computer name appears. No path under the user folder came up in this run (the toolchain is in `C:\ProgramData\Hiltwright`), so `%USERPROFILE%` did not need to appear. The replacement itself is covered by task 5.1 and `redact.test.ts`.
 - [x] 5.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-25.** 176 core and 140 desktop tests pass (7 gated skipped), and the type check is clean. Run after the last code change.
 - [ ] 5.5 After archive, tick roadmap task 3.3 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
