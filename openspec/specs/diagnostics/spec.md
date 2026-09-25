@@ -46,3 +46,14 @@ For a saber whose prop needs the Fett263 voice pack, the app SHALL check the car
 - **WHEN** a saber with the Fett263 prop has voice pack version 1 on its card
 - **THEN** the owner is told the card has version 1 and this firmware needs version 2
 - *Needs a real board (either).*
+
+### Requirement: Diagnostics offers a diagnostics file
+The Diagnostics page SHALL offer Save diagnostics whether or not a saber is connected (see `support-bundle`). Once the file is saved, the page SHALL name the file and say that the owner can read it before sending it.
+
+#### Scenario: Saving from Diagnostics
+- **WHEN** the owner presses Save diagnostics on the Diagnostics page
+- **THEN** the file's folder opens with the file selected, and the page names the file and says it can be read before sending
+
+#### Scenario: Diagnostics with nothing plugged in
+- **WHEN** the owner opens Diagnostics with no saber connected
+- **THEN** Save diagnostics is still offered
