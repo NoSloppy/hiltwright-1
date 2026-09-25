@@ -212,6 +212,7 @@ export function useBoard() {
 
   const connect = useCallback(async (interactive = false) => {
     if (!('serial' in navigator)) { setStatus('error'); setError('Web Serial is not available in this window.'); return; }
+    if (!(await api().app.boardAccess())) { setStatus('error'); setError('Board access is off for this run (HILTWRIGHT_NO_BOARD).'); return; }
     // After a reflash both the install flow and the Web Serial 'connect' event try to open the port; one is enough.
     if (transport.current || connecting.current) { console.log('[board] connect skipped: already connecting'); return; }
     connecting.current = true;

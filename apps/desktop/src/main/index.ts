@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { registerIpc } from './ipc';
 import { scrubDevEnv } from './devEnv';
+import { isProffie, serialAllowed } from './serialGate';
 
 // A packaged build ignores every HILTWRIGHT_* development switch: they are removed before anything reads one.
 scrubDevEnv(process.env, app.isPackaged);
@@ -14,39 +15,25 @@ scrubDevEnv(process.env, app.isPackaged);
 // so a test can never touch the owner's own.
 if (process.env.HILTWRIGHT_USER_DATA) app.setPath('userData', process.env.HILTWRIGHT_USER_DATA);
 
-const PROFFIE_VID = 0x1209;
-const PROFFIE_PID = 0x6668;
-
-/** Electron reports ids as decimal strings on select-serial-port ("4617") and as numbers to the device handler. */
-function idMatches(value: unknown, expected: number): boolean {
-  if (typeof value === 'number') return value === expected;
-  if (typeof value !== 'string' || !value) return false;
-  return parseInt(value, 10) === expected || parseInt(value, 16) === expected;
-}
-
-function isProffie(vendorId: unknown, productId: unknown): boolean {
-  return idMatches(vendorId, PROFFIE_VID) && idMatches(productId, PROFFIE_PID);
-}
+// Dev aid: HILTWRIGHT_NO_BOARD=1 keeps this run away from every board: no serial device is granted or selected and
+// nothing connects on its own. For test runs that must never reach a real saber.
+const noBoard = !!process.env.HILTWRIGHT_NO_BOARD;
 
 function grantSerial(): void {
   const ses = session.defaultSession;
   // Pick the Proffieboard when the renderer calls navigator.serial.requestPort().
   ses.on('select-serial-port', (event, portList, _webContents, callback) => {
     event.preventDefault();
-    const proffie = portList.find((p) => isProffie(p.vendorId, p.productId));
+    const proffie = noBoard ? undefined : portList.find((p) => isProffie(p.vendorId, p.productId));
     console.log('[main] select-serial-port', portList.map((p) => `${p.portName ?? p.displayName ?? '?'} ${p.vendorId}:${p.productId}`).join(', '), '→', proffie?.portId ?? '(none)');
     callback(proffie?.portId ?? '');
   });
   // Let navigator.serial.getPorts() return the board without a prompt, so connecting needs no click.
   // With a handler installed, Electron consults it for getPorts() and again at open time, so it must recognise the
-  // board. On Windows a serial device arrives as { device_instance_id: "USB\\VID_1209&PID_6668&MI_00\\...", name },
-  // with no vendorId/productId fields; other platforms report ids. Accept either shape.
+  // board (serialAllowed accepts the shapes a device arrives in, and refuses everything in a no-board run).
   ses.setDevicePermissionHandler((details) => {
     if (details.deviceType !== 'serial') return false;
-    const d = details.device as { vendorId?: unknown; productId?: unknown; device_instance_id?: string };
-    const byId = isProffie(d.vendorId, d.productId);
-    const byInstance = /VID_1209&PID_6668/i.test(d.device_instance_id ?? '');
-    const ok = byId || byInstance;
+    const ok = serialAllowed(details.device, noBoard);
     console.log('[main] device permission', JSON.stringify(details.device), '→', ok);
     return ok;
   });
@@ -97,7 +84,8 @@ function createWindow(): void {
   // Chromium requires a user gesture for navigator.serial.requestPort(). The renderer cannot fake one, but main can
   // run a script *as* a gesture, which is what makes "plug it in and it just connects" possible.
   win.webContents.on('did-finish-load', () => {
-    setTimeout(() => {
+    if (noBoard) console.log('[main] auto-connect skipped: HILTWRIGHT_NO_BOARD');
+    else setTimeout(() => {
       void win.webContents.executeJavaScript('window.hiltwrightAutoConnect ? window.hiltwrightAutoConnect() : "no hook"', true)
         .then((r) => console.log('[main] auto-connect', r))
         .catch((err) => console.log('[main] auto-connect failed', String(err)));

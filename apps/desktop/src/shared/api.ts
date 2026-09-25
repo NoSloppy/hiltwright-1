@@ -289,6 +289,8 @@ export interface HiltwrightApi {
   onJobEvent(cb: (e: JobEvent) => void): () => void;
   app: {
     userDataPath(): Promise<string>;
+    /** False when a development run was started with HILTWRIGHT_NO_BOARD: no board can be reached. */
+    boardAccess(): Promise<boolean>;
     openPath(path: string): Promise<void>;
     /** Open a known help page in the system browser. Only pod.hubbe.net and fredrik.hubbe.net are allowed. */
     openHelp(url: string): Promise<void>;

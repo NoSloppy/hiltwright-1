@@ -2,7 +2,7 @@
 
 ## 1. The gate in main
 
-- [ ] 1.1 Move the Proffieboard recognition in `grantSerial()` into `serialAllowed(device, noBoard)` in `apps/desktop/src/main/serialGate.ts` (design D2). Use it in the device permission handler, and make `select-serial-port` select nothing when `HILTWRIGHT_NO_BOARD` is set. Verify with `apps/desktop/test/serialGate.test.ts`:
+- [x] 1.1 Move the Proffieboard recognition in `grantSerial()` into `serialAllowed(device, noBoard)` in `apps/desktop/src/main/serialGate.ts` (design D2). Use it in the device permission handler, and make `select-serial-port` select nothing when `HILTWRIGHT_NO_BOARD` is set. Verify with `apps/desktop/test/serialGate.test.ts`:
   - a Proffieboard by ids is allowed
   - a Proffieboard by Windows instance id is allowed
   - another serial device is refused
@@ -27,6 +27,8 @@
 
 ## 4. Close
 
-- [ ] 4.1 Set `HILTWRIGHT_NO_BOARD=1` by default in the offscreen verification harness, and update the project note on test runs to say so (design D4). Verify by reading the harness.
-- [ ] 4.2 Run `npm test` and `npm run typecheck`; verify both pass.
+- [x] 4.1 Set `HILTWRIGHT_NO_BOARD=1` by default in the offscreen verification harness, and update the project note on test runs to say so (design D4). Verify by reading the harness.
+  - **Result, 2026-09-25.** The scratch harness `run-app.ps1` sets `HILTWRIGHT_NO_BOARD=1` unless called with `-Board`. The project note on test runs says so.
+- [x] 4.2 Run `npm test` and `npm run typecheck`; verify both pass.
+  - **Result, 2026-09-25.** 175 core and 121 desktop tests pass (7 gated skipped), and the type check is clean.
 - [ ] 4.3 After archive, tick roadmap task 3.4a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.

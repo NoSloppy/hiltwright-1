@@ -107,6 +107,7 @@ const api: HiltwrightApi = {
   },
   app: {
     userDataPath: () => ipcRenderer.invoke('app:userDataPath'),
+    boardAccess: () => ipcRenderer.invoke('app:boardAccess'),
     openHelp: (url) => ipcRenderer.invoke('app:openHelp', url),
     openPath: (path) => ipcRenderer.invoke('app:openPath', path),
   },

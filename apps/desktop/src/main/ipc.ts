@@ -304,6 +304,8 @@ export function registerIpc(): void {
   ipcMain.handle('flash:waitForRuntime', async (_e, timeoutMs: unknown) => !!(await waitFor((u) => u.runtimePresent && !u.bootloaderPresent, Math.min(Number(timeoutMs) || 20000, 60000), (l) => emit('flash', l))));
 
   ipcMain.handle('app:userDataPath', () => userData);
+  // False in a development run started with HILTWRIGHT_NO_BOARD (packaged builds never have it).
+  ipcMain.handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);
   ipcMain.handle('app:openHelp', async (_e, url: unknown) => {
     const u = new URL(str(url, 500));
     if (u.protocol !== 'https:' || !['pod.hubbe.net', 'fredrik.hubbe.net'].includes(u.hostname)) throw new Error('Only ProffieOS help pages can be opened');
