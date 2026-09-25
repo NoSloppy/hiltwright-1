@@ -106,7 +106,7 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 
 ### Wave A: unblock and equip
 
-- [ ] 3.1 Deliver `wiring-confirmation-gate`: first, because FW1 blocks every first install; verify it is archived
+- [x] 3.1 Deliver `wiring-confirmation-gate`: first, because FW1 blocks every first install; verify it is archived
 - [ ] 3.2 Deliver `release-hardening`: development aids off in packaged builds, before any packaged verification; verify it is archived
 - [ ] 3.3 Deliver `support-bundle`: a log and a diagnostics file, useful for every hardware check that follows; verify it is archived
 - [ ] 3.4 Deliver `hide-for-beta-1`: covers SF34 and FW21; verify it is archived

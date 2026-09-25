@@ -98,12 +98,16 @@ Each saber SHALL have one build model (wiring, board, buttons, prop, presets wit
 - **THEN** a draft model is shown with one blade per reported pixel count and the saber's reported presets
 
 ### Requirement: The installed firmware is recorded
-After a successful install, the saber's record SHALL keep what was compiled in: the build's hash, ProffieOS version, time, and which style is in which preset slot with its arguments. Putting a firmware backup back SHALL clear that record, because the restored firmware is not Hiltwright's.
+After a successful install, the saber's record SHALL keep what was compiled in: the build's hash, ProffieOS version, time, which style is in which preset slot with its arguments, and the board and blade layout the firmware was built for. Putting a firmware backup back SHALL clear that record, because the restored firmware is not Hiltwright's.
 
 #### Scenario: Install then restore
 - **WHEN** a saber is installed with Hiltwright and later has a backup put back
 - **THEN** after the install its styles count as compiled in, and after the restore they do not
 - *Needs a real board (either).*
+
+#### Scenario: The installed layout is kept
+- **WHEN** a saber with a 132-pixel main blade on its own data line and a 2-pixel crystal chained after it is installed
+- **THEN** the saber's record says the firmware was built for that board with those two blades, even after the owner later changes the wiring
 
 ### Requirement: A saber can be planned before it exists
 The owner SHALL be able to create a planned saber from the Armory by giving it a name. A plan has no board identity, starts with a starter build model and no presets, becomes the working saber, and opens the first step. A plan that is not the working saber SHALL be removable. Removing SHALL NOT be offered for a saber that has been seen on a board.

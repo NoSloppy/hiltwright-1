@@ -71,7 +71,7 @@
 
   - **Result, 2026-09-24, owner, V2.2 hote2:**
     - Adoption onto a plan worked, and the install completed.
-    - The real library (read through `\localhost\C$`, because the Claude app's package view redirects `AppData`) holds "hotetest" with its firmware record at 01:50:44 UTC, with `wiring` V2 and 3 blades, its confirmation, and staged presets cleared.
+    - The real library (read through `\\localhost\C$`, because the Claude app's package view redirects `AppData`) holds "hotetest" with its firmware record at 01:50:44 UTC, with `wiring` V2 and 3 blades, its confirmation, and staged presets cleared.
     - A concurrent second write to the library failed with ENOENT, filed to `library-integrity`.
     - The page showed that failure as "Stopped", with clipped text, filed to `install-safety-nets`.
     - Loading a set that named a deleted style threw, filed to `sets-safety`.
@@ -79,4 +79,4 @@
 ## 6. Close
 
 - [x] 6.1 Run `npm test` and `npm run typecheck`; verify both pass.
-- [ ] 6.2 In `openspec/changes/beta-1-roadmap/tasks.md`, tick task 3.1 once this change is archived; verify the tick.
+- [x] 6.2 In `openspec/changes/beta-1-roadmap/tasks.md`, tick task 3.1 once this change is archived; verify the tick.
