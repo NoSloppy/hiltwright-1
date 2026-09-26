@@ -27,4 +27,5 @@
   - **Result, 2026-09-26.** Scratch folder with the pasted style "Misspelt credit" by "Fet263", and `contributors.json` giving Fet263 `https://fett263.com/`. No board. The credit showed "Style by Fet263 … fett263.com". Edit, then "Fett263", then Save showed "Give Fett263 the logo and link of Fet263? Fet263 keeps its own…". Give them made the list hold both `Fet263:https://fett263.com/` and `Fett263:https://fett263.com/`, with the credit showing "Fett263 … fett263.com" and the note "Fett263 now has the same logo and link as Fet263." Damaged-file run: the Armory said "Your contributors could not be read. It was kept as contributors.damaged-20260926-124710.json in Hiltwright's data folder …", and that file exists.
 - [x] 3.2 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 178 core and 214 desktop tests pass (7 gated skipped), and the type check is clean.
-- [ ] 3.3 After archive, tick roadmap task 3.9 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 3.3 After archive, tick roadmap task 3.9 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-26.** Archived to `openspec/changes/archive/2026-09-26-contributors-integrity`, with the contributors spec synced (8 requirements, 12 scenarios). Roadmap 3.9 is ticked.
