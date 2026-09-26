@@ -15,6 +15,7 @@ The saber library is the owner's record of every saber, and its build model, sna
 - **FW26** (from `baseline-firmware`): Before adoption replaces a saber's compiled styles with Hiltwright's, tell the owner. That includes presets whose styles will point elsewhere.
 - **Shared safe store** (roadmap design D8): build F14's fix as one safe store (write via a temporary file, keep the last good copy, set a damaged file aside and report it) that `font-library-integrity`, `style-save-integrity` and `contributors-integrity` reuse, and use it for the preset-sets store too, which has the same flaw but was never flagged.
 - **HW-2026-09-24a** (seen on hote2 during `wiring-confirmation-gate` 5.3): two library writes at the same moment collide. The temporary file is named after the process, so the second rename fails with ENOENT (`library.json.<pid>.tmp`), and that write is lost; the install's firmware record won the race. The shared safe store must queue writes and give each one its own temporary file.
+- **BST-1** (from `board-side-test-coverage`): a store whose records have the wrong shape (valid JSON, records missing fields) makes the library throw on listing and on the next connect, instead of reading as no sabers. It is pinned by the expected-failure test "1.2 a store whose records have the wrong shape reads as no sabers" in `apps/desktop/test/library.test.ts`. Make it a normal test when fixed.
 
 ## Non-goals
 

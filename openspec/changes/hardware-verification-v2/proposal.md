@@ -47,6 +47,7 @@ A scripted pass in the real app, recording board, date and result for each scena
   - hwpack 2.6 (the built-in hilt on a fresh install), 2.7
   - contributors 3.4, 3.6, 3.7
   - loading a real `.glb` hilt
+- **BST-5** (from `board-side-test-coverage`, saber-library 1.9): a snapshot file (its `#` header lines, and no `installed=` line) is loaded by ProffieOS when copied onto the card as `presets.ini`. The codec side is tested in `apps/desktop/test/snapshots.test.ts`. This check needs a board (either), and the owner decides when to write the card.
 
 ## Non-goals
 

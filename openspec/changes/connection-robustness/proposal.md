@@ -13,6 +13,7 @@ The connection layer is the best-tested part of the app, but it has gaps a teste
 - **F3:** Bound the whole connect sequence on a dead ProffieOS 8 board to seconds, not minutes, and say what happened.
 - **F5:** Route console commands and the Try it / Diagnostics controls through the same operation queue as preset edits, so they cannot land between the steps of an edit.
 - **F7:** Correct the stale statements: the misleading test name in `protocol.test.ts`, the 6 s ceiling in doc 09, `list_named_style` and the 1200-baud note in the plan.
+- **BST-4** (from `board-side-test-coverage`): an edit queued just before an unplug is dropped silently. The operation returns at once with no failed state, so the owner is never told it did not reach the saber. There is no test yet, because the check lives in `runNow` inside the `useBoard` hook. The queue itself is tested in `boardOps.test.ts`.
 
 ## Non-goals
 

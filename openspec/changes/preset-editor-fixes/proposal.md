@@ -15,6 +15,7 @@ Several small defects make the Presets page say one thing while the saber or the
 - **F43:** The mode chip says "Staged for install" only when something is staged.
 - **F44:** After a failed write, the field shows what the saber reports.
 - **F45:** Colours are written when the picker settles, not only when the swatch loses focus.
+- **BST-2** (from `board-side-test-coverage`): chosen styles follow presets by name, so two presets with the same or a blank name both take the last one's styles. A preset renamed and moved on the saber takes the styles of whatever used to sit at its new position. Both are pinned by expected-failure tests in `apps/desktop/test/draftModel.test.ts`. Make them normal tests when fixed.
 
 ## Non-goals
 

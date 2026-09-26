@@ -165,6 +165,21 @@ describe('presets.ini', () => {
     expect(back.installed).toBe('Sep 11 2024 17:34:59');
     expect(back.presets).toEqual(presets);
   });
+  // presets-ini 5.3 (baseline audit).
+  it('5.3 writes a preset with no track as an empty track= line, reads it back empty, and ends with end', () => {
+    const presets = [
+      { font: 'Valkyrie;common', track: '', styles: ['builtin 0 1'], name: 'Valkyrie', variation: 0 },
+      { font: 'Kylo;common', track: 'tracks/kylo.wav', styles: ['builtin 1 1'], name: 'Kylo', variation: 3 },
+    ];
+    const text = emitPresetsIni({ installed: null, presets, terminated: true });
+    const lines = text.split('\n');
+    expect(lines[2]).toBe('track=');
+    expect(text.endsWith('variation=3\nend\n')).toBe(true);
+    const back = parsePresetsIni(text);
+    expect(back.terminated).toBe(true);
+    expect(back.presets[0].track).toBe('');
+    expect(back.presets).toEqual(presets);
+  });
   it('reads the documented hand-written form, comments and mixed case', () => {
     const ini = parsePresetsIni('# my presets\nNEW_PRESET\nFont=TFAFlex\ntrack=tracks/rey_training.wav\nstyle=builtin 0 1\nstyle=builtin 0 2\nname=Graflex8\nvariation=23299\nend\n');
     expect(ini.presets).toEqual([{ font: 'TFAFlex', track: 'tracks/rey_training.wav', styles: ['builtin 0 1', 'builtin 0 2'], name: 'Graflex8', variation: 23299 }]);

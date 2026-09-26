@@ -10,6 +10,7 @@ import {
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
 import { PROFFIE_FILTER, WebSerialTransport, describePort, grantedProffiePorts } from './serial';
 import { setConnectionSnapshot } from './support';
+import { connectGate, serialQueue } from './boardOps';
 
 export interface BoardInfo {
   version: VersionInfo | null;
@@ -45,8 +46,9 @@ export function useBoard() {
   const busyRef = useRef(false);
   const setBusy = (v: boolean) => { busyRef.current = v; setBusyState(v); };
   const client = useRef<BoardClient | null>(null);
-  const connecting = useRef(false);
   const transport = useRef<WebSerialTransport | null>(null);
+  // One connection attempt at a time (boardOps.ts): a second one while connecting, or while a port is open, is skipped.
+  const [gate] = useState(() => connectGate(() => !!transport.current));
   const infoRef = useRef<BoardInfo | null>(null);
   const saberRef = useRef<SaberRecord | null>(null);
   infoRef.current = info;
@@ -231,10 +233,8 @@ export function useBoard() {
     if (!('serial' in navigator)) { setStatus('error'); setError('Web Serial is not available in this window.'); return; }
     if (!(await api().app.boardAccess())) { setStatus('error'); setError('Board access is off for this run (HILTWRIGHT_NO_BOARD).'); return; }
     // After a reflash both the install flow and the Web Serial 'connect' event try to open the port; one is enough.
-    if (transport.current || connecting.current) { console.log('[board] connect skipped: already connecting'); return; }
-    connecting.current = true;
-    try { await connectOnce(interactive); } finally { connecting.current = false; }
-  }, [connectOnce]);
+    if (!(await gate(() => connectOnce(interactive)))) console.log('[board] connect skipped: already connecting');
+  }, [connectOnce, gate]);
 
   useEffect(() => {
     void refreshLibrary();
@@ -272,11 +272,9 @@ export function useBoard() {
 
   /** Run a board operation with busy state, snapshot and save-state bookkeeping. */
   // Writes are serialised, never dropped: a click that lands while the board is busy waits its turn.
-  const queue = useRef<Promise<void>>(Promise.resolve());
+  const [enqueue] = useState(serialQueue);
   const run = useCallback((label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot = true): Promise<void> => {
-    const next = queue.current.then(() => runNow(label, op, withSnapshot));
-    queue.current = next.catch(() => undefined);
-    return next;
+    return enqueue(() => runNow(label, op, withSnapshot));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

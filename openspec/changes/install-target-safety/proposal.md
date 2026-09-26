@@ -12,6 +12,7 @@ Nothing makes sure the firmware being written matches the board it lands on. The
 - **FW4:** Install to a board in its bootloader only when the app can tell it is the saber being worked on, or after the owner explicitly says which saber it is.
 - **FW5:** A build becomes stale as soon as the model it was built from changes. Install offers only a current build, and the record stored after an install is the model that was actually built.
 - **FW31:** With more than one board plugged in, say so and do not guess.
+- **BST-3** (from `board-side-test-coverage`, joins FW3): a new saber's first draft is always for V2, because `draftModel` guesses the board from the ProffieOS version string, which never names the board. A V3 owner's first build would target V2 unless they change it. It is pinned by the expected-failure test "a new saber whose config names a V3 board is drafted for V3" in `apps/desktop/test/draftModel.test.ts`.
 
 ## Non-goals
 
