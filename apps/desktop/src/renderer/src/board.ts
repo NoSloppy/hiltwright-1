@@ -76,8 +76,15 @@ export function useBoard() {
     });
   }, [status, error, portName, info]);
 
+  // The connected saber's own record is refreshed too: main may have changed it (a saved style reaching its plan), and
+  // every page works from `saber` while it is plugged in.
   const refreshLibrary = useCallback(async () => {
-    try { setLibrary(await api().library.list()); } catch (err) { console.log(`[library] list failed: ${String(err)}`); }
+    try {
+      const list = await api().library.list();
+      setLibrary(list);
+      const fresh = saberRef.current && list.find((s) => s.id === saberRef.current!.id);
+      if (fresh) { saberRef.current = fresh; setSaber(fresh); }
+    } catch (err) { console.log(`[library] list failed: ${String(err)}`); }
   }, []);
 
   const refreshSnapshots = useCallback(async (saberId: string) => {

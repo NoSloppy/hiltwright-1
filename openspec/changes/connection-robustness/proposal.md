@@ -14,6 +14,7 @@ The connection layer is the best-tested part of the app, but it has gaps a teste
 - **F5:** Route console commands and the Try it / Diagnostics controls through the same operation queue as preset edits, so they cannot land between the steps of an edit.
 - **F7:** Correct the stale statements: the misleading test name in `protocol.test.ts`, the 6 s ceiling in doc 09, `list_named_style` and the 1200-baud note in the plan.
 - **BST-4** (from `board-side-test-coverage`): an edit queued just before an unplug is dropped silently. The operation returns at once with no failed state, so the owner is never told it did not reach the saber. There is no test yet, because the check lives in `runNow` inside the `useBoard` hook. The queue itself is tested in `boardOps.test.ts`.
+- **HW-2026-09-26b** (seen on hote2 during `style-save-integrity` 5.2, 2026-09-26): about four minutes after an install and reconnect, hote2 stopped answering entirely. `h11| cat common/voicepack.ini` got no reply, and 106 kicks over two minutes heard nothing, while the header still said "Connected". The Build page then showed the voice-pack warning. The app must notice a board that has gone silent and say so (with F1 and F3). The owner's run log is `hiltwright-20260926-121012.log`.
 
 ## Non-goals
 
