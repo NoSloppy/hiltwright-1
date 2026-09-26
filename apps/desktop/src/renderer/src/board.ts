@@ -105,10 +105,13 @@ export function useBoard() {
   const disconnect = useCallback(async (reason?: string) => {
     client.current?.close();
     client.current = null;
-    await transport.current?.close();
+    // Let go of the transport before waiting on it, so anything still running sees at once that it is gone.
+    const t = transport.current;
     transport.current = null;
+    await t?.close();
     setStatus(reason ? 'error' : 'idle');
-    if (reason) setError(reason);
+    // A plain disconnect or unplug leaves no stale reason behind.
+    setError(reason ?? null);
     setInfo(null);
     setPortName(null);
   }, []);
@@ -262,6 +265,8 @@ export function useBoard() {
       await identify();
     } catch (err) {
       console.log(`[board] reading stopped: ${String(err)}`);
+      // Unplugged while being read: the port is already gone and the state already says "Not connected".
+      if (transport.current !== t) return;
       await disconnect(err instanceof NotAnswering ? NOT_ANSWERING : `Board did not answer: ${String(err)}`);
     } finally {
       identifying.current = false;

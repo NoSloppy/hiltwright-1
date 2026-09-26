@@ -50,7 +50,7 @@
     - **Connecting while silent:** after Disconnect, mute and Connect, the log says `silent: hwt| version (6005 ms)` and `reading stopped: no answer to the tag probe`. The Armory said "The saber is not answering…" after 6.3 s.
     - **The saber list** was `["hote2"]` before and after.
     - **Left connected and unmuted:** reconnected in 1.6 s.
-- [ ] 3.2 Owner check on V2.2 hote2 and the V3.9 from a development build (design D7). Verify on each board that:
+- [x] 3.2 Owner check on V2.2 hote2 and the V3.9 from a development build (design D7). Verify on each board that:
   - unplugging while idle reads "Not connected", and replugging reconnects
   - unplugging during a console `list_fonts` ends the command and reads "Not connected"
   - pulling the cable just as a preset edit (for example a font change) is saved leaves the save status saying what happened (saved, failed, or "Not sent: the saber is not connected."), never nothing. The exact case, an edit still waiting its turn at the unplug, is covered by `boardOps.test.ts`, because the page offers no edits once the saber is unplugged.
@@ -66,6 +66,13 @@
     - `.chip.err` wraps, on its own line in the Presets header, measured and screenshotted inside the panel.
 
     The spec gains the scenario "Unplugged while an edit is written". 184 core and 254 desktop tests pass, and the type check is clean. Awaiting the owner's re-run of step 3, and the V3.
+  - **Result, 2026-09-26 (owner).** All passed:
+    - **hote2:** step 3 passed on the re-run. The log shows `port lost` 0.3 s after `set_font BEN_SOLO`, then "Font → BEN_SOLO · disconnected during the change".
+    - **V3.9 (stock `default_proffieboard_config.h`, untagged):** all three steps passed, over several unplugs and replugs.
+
+    Two things from the owner's log (`hiltwright-20260926-160344.log`):
+    - **With no SD card, a V3 preset edit fails with "The saber stopped answering…".** The board printed "Failed to mount SD card.". This is the preset editor's own behaviour with no card, not this change's, so it is filed as HW-2026-09-26d in `preset-editor-fixes`.
+    - **An unplug while the V3 was being read** showed "Board did not answer: Error: Not connected" and kept that text. This is F1 here, so it is fixed (design D3, added). 184 core and 254 desktop tests pass, and the type check is clean. It was not re-run on a board, because the owner's development app held hote2's port.
 - [x] 3.3 Correct the stale statements of design D8 in `protocol.test.ts`, `docs/09-board-protocol-notes.md` and `docs/00-plan.md`. Verify by reading each.
   - **Result, 2026-09-26.** Done, read back after editing:
     - The `protocol.test.ts` test is now "OS 8.10 rejects help, id, list_named_style (singular) and get_style, and tags written without a space after the pipe".

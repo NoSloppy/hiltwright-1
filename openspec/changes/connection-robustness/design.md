@@ -56,6 +56,10 @@
   - The transport's `onClose` now calls `lost(reason)`. This logs `[board] port lost: <reason>` and calls `disconnect()` with no error, so the state is `idle` ("Not connected") and the live values are cleared.
   - A real error opening the port still shows as an error.
 
+**Added after the owner's check (3.2):** an unplug while the saber was still being read briefly showed "Board did not answer: Error: Not connected", and kept that text even at "Not connected". Two changes fix it:
+- `disconnect` now lets go of the transport before awaiting its close, and clears `error` when there is no reason.
+- `connectTo` ignores a reading that stopped because its own transport was already lost.
+
 **Rejected:**
 - *Keeping "error" for an unplug.* The spec says an unplug returns to "Not connected". An unplug is not a fault.
 

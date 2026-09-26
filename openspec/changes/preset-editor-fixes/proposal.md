@@ -16,6 +16,10 @@ Several small defects make the Presets page say one thing while the saber or the
 - **F44:** After a failed write, the field shows what the saber reports.
 - **F45:** Colours are written when the picker settles, not only when the swatch loses focus.
 - **BST-2** (from `board-side-test-coverage`): chosen styles follow presets by name, so two presets with the same or a blank name both take the last one's styles. A preset renamed and moved on the saber takes the styles of whatever used to sit at its new position. Both are pinned by expected-failure tests in `apps/desktop/test/draftModel.test.ts`. Make them normal tests when fixed.
+- **HW-2026-09-26d** (seen on the V3.9 during `connection-robustness` 3.2, 2026-09-26, with no SD card; run log `hiltwright-20260926-160344.log`):
+  - **What happened:** a preset edit (`set_font BEN_SOLO`) fails with "The saber stopped answering. Unplug and replug it, then press Connect." The board printed "Failed to mount SD card." after the write and before almost every command. The three read-backs got no preset block, so `editCurrentPreset`'s dead-link probe blamed the connection.
+  - **Why it matters:** reconnecting cannot help, because preset changes are saved on the card.
+  - **The fix:** recognise the SD failure, both at connect (the board reports it during reading) and on an edit. Say there is no readable SD card in the saber, so preset changes cannot be saved until one is in, and do not offer live edits in that state.
 
 ## Non-goals
 
