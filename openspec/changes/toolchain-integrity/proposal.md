@@ -17,6 +17,7 @@ Every tester will run the toolchain setup. It downloads and runs executables wit
 - **FW32:** Create the toolchain folder only when the owner starts the setup, and check that the machine-wide folder is not writable by other standard users.
 - **FW36:** Flag a toolchain that is already installed at a path that is too long.
 - **FW28:** Correct the docs (path limit, disk footprint, driver helper, toolchain location).
+- **HW-2026-09-25a** (seen on hote2 during `library-integrity` 6.3): files in the machine-wide folder that were written by a Hiltwright run with administrator rights (here `C:\ProgramData\Hiltwrightuilds53c5735a826\`, from the 2026-09-24 install, owned by Administrators) cannot be overwritten by a normal run. The next build fails with `EPERM: operation not permitted, open '…\hiltwright_hote2.h'`. The build output must stay writable by the owner whatever rights an earlier run had. For example: a per-user build folder, or repairing or replacing a build folder the app cannot write. Related to FW32.
 
 ## Non-goals
 

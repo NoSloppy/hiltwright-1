@@ -12,6 +12,7 @@ A few build defects will reach Beta 1's style builders directly: V3 flash percen
 - **FW14:** Name the preset and style an error comes from, test the remaining translation patterns, and check pins and prop defines before compiling.
 - **FW15:** Style names and authors are escaped wherever they enter the config.
 - **FW16:** The config name is validated before any file is written, and the path is checked to stay in the build folder.
+- **HW-2026-09-25b** (seen on hote2 during `library-integrity` 6.3): when `build:run` throws instead of returning a failed result (here EPERM writing the config), Build & Install stays on "Building…" with the timer running forever. The rejection is unhandled (the run log has `unhandled rejection: Error invoking remote method 'build:run'`). A thrown build must end the step as failed, in plain words, with Save diagnostics offered.
 
 ## Non-goals
 
