@@ -27,7 +27,7 @@ saber.model = withWiringConfirmation(saber.model as SaberConfigModel, true, '202
 const base = (over: Partial<BundleInput> = {}): BundleInput => ({
   now,
   about: { app: '0.1.0', packaged: true, os: 'Windows 11 Pro 10.0.26200', arch: 'x64', electron: '37.2.0', chrome: '138.0' },
-  toolchain: { root: 'C:\\Users\\Al\\AppData\\Local\\Hiltwright\\tc', cli: true, cliVersion: '1.3.1', core: true, gcc: true, dfuUtil: 'x', proffieOS: true, proffieOSVersion: 'v8.10', ready: true, freeBytes: 50 * 1048576, pathTooLong: false },
+  toolchain: { root: 'C:\\Users\\Al\\AppData\\Local\\Hiltwright\\tc', cli: true, cliVersion: '1.3.1', core: true, gcc: true, dfuUtil: 'x', proffieOS: true, proffieOSVersion: 'v8.10', ready: true, freeBytes: 50 * 1048576, pathTooLong: false, versions: { cli: '1.3.1', core: '4.6', proffieOS: 'v8.10' }, open: false },
   usb: { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: null, bootloaderProblem: null },
   connection: { status: 'connected', error: null, port: '1209:6668', board: { version: 'v8.10', config: 'hote2.h', prop: 'Fett263', buttons: 2, battery: 3.9, volume: 1800, presets: 13, fonts: 18, tracks: 22, blades: [132, 1, 2] }, saberId: 'ea8dbea42e78' },
   saber,

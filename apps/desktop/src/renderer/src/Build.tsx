@@ -103,6 +103,13 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     setInstalling(true); setInstallError(null); setInstallStarted(Date.now());
     try { setTool(await api().toolchain.install()); } catch (err) { setInstallError(String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')); } finally { setInstalling(false); }
   };
+  // Locking a toolchain folder other Windows users can change (toolchain-integrity).
+  const [repairing, setRepairing] = useState(false);
+  const [repairNote, setRepairNote] = useState<string | null>(null);
+  const repair = async () => {
+    setRepairing(true); setRepairNote(null);
+    try { const r = await api().toolchain.repair(); setTool(r.status); if (!r.ok) setRepairNote(r.text); } catch (err) { setRepairNote(String(err)); } finally { setRepairing(false); }
+  };
 
   const build = useCallback(async (force = false) => {
     if (!model || !saber) return;
@@ -200,12 +207,20 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const toolStep = (now: boolean) => (
     <div className={`stepc ${tool?.ready ? 'done' : now ? 'now' : ''}`}>
       <div className="head"><span className="nbox">{tool?.ready ? <Icon name="check" /> : 2}</span><b>Compiler</b><span className="what">{tool?.ready ? `ProffieOS ${tool.proffieOSVersion ?? ''} ready` : installing ? `installing, ${installStarted ? Math.round((Date.now() - installStarted) / 1000) : 0} s` : 'one-time download'}</span></div>
+      {tool?.ready && <span className="hint">arduino-cli {tool.versions.cli} · board support {tool.versions.core} · ProffieOS {tool.versions.proffieOS}</span>}
+      {tool?.open && (
+        <div className="note amber"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+          <span>Other Windows users on this computer could change the compiler Hiltwright uses, in {tool.root}. Repair makes it changeable only by administrators and your account; Windows may ask for approval.</span>
+          {repairNote && <span className="red small">{repairNote}</span>}
+          <span className="row"><button type="button" className="btn sm" disabled={repairing || installing} onClick={() => void repair()}><span className="b"><span className="i">{repairing ? 'Repairing…' : 'Repair'}</span></span></button></span>
+        </span></div>
+      )}
       {tool && !tool.ready && !installing && (
         <>
           <span className="hint">Building firmware needs the ProffieOS sources, the Arduino command line and the ARM compiler. Hiltwright downloads them once into its own folder and touches nothing else.</span>
           <div>
             <div className="kv"><span>Download</span><span>about 360 MB</span></div>
-            <div className="kv"><span>On disk</span><span>about 1.7 GB</span></div>
+            <div className="kv"><span>On disk</span><span>about 1.9 GB</span></div>
             <div className="kv"><span>Free space</span><span>{tool.freeBytes != null ? fmtGB(tool.freeBytes) : 'unknown'}</span></div>
             <div className="kv"><span>Folder</span><span title={tool.root}>{tool.root}</span></div>
           </div>
@@ -216,6 +231,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         </>
       )}
       {installing && <div className="console" style={{ maxHeight: 120, minHeight: 48, fontSize: 11 }}>{log.filter((e) => e.job === 'toolchain').slice(-6).map((e, i) => <div key={i}>{e.line}</div>)}</div>}
+      {installing && <button type="button" className="btn sm ghost" onClick={() => void api().toolchain.cancel()}><span className="b"><span className="i">Cancel</span></span></button>}
     </div>
   );
 

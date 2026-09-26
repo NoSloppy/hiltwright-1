@@ -9,7 +9,7 @@
  */
 export const MAX_ROOT_LENGTH = 40;
 /** On-disk footprint of a full install, and the free space the setup asks for (the footprint plus room to build). */
-export const INSTALL_DISK_BYTES = 1.7 * 1024 * 1024 * 1024;
+export const INSTALL_DISK_BYTES = 1.9 * 1024 * 1024 * 1024;
 export const INSTALL_DISK_MARGIN = 2.5 * 1024 * 1024 * 1024;
 
 export interface ToolchainFacts { root: string; ready: boolean; freeBytes: number | null; pathTooLong: boolean }
@@ -19,7 +19,7 @@ export function toolchainBlockers(s: ToolchainFacts): { pathTooLong: Blocker | n
   return {
     pathTooLong: s.pathTooLong ? {
       error: `The toolchain folder path is too long for the compiler on Windows (${s.root.length} characters, at most ${MAX_ROOT_LENGTH}): ${s.root}`,
-      panel: 'This folder path is too long for the compiler on Windows. Set HILTWRIGHT_TOOLCHAIN_DIR to a short path, or unset it to use the default.',
+      panel: `This folder's path is too long for the compiler on Windows: ${s.root.length} characters, where at most ${MAX_ROOT_LENGTH} fit. The compiler's own files sit about 213 characters deeper, and Windows stops at 259.`,
     } : null,
     lowSpace: !s.ready && s.freeBytes != null && s.freeBytes < INSTALL_DISK_MARGIN ? {
       error: `Not enough free space: ${(s.freeBytes / 1073741824).toFixed(1)} GB free, the toolchain needs about ${(INSTALL_DISK_BYTES / 1073741824).toFixed(1)} GB plus room to build.`,

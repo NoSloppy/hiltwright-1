@@ -46,6 +46,8 @@ The pins, in `toolchain.ts`:
 - **The check.** `verifiedDownload(url, dest, sha256, …)` downloads with `download`, then hashes the file. On a mismatch it deletes the file and throws "The <part> download is not the file Hiltwright expects, so it was not used." Only a verified file is unpacked.
 - **The core.** The setup runs `core install proffieboard:stm32l4@4.6`. arduino-cli keeps one version per platform, so this replaces any other. The core archives themselves are checked by arduino-cli against the board index's own checksums.
 
+**Added during implementation:** `ToolchainSys.expected` (`{ cli, proffieOS }`, defaulting to the pins) lets the unit tests name their fake files, as the driver installer's `expected` does. The measured footprint, 1.9 GB including 360 MB of archives kept, replaces the 1.7 GB constant.
+
 **Rejected:**
 - *Downloading ProffieOS by commit instead of tag.* The tag archive is what the owner's working install used, and the hash pins its exact bytes whichever way the tag moves.
 - *Bundling the toolchain in the installer.* It adds about 360 MB to every download, and the licences of the parts need care. That is out of scope here.

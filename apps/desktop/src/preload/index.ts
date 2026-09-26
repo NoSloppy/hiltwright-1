@@ -102,6 +102,8 @@ const api: HiltwrightApi = {
   toolchain: {
     status: () => ipcRenderer.invoke('toolchain:status'),
     install: () => ipcRenderer.invoke('toolchain:install'),
+    cancel: () => ipcRenderer.invoke('toolchain:cancel'),
+    repair: () => ipcRenderer.invoke('toolchain:repair'),
   },
   build: {
     run: (saberId, model, force) => ipcRenderer.invoke('build:run', saberId, model, force),

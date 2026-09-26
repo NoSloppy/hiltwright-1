@@ -138,6 +138,10 @@ export interface ToolchainStatus {
   freeBytes: number | null;
   /** Windows: the folder is too deep for the compiler's 260-character path limit. */
   pathTooLong: boolean;
+  /** What is installed, read back: arduino-cli's version, the board support's version folders, the ProffieOS source. */
+  versions: { cli: string | null; core: string | null; proffieOS: string | null };
+  /** Windows: standard users other than the owner can change the folder. Null when it does not exist or is unknown. */
+  open: boolean | null;
 }
 
 export interface BuildResult {
@@ -321,8 +325,12 @@ export interface HiltwrightApi {
   };
   toolchain: {
     status(): Promise<ToolchainStatus>;
-    /** Download and install whatever is missing. Progress arrives through onJobEvent. */
+    /** Download and install whatever is missing. Progress arrives through onJobEvent. Joins a setup already running. */
     install(): Promise<ToolchainStatus>;
+    /** Stop the running setup. False when none is running. */
+    cancel(): Promise<boolean>;
+    /** Lock a toolchain folder other users can change (asks Windows for approval when needed). */
+    repair(): Promise<{ ok: boolean; text: string; status: ToolchainStatus }>;
   };
   build: {
     /** Generate config.h for the model and compile it. Progress arrives through onJobEvent. */

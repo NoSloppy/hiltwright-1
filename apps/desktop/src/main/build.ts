@@ -5,7 +5,7 @@ import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promi
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { generateConfig, validateModel, type GeneratedConfig, type SaberConfigModel } from '@hiltwright/core';
-import { PROFFIEOS_TAG, cliEnv, run, toolchainPaths, type Progress, type ToolchainPaths } from './toolchain';
+import { PROFFIEOS_TAG, cliEnv, run, toolchainPaths, type Progress, type ToolchainPaths, ensureBuildRoot, userBuildRoot } from './toolchain';
 
 export const FQBN: Record<'V2' | 'V3', string> = {
   V2: 'proffieboard:stm32l4:ProffieboardV2-L433CC:usb=cdc_msc_webusb,dosfs=sdspi,speed=80,opt=os',
@@ -72,7 +72,11 @@ async function prepareSketch(p: ToolchainPaths, saberDir: string, onLine: Progre
   return sketch;
 }
 
-export async function buildFirmware(opts: { toolchainRoot: string; saberId: string; model: SaberConfigModel; onLine?: Progress; force?: boolean }): Promise<BuildResult> {
+/**
+ * Build a saber's firmware. Each saber builds in `<buildRoot>/<saberId>`, by default a folder of the Windows user's own
+ * (userBuildRoot): never the shared toolchain folder, so another run's files cannot block it.
+ */
+export async function buildFirmware(opts: { toolchainRoot: string; buildRoot?: string; saberId: string; model: SaberConfigModel; onLine?: Progress; force?: boolean }): Promise<BuildResult> {
   const onLine = opts.onLine ?? (() => {});
   const t0 = Date.now();
   const p = toolchainPaths(opts.toolchainRoot);
@@ -80,7 +84,9 @@ export async function buildFirmware(opts: { toolchainRoot: string; saberId: stri
   const gen = generateConfig(opts.model);
   const fqbn = FQBN[opts.model.board];
   const flashBytes = FLASH_BYTES[opts.model.board];
-  const saberDir = join(p.buildRoot, opts.saberId.replace(/[^A-Za-z0-9_-]/g, '_'));
+  const buildRoot = opts.buildRoot ?? userBuildRoot();
+  await ensureBuildRoot(buildRoot);
+  const saberDir = join(buildRoot, opts.saberId.replace(/[^A-Za-z0-9_-]/g, '_'));
   const cacheKey = createHash('sha256').update(`${gen.hash}|${PROFFIEOS_TAG}|${fqbn}`).digest('hex').slice(0, 16);
   const cacheDir = join(saberDir, 'cache', cacheKey);
   const configPath = join(saberDir, `${opts.model.name}.h`);

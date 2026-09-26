@@ -12,7 +12,7 @@ import type { LookDef } from '@hiltwright/core';
 import { Snapshots } from './snapshots';
 import { proffieSerials } from './usb';
 import { checkFontDir, copyFont, listFonts, listTracks, locateCards, readVoicePack, ejectVolume, readFontSounds } from './sd';
-import { defaultToolchainRoot, installToolchain, toolchainStatus } from './toolchain';
+import { cancelSetup, ensureToolchainRoot, installToolchain, lockFolder, plannedToolchainRoot, setupOnce, toolchainStatus, userBuildRoot } from './toolchain';
 import { listPacks, packFont, packMesh, userPacksDir } from './packs';
 import { FontLibrary, type ImportResult } from './fontLibrary';
 import { ContributorStore, cleanUrl } from './contributors';
@@ -329,8 +329,8 @@ export function registerIpc(): void {
 
   // ---- Tier 2: toolchain, build, flash ----
   // The toolchain wants a short path on Windows: GCC opens its headers 213 characters below the root and
-  // CreateProcess fails past 260. See defaultToolchainRoot.
-  const toolchainRoot = process.env.HILTWRIGHT_TOOLCHAIN_DIR || defaultToolchainRoot(userData);
+  // CreateProcess fails past 260. The folder is chosen now but created only when the owner starts the setup.
+  let toolchainRoot = process.env.HILTWRIGHT_TOOLCHAIN_DIR || plannedToolchainRoot(userData);
   const emit = (job: JobEvent['job'], line: string) => {
     const ev: JobEvent = { job, line, at: Date.now() };
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send('job:event', ev);
@@ -342,7 +342,19 @@ export function registerIpc(): void {
     return m;
   };
   handle('toolchain:status', () => toolchainStatus(toolchainRoot));
-  handle('toolchain:install', () => installToolchain(toolchainRoot, (l) => emit('toolchain', l)));
+  // One setup at a time: pressing Install again joins the running one. Cancel stops it between or during steps.
+  handle('toolchain:install', () => setupOnce(async (signal) => {
+    const onLine = (l: string) => emit('toolchain', l);
+    if (!process.env.HILTWRIGHT_TOOLCHAIN_DIR) toolchainRoot = await ensureToolchainRoot(toolchainRoot, userData, onLine);
+    return installToolchain(toolchainRoot, onLine, undefined, signal);
+  }));
+  handle('toolchain:cancel', () => cancelSetup());
+  // Lock a toolchain folder other users can change; asks Windows for approval when the folder belongs to administrators.
+  handle('toolchain:repair', async () => {
+    const r = await lockFolder(toolchainRoot, true);
+    emit('toolchain', r.ok ? `locked ${toolchainRoot}` : `could not lock ${toolchainRoot}: ${r.text}`);
+    return { ...r, status: await toolchainStatus(toolchainRoot) };
+  });
   handle('build:preview', (_e, m: unknown) => {
     const mm = model(m);
     const errors = validateModel(mm);
@@ -379,7 +391,7 @@ export function registerIpc(): void {
     const p = str(dfuPath, 1000);
     // Paths arrive with whatever slashes the builder used; compare them resolved and case-folded (Windows).
     const norm = (x: string) => resolve(x).replace(/[\\/]+/g, '/').toLowerCase();
-    if (!norm(p).startsWith(norm(toolchainRoot) + '/')) throw new Error('Only firmware built by Hiltwright can be written');
+    if (!norm(p).startsWith(norm(userBuildRoot()) + '/')) throw new Error('Only firmware built by Hiltwright can be written');
     return writeFirmware(toolchainRoot, p, (l) => emit('flash', l)).then(result('write'));
   });
   const backupsDir = (saberId: unknown) => join(userData, 'sabers', str(saberId, 40).replace(/[^A-Za-z0-9_-]/g, '_'), 'backups');

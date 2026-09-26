@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { SaberConfigModel } from '@hiltwright/core';
@@ -31,11 +31,21 @@ describe.skipIf(!enabled)('first-run toolchain install', () => {
       expect(after.ready).toBe(true);
       expect(after.cliVersion).toMatch(/^1\.3\.1/);
       expect(after.dfuUtil).toBeTruthy();
+      // toolchain-integrity: what is installed is read back, and is the pinned set.
+      expect(after.versions).toEqual({ cli: '1.3.1', core: '4.6', proffieOS: 'v8.10' });
+      expect(lines.some((l) => /arduino-cli sha256 cfece6f3/.test(l))).toBe(true);
+      expect(lines.some((l) => /ProffieOS source sha256 454f2374/.test(l))).toBe(true);
       // Idempotent: a second call does nothing and stays ready.
       const again = await installToolchain(root, () => undefined);
       expect(again.ready).toBe(true);
-      const r = await buildFirmware({ toolchainRoot: root, saberId: 'fresh', model, onLine: (l) => console.log(`[build] ${l.slice(0, 160)}`), force: true });
+      const buildRoot = await mkdtemp(join(tmpdir(), 'hw-b-'));
+      const r = await buildFirmware({ toolchainRoot: root, buildRoot, saberId: 'fresh', model, onLine: (l) => console.log(`[build] ${l.slice(0, 160)}`), force: true });
       expect(r.ok).toBe(true);
+      // How deep a build writes below its saber folder: sets the per-user build root's length budget.
+      const saberDir = join(buildRoot, 'fresh');
+      const deepest = (await readdir(saberDir, { recursive: true })).reduce((a, f) => (String(f).length > a.length ? String(f) : a), '');
+      console.log(`[depth] deepest path below the saber folder: ${deepest.length} characters: ${deepest}`);
+      await rm(buildRoot, { recursive: true, force: true });
       expect(r.textBytes).toBeGreaterThan(100000);
       console.log(`install ${((Date.now() - t0) / 1000).toFixed(0)} s total; build ${r.ms} ms, ${r.flashPct}% of flash`);
     } finally {

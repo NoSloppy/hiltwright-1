@@ -3,16 +3,18 @@
 // is tested against a stubbed fetch.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rename, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { download, installToolchain, type ToolchainStatus, type ToolchainSys } from '../src/main/toolchain';
+import { CORE_VERSION, PROFFIEOS_SHA256, cancelSetup, download, folderOpenToOthers, installToolchain, lockFolder, plannedToolchainRoot, setupOnce, toolchainStatus, type ToolchainStatus, type ToolchainSys } from '../src/main/toolchain';
 import { toolchainBlockers } from '../src/shared/toolchainChecks';
 
 const status = (root: string, over: Partial<ToolchainStatus> = {}): ToolchainStatus => ({
   root, cli: true, cliVersion: '1.3.1', core: true, gcc: true, dfuUtil: 'dfu-util.exe', proffieOS: false, proffieOSVersion: null,
-  ready: false, freeBytes: 100 * 1073741824, pathTooLong: false, ...over,
+  ready: false, freeBytes: 100 * 1073741824, pathTooLong: false, versions: { cli: '1.3.1', core: '4.6', proffieOS: null }, open: false, ...over,
 });
 /** A setup where arduino-cli and the core are in place and only ProffieOS is missing; downloads fail as `fail` says. */
 function fakeSys(root: string, fail: (url: string, n: number) => boolean) {
@@ -22,6 +24,8 @@ function fakeSys(root: string, fail: (url: string, n: number) => boolean) {
     download: async (url, dest) => { downloads.push(url); if (fail(url, downloads.length)) throw new Error('Download failed: the network dropped'); await writeFile(dest, 'zip'); },
     extract: async (_zip, into) => { await mkdir(join(into, 'ProffieOS-8.10'), { recursive: true }); await writeFile(join(into, 'ProffieOS-8.10', 'ProffieOS.ino'), '//'); },
     status: async (r) => { const os = existsSync(join(r, 'ProffieOS', 'ProffieOS.ino')); return status(r, { proffieOS: os, ready: os }); },
+    // The fake downloads are the three bytes 'zip': pin those, as a real setup pins the published files.
+    expected: { cli: {}, proffieOS: createHash('sha256').update('zip').digest('hex') },
   };
   return { sys, downloads };
 }
@@ -37,8 +41,8 @@ describe('toolchain audit', () => {
     expect(toolchainBlockers(status(long, { pathTooLong: true })).pathTooLong).not.toBeNull();
   });
 
-  // FST-2 (toolchain-integrity): the panel must give the path's length and not send the owner to a development switch.
-  it.fails('2.3 the panel says the path is too long in plain words with its length', () => {
+  // FST-2, fixed in toolchain-integrity: the panel gives the path's length and no development switch.
+  it('2.3 the panel says the path is too long in plain words with its length', () => {
     const long = 'C:\\Users\\a-rather-long-user-name\\AppData\\Local\\Hiltwright\\tc';
     const panel = toolchainBlockers(status(long, { pathTooLong: true })).pathTooLong!.panel;
     expect(panel).toContain(String(long.length));
@@ -87,5 +91,104 @@ describe('download', () => {
     await download('https://example.invalid/p.zip', dest, () => undefined);
     expect(existsSync(dest)).toBe(true);
     expect(await readdir(dir)).toEqual(['ProffieOS-v8.10.zip']);
+  });
+});
+
+// toolchain-integrity: pinned downloads, versions read back, stalls, cancelling, one setup at a time, the folder.
+describe('a pinned, checked toolchain', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('a download that is not the pinned file is deleted, not unpacked, and the setup stops naming the part', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'hw-tc-'));
+    const { sys } = fakeSys(root, () => false);
+    const extract = vi.spyOn(sys, 'extract');
+    sys.expected = undefined; // the real pins: 'zip' is not the ProffieOS archive
+    await expect(installToolchain(root, () => undefined, sys)).rejects.toThrow('The ProffieOS source download is not the file Hiltwright expects, so it was not used.');
+    expect(extract).not.toHaveBeenCalled();
+    expect(existsSync(join(root, 'ProffieOS-v8.10.zip'))).toBe(false);
+    expect(existsSync(join(root, 'ProffieOS'))).toBe(false);
+  });
+
+  it('a verified unpack stamps the source, and the stamp and the pinned core version drive ready', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'hw-tc-'));
+    const hw = join(root, 'arduino-data', 'packages', 'proffieboard');
+    await mkdir(join(hw, 'hardware', 'stm32l4', CORE_VERSION, 'tools', process.platform === 'win32' ? 'windows' : 'linux'), { recursive: true });
+    await writeFile(join(hw, 'hardware', 'stm32l4', CORE_VERSION, 'tools', process.platform === 'win32' ? 'windows' : 'linux', process.platform === 'win32' ? 'dfu-util.exe' : 'dfu-util'), '');
+    await mkdir(join(hw, 'tools', 'arm-none-eabi-gcc'), { recursive: true });
+    await mkdir(join(root, 'ProffieOS'), { recursive: true });
+    await writeFile(join(root, 'ProffieOS', 'ProffieOS.ino'), '//');
+    let st = await toolchainStatus(root);
+    expect(st).toMatchObject({ core: true, gcc: true, proffieOS: false, versions: { core: CORE_VERSION, proffieOS: 'unknown (not from a checked download)' } });
+    expect(st.dfuUtil).toBeTruthy();
+    await writeFile(join(root, 'ProffieOS', '.hiltwright-source.json'), JSON.stringify({ tag: 'v8.10', sha256: PROFFIEOS_SHA256 }));
+    st = await toolchainStatus(root);
+    expect(st).toMatchObject({ proffieOS: true, proffieOSVersion: 'v8.10', versions: { proffieOS: 'v8.10' } });
+    expect(st.ready).toBe(false); // no arduino-cli here
+    // A different board support version is not the pinned one.
+    await rename(join(hw, 'hardware', 'stm32l4', CORE_VERSION), join(hw, 'hardware', 'stm32l4', '4.5'));
+    st = await toolchainStatus(root);
+    expect(st).toMatchObject({ core: false, dfuUtil: null, versions: { core: '4.5' } });
+  });
+
+  it('a stalled download stops, and nothing is left under its real name', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'hw-dl-'));
+    vi.stubGlobal('fetch', async (_u: string, init: { signal: AbortSignal }) => new Response(new ReadableStream({
+      start(c) { c.enqueue(new Uint8Array(10)); init.signal.addEventListener('abort', () => c.error(new Error('aborted'))); },
+    }), { headers: { 'content-length': '1000' } }));
+    await expect(download('https://example.invalid/p.zip', join(dir, 'p.zip'), () => undefined, { stallMs: 150 })).rejects.toThrow(/The download stalled: nothing arrived/);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('cancelling stops a download at once, and nothing is left under its real name', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'hw-dl-'));
+    vi.stubGlobal('fetch', async (_u: string, init: { signal: AbortSignal }) => new Response(new ReadableStream({
+      start(c) { c.enqueue(new Uint8Array(10)); init.signal.addEventListener('abort', () => c.error(new Error('aborted'))); },
+    }), { headers: { 'content-length': '1000' } }));
+    const ctrl = new AbortController();
+    const p = download('https://example.invalid/p.zip', join(dir, 'p.zip'), () => undefined, { signal: ctrl.signal, stallMs: 60000 });
+    setTimeout(() => ctrl.abort(), 50);
+    await expect(p).rejects.toThrow('The setup was cancelled.');
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('only one setup runs at a time: starting again joins it, and cancel stops it', async () => {
+    let starts = 0;
+    let seen!: AbortSignal;
+    const start = (signal: AbortSignal) => { starts++; seen = signal; return new Promise<ToolchainStatus>((_r, reject) => signal.addEventListener('abort', () => reject(new Error('The setup was cancelled.')))); };
+    const a = setupOnce(start);
+    const b = setupOnce(start);
+    expect(b).toBe(a);
+    expect(starts).toBe(1);
+    expect(cancelSetup()).toBe(true);
+    expect(seen.aborted).toBe(true);
+    await expect(a).rejects.toThrow('cancelled');
+    expect(cancelSetup()).toBe(false);
+  });
+
+  it('choosing the toolchain folder creates nothing', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'hw-pd-'));
+    const was = { ProgramData: process.env.ProgramData, LOCALAPPDATA: process.env.LOCALAPPDATA, SystemDrive: process.env.SystemDrive };
+    try {
+      process.env.ProgramData = base; process.env.LOCALAPPDATA = join(base, 'nowhere'); process.env.SystemDrive = join(base, 'nodrive');
+      const planned = plannedToolchainRoot(join(base, 'userData'));
+      // (Under a long temp path every candidate is too long and it falls back to the data folder; either way nothing is made.)
+      expect(existsSync(planned)).toBe(false);
+      expect(await readdir(base)).toEqual([]);
+    } finally { Object.assign(process.env, was); }
+  });
+});
+
+describe.skipIf(process.platform !== 'win32')('the toolchain folder lock (Windows)', () => {
+  it('a folder standard users can write is reported open, and locking it leaves it changeable only by this account and administrators', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'hw-lock-'));
+    execFileSync('icacls', [dir, '/grant', '*S-1-5-32-545:(OI)(CI)M']);
+    expect(await folderOpenToOthers(dir)).toBe(true);
+    const r = await lockFolder(dir, false);
+    expect(r).toEqual({ ok: true, text: 'Locked.' });
+    expect(await folderOpenToOthers(dir)).toBe(false);
+    // This account can still write in it.
+    await writeFile(join(dir, 'still-mine.txt'), 'ok');
+    const acl = execFileSync('icacls', [dir]).toString();
+    expect(acl).not.toMatch(/\(I\)/); // nothing inherited any more
   });
 });
