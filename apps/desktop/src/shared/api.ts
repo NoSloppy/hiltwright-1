@@ -1,7 +1,24 @@
 // The typed contract between renderer and main, exposed by the preload script as window.hiltwright.
 // Only data crosses this boundary: no handles, no callbacks except the event subscriptions listed here.
 
+import type { HiltFit, SceneSettings } from './demoSettings';
 import type { FirmwareManifest, FontReport, LookDef, PresetBank, PresetRecord, SaberConfigModel, VoicePackStatus } from '@hiltwright/core';
+
+/** A demo-room hilt the owner loaded, as the room lists it: everything but the model's bytes. */
+export interface HiltInfo { id: string; name: string; format: 'glb' | 'obj' | 'stl'; fit: HiltFit; creator?: string }
+/** A hilt's model and the files that came with it (an OBJ's .mtl and textures), by the names the model uses. */
+export interface HiltModelData { format: 'glb' | 'obj' | 'stl'; data: ArrayBuffer | Uint8Array; sideFiles: { name: string; data: ArrayBuffer | Uint8Array }[] }
+export interface HiltInput extends HiltModelData { name: string; fit?: unknown; creator?: string }
+/** 'new': add under its own name, or report the hilt that has it. 'keepBoth': add under the next free numbered name. `replace`: swap that hilt's model, keeping its name, fit and credit. */
+export type HiltAddMode = 'new' | 'keepBoth' | { replace: string };
+export type HiltAddResult = { added: HiltInfo } | { taken: { id: string; name: string } };
+/**
+ * What an earlier version kept in one page origin's own storage. `origin` is recorded once adopted, so it is never
+ * brought over twice. `chosen` is `pack:<packId>` or `name:<hilt name>`.
+ */
+export interface LegacyHilts { origin: string; hilts: (HiltInput & { packId?: string })[]; scene?: unknown; chosen?: string }
+/** Hilts added, pack fit adjustments added, and entries skipped because they were already here. */
+export interface HiltMergeResult { added: number; fits: number; skipped: number }
 
 /** What the app can learn about a board without touching its SD card. */
 export interface SaberIdentity {
@@ -265,6 +282,28 @@ export interface HiltwrightApi {
     copy(from: string, to: string): Promise<boolean>;
     /** Open the person's saved link in the browser. */
     open(name: string): Promise<void>;
+  };
+  /** The demo room's hilts, fit adjustments to pack hilts, and scene settings, kept in the app's data folder. */
+  hilts: {
+    list(): Promise<HiltInfo[]>;
+    model(id: string): Promise<HiltModelData>;
+    add(input: HiltInput, mode: HiltAddMode): Promise<HiltAddResult>;
+    setFit(id: string, fit: HiltFit): Promise<void>;
+    setCreator(id: string, creator: string): Promise<void>;
+    remove(id: string): Promise<void>;
+    packFits(): Promise<Record<string, HiltFit>>;
+    setPackFit(packId: string, fit: HiltFit): Promise<void>;
+    resetPackFit(packId: string): Promise<void>;
+    /** `adopted`: the page origins whose earlier storage has been brought over. */
+    room(): Promise<{ scene: SceneSettings | null; chosen: string | null; adopted: string[] }>;
+    /** `chosen`: a hilt id, `pack:<packId>`, or null for the built-in hilt. */
+    setRoom(patch: { scene?: SceneSettings; chosen?: string | null }): Promise<void>;
+    /** Bring over what an earlier version kept in page storage; never replaces anything. */
+    adopt(legacy: LegacyHilts): Promise<HiltMergeResult>;
+    /** Ask where to save, then write every hilt and pack fit to one zip. Null when cancelled. */
+    export(): Promise<{ file: string; hilts: number; packFits: number } | null>;
+    /** Ask for an export and add what is not already here. Null when cancelled. */
+    import(): Promise<HiltMergeResult | null>;
   };
   packs: {
     list(): Promise<PackInfo[]>;

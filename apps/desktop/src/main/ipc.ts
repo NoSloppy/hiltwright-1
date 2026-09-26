@@ -16,6 +16,8 @@ import { defaultToolchainRoot, installToolchain, toolchainStatus } from './toolc
 import { listPacks, packFont, packMesh, userPacksDir } from './packs';
 import { FontLibrary, type ImportResult } from './fontLibrary';
 import { ContributorStore, cleanUrl } from './contributors';
+import { HiltStore } from './hilts';
+import type { HiltInput, LegacyHilts } from '../shared/api';
 import { buildFirmware } from './build';
 import { cleanFirmware, hexMap } from './firmwareRecord';
 import { insideFolder } from './paths';
@@ -170,6 +172,7 @@ export function registerIpc(): void {
   // Contributors: font makers and look authors, with a logo and a link each. Logos the font library kept for its
   // makers before this list existed are brought over once, at start.
   const contributors = new ContributorStore(userData);
+  const hilts = new HiltStore(userData);
   const contributorsReady = (async () => {
     try { await libReady; for (const l of await fontLib.legacyLogos()) if (!(await contributors.has(l.name)) && existsSync(l.file)) await contributors.setLogo(l.name, l.file); } catch (err) { console.log(`[contributors] bringing over font makers' logos: ${String(err)}`); }
   })();
@@ -262,6 +265,31 @@ export function registerIpc(): void {
     const name = String(fontName);
     if (!/^[^\\/:*?"<>|]+$/.test(name)) throw new Error('Bad font name');
     return readFontSounds(join(root(r), name), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total }));
+  });
+  // The demo room's hilts, pack fit adjustments and scene settings, in the data folder so every build shares them.
+  handle('hilts:list', () => hilts.list());
+  handle('hilts:model', (_e, id: unknown) => hilts.model(str(id, 20)));
+  handle('hilts:add', (_e, input: unknown, mode: unknown) => hilts.add(input as HiltInput, mode === 'keepBoth' ? 'keepBoth' : mode && typeof mode === 'object' ? { replace: str((mode as { replace?: unknown }).replace, 20) } : 'new'));
+  handle('hilts:setFit', (_e, id: unknown, fit: unknown) => hilts.setFit(str(id, 20), fit));
+  handle('hilts:setCreator', (_e, id: unknown, creator: unknown) => hilts.setCreator(str(id, 20), creator));
+  handle('hilts:remove', (_e, id: unknown) => hilts.remove(str(id, 20)));
+  handle('hilts:packFits', () => hilts.packFits());
+  handle('hilts:setPackFit', (_e, packId: unknown, fit: unknown) => hilts.setPackFit(str(packId, 200), fit));
+  handle('hilts:resetPackFit', (_e, packId: unknown) => hilts.resetPackFit(str(packId, 200)));
+  handle('hilts:room', () => hilts.room());
+  handle('hilts:setRoom', (_e, patch: unknown) => hilts.setRoom((patch && typeof patch === 'object' ? patch : {}) as { scene?: unknown; chosen?: unknown }));
+  handle('hilts:adopt', (_e, legacy: unknown) => hilts.adopt(legacy as LegacyHilts));
+  handle('hilts:export', async () => {
+    const d = new Date();
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    // Dev aid: HILTWRIGHT_DIALOG_FILE answers this dialog (and Import's), so an offscreen run can export and import.
+    const r = process.env.HILTWRIGHT_DIALOG_FILE ? { canceled: false, filePath: process.env.HILTWRIGHT_DIALOG_FILE } : await dialog.showSaveDialog({ title: 'Export hilts', defaultPath: join(app.getPath('documents'), `Hiltwright hilts ${day}.zip`), filters: [{ name: 'Zip file', extensions: ['zip'] }] });
+    if (r.canceled || !r.filePath) return null;
+    return { file: r.filePath, ...(await hilts.exportTo(r.filePath)) };
+  });
+  handle('hilts:import', async () => {
+    const r = process.env.HILTWRIGHT_DIALOG_FILE ? { canceled: false, filePaths: [process.env.HILTWRIGHT_DIALOG_FILE] } : await dialog.showOpenDialog({ title: 'Import hilts', properties: ['openFile'], filters: [{ name: 'Hiltwright hilt export', extensions: ['zip'] }] });
+    return r.canceled || !r.filePaths[0] ? null : hilts.importFrom(r.filePaths[0]);
   });
   // Packs: encrypted hilts and fonts. Payloads are decrypted here and handed over in memory, never as files.
   handle('packs:list', () => listPacks());
@@ -389,7 +417,7 @@ export function registerIpc(): void {
   });
 
   // Stores set aside at start (jsonStore.ts). Reading them first makes sure the library and sets have been loaded.
-  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list(), looksStore.list(), contributorsReady.then(() => contributors.list()), libReady.then(() => fontLib.list())]); return storeProblems(); });
+  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list(), looksStore.list(), contributorsReady.then(() => contributors.list()), hilts.list(), libReady.then(() => fontLib.list())]); return storeProblems(); });
   handle('app:userDataPath', () => userData);
   // False in a development run started with HILTWRIGHT_NO_BOARD (packaged builds never have it).
   handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);

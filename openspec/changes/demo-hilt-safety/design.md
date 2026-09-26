@@ -76,7 +76,7 @@ IPC:
 
 ### D2. Identity, and loading a name already taken (SR1)
 - The owner's hilts are keyed by `id` and pack adjustments by pack id, in separate fields, so they cannot collide.
-- The Hilt panel lists pack hilts under the pack's name as now.
+- The Hilt panel lists pack hilts under the pack's name as now. Because the owner's own "YS" and a pack's "YS" can now both be listed, the hilt dropdown groups them under "Your hilts" and "From packs" (added during implementation).
 - "Reset fit" deletes only `packFits[packId]`.
 
 `hilts:add(input, mode)`:
@@ -117,6 +117,15 @@ Fit saves are debounced (300 ms after the last change) and flushed when the hilt
    - A pack record becomes `packFits[packId]` unless one exists.
    - `scene` and `chosen` are taken only if the store has none.
 3. On success, set the flag. The IndexedDB database and the `localStorage` keys are left untouched, as a backup.
+
+**The app records each adopted origin (added during implementation).** The development run showed that the page's `localStorage` flag is lost when the app is killed before it writes to disk. The next start then adopted again. Nothing was replaced, but an old version of a hilt came back under a numbered name, and a hilt the owner had removed would have come back too. Now:
+- `hilts.json` keeps `adopted: string[]`, the page origins already brought over, written by the same store update that adds the hilts.
+- `adoptOnce` asks `hilts:room` first and skips an origin that is recorded.
+- `adopt` refuses a recorded origin even if asked.
+
+The page flag is now only a shortcut that saves reading the old database.
+
+The remembered hilt name goes to the owner's own hilt when one has it, and otherwise to a pack hilt of that name, because the old room listed the owner's hilts first. The repository's own `ys.hwpack` shares the name "YS" with the development run's hilt, which is how this showed up.
 
 A failure leaves the flag unset, so the next open tries again, and the panel says "Could not bring over your earlier hilts: <reason>."
 
@@ -167,7 +176,9 @@ A value that is missing, not finite, the wrong type or out of range takes its de
   3. Add each hilt by the adoption rule (D5): identical skipped, a taken name numbered. Each gets a new `id` and copies its files in. Pack fits are added only where none exist.
   4. Delete the temp folder.
 
-  The note says "Imported 3 hilts; 2 were already here." A file that is not a Hiltwright hilt export says so.
+  The note says "Imported 2 hilts and 1 pack fit; 2 were already here." A file that is not a Hiltwright hilt export says so. `HiltMergeResult` counts hilts (`added`) and pack fits (`fits`) apart for this.
+
+  **Development switch (added during implementation).** `HILTWRIGHT_DIALOG_FILE` answers the export and import dialogs with a path, so an offscreen development run can exercise both. Like every `HILTWRIGHT_*` switch, a packaged build removes it.
 
 **Rejected:**
 - *A folder instead of a zip.* Awkward to send or keep as one file.

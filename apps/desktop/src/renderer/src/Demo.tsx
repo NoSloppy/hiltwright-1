@@ -5,13 +5,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { PROPS, SIMULATED_LOOKS, STARTER_LOOKS, argInfo, canSimulateLook, hexToColorWord, propBehaviour, registerLookSim, type LockupType, type LookDef } from '@hiltwright/core';
 import { BLADE_DIAMETERS, DEFAULT_SCENE, DemoScene, STRIP_DENSITIES, ledsFor, type BladeDiameter, type ControlMode, type Motion, type SceneSettings } from './demoScene';
 import { Icon } from './Icon';
-import { DEFAULT_FIT, formatOf, meshFromPack, parseHilt, type HiltFit, type SideFile, type StoredHilt } from './hiltModel';
-import type { PackInfo } from '../../shared/api';
+import { DEFAULT_FIT, formatOf, meshFromPack, parseHilt, type HiltFit, type HiltFormat, type SideFile } from './hiltModel';
+import type { HiltAddMode, HiltInfo, HiltInput, PackInfo } from '../../shared/api';
 import { FontEngine } from './fontEngine';
 import type { Board } from './board';
 import type { FontEntry } from '../../shared/api';
 import { lookAtSlot } from '@hiltwright/core';
-import { listHilts, removeHilt, saveHilt } from './hiltStore';
+import { adoptOnce, asArrayBuffer } from './hiltStore';
 import { ContributorLogo, useContributors } from './credits';
 import type { Object3D } from 'three';
 import { Select } from './Select';
@@ -29,9 +29,12 @@ const SLIDERS: { key: Exclude<keyof SceneSettings, 'grid' | 'bladeInches' | 'bla
   { key: 'roomLight', label: 'Room light', min: 0, max: 2.5, step: 0.05, hint: 'The room\u2019s own lamps. All the way down, only the blade lights the scene', centre: DEFAULT_SCENE.roomLight },
   { key: 'haze', label: 'Haze', min: 0, max: 0.3, step: 0.005, hint: 'How quickly the room fades with distance', centre: DEFAULT_SCENE.haze },
 ];
-function loadScene(): SceneSettings {
-  try { const raw = localStorage.getItem('hiltwright.demo.scene'); return raw ? { ...DEFAULT_SCENE, ...(JSON.parse(raw) as Partial<SceneSettings>) } : { ...DEFAULT_SCENE }; } catch { return { ...DEFAULT_SCENE }; }
-}
+/** A hilt in the room: one the owner loaded (key = its id) or a pack's (key = `pack:<id>`), so neither can stand for the other. */
+interface RoomHilt { key: string; id?: string; name: string; format: HiltFormat; fit: HiltFit; packId?: string; creator?: string; /** Bumped when its model is replaced, to reload it. */ rev?: number }
+/** Notes in the Hilt panel that report something done rather than a problem. */
+const OK_NOTE = /^(Fit copied|Exported|Imported|Brought over)/;
+/** "2 hilts and 1 pack fit" */
+const counted = (r: { added: number; fits: number }) => [r.added ? `${r.added} hilt${r.added === 1 ? '' : 's'}` : '', r.fits ? `${r.fits} pack fit${r.fits === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
 
 const HOLDS: { type: LockupType; label: string; key: string }[] = [{ type: 'normal', label: 'Lockup', key: 'l' }, { type: 'drag', label: 'Drag', key: 'd' }, { type: 'melt', label: 'Melt', key: 'm' }, { type: 'lb', label: 'Lightning', key: 'n' }];
 
@@ -156,35 +159,80 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
     setSoundNote(`The font "${folder}" is not in the font library or on any card here. Add it to the Font library, or share the saber's card on Fonts & SD.`);
   };
   const [control, setControl] = useState<ControlMode>(() => { try { return localStorage.getItem('hiltwright.demo.control') === 'steer' ? 'steer' : 'hold'; } catch { return 'hold'; } });
-  const [look3d, setLook3d] = useState<SceneSettings>(loadScene);
-  // Custom hilts: model files the owner loaded, kept in the browser's database, one of them (or none) in use.
-  const [hilts, setHilts] = useState<StoredHilt[]>([]);
-  const [hiltName, setHiltName] = useState<string>(() => { try { return localStorage.getItem('hiltwright.demo.hilt') ?? ''; } catch { return ''; } });
+  const [look3d, setLook3d] = useState<SceneSettings>({ ...DEFAULT_SCENE });
+  // Hilts: the owner's own models and pack hilts, kept by the app in its data folder (main/hilts.ts) with the scene
+  // settings and the chosen hilt, so every build of the app sees the same ones. One of them (or the built-in) in use.
+  const [hilts, setHilts] = useState<RoomHilt[]>([]);
+  const [hiltKey, setHiltKey] = useState<string>('');
+  // Nothing is saved until what was kept has been read, so the defaults never overwrite it.
+  const [roomReady, setRoomReady] = useState(false);
   const [hiltNote, setHiltNote] = useState<string | null>(null);
   // The fit controls are for placing a hilt on the blade: shown when the owner loads a hilt of their own, folded away otherwise.
   const [fitOpen, setFitOpen] = useState(false);
   const [hiltLength, setHiltLength] = useState<number | null>(null);
-  const loaded = useRef<{ name: string; model: Object3D } | null>(null);
+  const loaded = useRef<{ key: string; model: Object3D } | null>(null);
   // The built-in hilt is a pack that ships with the app; the procedural hilt only stands in when it is missing.
   const builtIn = hilts.find((h) => h.packId === BUILT_IN_PACK) ?? null;
-  const hilt = (hiltName ? hilts.find((h) => h.name === hiltName) : null) ?? builtIn;
+  const hilt = (hiltKey ? hilts.find((h) => h.key === hiltKey) : null) ?? builtIn;
   // Packs beside the app or in the owner's packs folder. A pack hilt is listed with the pack's fit unless the owner
-  // has adjusted it here, in which case their adjustment is kept like any other hilt's.
+  // has adjusted it here, in which case their adjustment is kept apart from their own hilts, by pack id.
   const [packs, setPacks] = useState<PackInfo[]>([]);
+  // A file whose name is taken, waiting for the owner's answer; a removal or reset waiting for confirmation.
+  const [taken, setTaken] = useState<{ input: HiltInput; id: string; name: string; note: string | null } | null>(null);
+  const [confirm, setConfirm] = useState<'remove' | 'reset' | null>(null);
+  const errText = (err: unknown) => String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '');
+  const packEntry = (p: PackInfo, fits: Record<string, HiltFit>): RoomHilt => ({ key: `pack:${p.id}`, name: p.id === BUILT_IN_PACK ? 'Built-in' : p.name, format: 'pack', fit: fits[p.id] ? { ...fits[p.id] } : { ...DEFAULT_FIT, ...(p.fit ?? {}) }, packId: p.id, creator: p.creator });
+  const ownEntry = (h: HiltInfo): RoomHilt => ({ key: h.id, id: h.id, name: h.name, format: h.format, fit: h.fit, ...(h.creator ? { creator: h.creator } : {}) });
+  /** Read the hilts, first bringing over any this page kept itself in an earlier version. */
+  const loadHiltList = async () => {
+    const found = await api().packs.list().catch(() => [] as PackInfo[]);
+    setPacks(found);
+    let moveNote: string | null = null;
+    try {
+      const moved = await adoptOnce(found);
+      if (moved) moveNote = `Brought over ${counted(moved)} from an earlier version of Hiltwright.`;
+    } catch (err) { moveNote = `Could not bring over your earlier hilts: ${errText(err)}`; }
+    const [own, fits, room] = await Promise.all([api().hilts.list(), api().hilts.packFits(), api().hilts.room()]);
+    setHilts([...own.map(ownEntry), ...found.filter((p) => p.kind === 'hilt').map((p) => packEntry(p, fits))]);
+    return { room, moveNote };
+  };
   useEffect(() => {
     void (async () => {
-      const [stored, found] = await Promise.all([listHilts().catch(() => [] as StoredHilt[]), api().packs.list().catch(() => [] as PackInfo[])]);
-      setPacks(found);
-      const packHilts: StoredHilt[] = found.filter((p) => p.kind === 'hilt').map((p) => {
-        const kept = stored.find((h) => h.packId === p.id);
-        // The credit always comes from the pack itself, so a re-credited pack shows its new creator even on a kept fit.
-        const entry = kept ? { ...kept, creator: p.creator } : { name: p.name, format: 'pack' as const, data: new ArrayBuffer(0), fit: { ...DEFAULT_FIT, ...(p.fit ?? {}) }, packId: p.id, creator: p.creator };
-        return p.id === BUILT_IN_PACK ? { ...entry, name: 'Built-in' } : entry;
-      });
-      setHilts([...stored.filter((h) => !h.packId), ...packHilts]);
+      try {
+        const { room, moveNote } = await loadHiltList();
+        if (room.scene) setLook3d(room.scene);
+        setHiltKey(room.chosen ?? '');
+        if (moveNote) setHiltNote(moveNote);
+        setRoomReady(true);
+      } catch (err) { setHiltNote(`Could not read your hilts: ${errText(err)}`); }
     })();
-  }, []);
-  useEffect(() => { try { localStorage.setItem('hiltwright.demo.hilt', hiltName); } catch { /* private mode */ } }, [hiltName]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Scene settings are saved a moment after the last change, and at once when the room closes.
+  const sceneSave = useRef<{ t: ReturnType<typeof setTimeout>; run: () => void } | null>(null);
+  useEffect(() => {
+    if (!roomReady) return;
+    if (sceneSave.current) clearTimeout(sceneSave.current.t);
+    const run = () => { sceneSave.current = null; void api().hilts.setRoom({ scene: look3d }).catch((err) => setHiltNote(`Could not save the scene settings: ${errText(err)}`)); };
+    sceneSave.current = { t: setTimeout(run, 300), run };
+  }, [look3d, roomReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (roomReady) void api().hilts.setRoom({ chosen: hiltKey || null }).catch((err) => setHiltNote(`Could not remember the chosen hilt: ${errText(err)}`)); }, [hiltKey, roomReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A fit is saved a moment after the last nudge, and at once when another hilt is chosen or the room closes.
+  const fitSave = useRef<{ key: string; t: ReturnType<typeof setTimeout>; run: () => void } | null>(null);
+  const flushFit = () => { const f = fitSave.current; if (f) { clearTimeout(f.t); f.run(); } };
+  const dropFit = (key: string) => { const f = fitSave.current; if (f?.key === key) { clearTimeout(f.t); fitSave.current = null; } };
+  const saveFit = (h: RoomHilt) => {
+    if (fitSave.current && fitSave.current.key !== h.key) flushFit();
+    if (fitSave.current) clearTimeout(fitSave.current.t);
+    const run = () => {
+      fitSave.current = null;
+      void (h.packId ? api().hilts.setPackFit(h.packId, h.fit) : api().hilts.setFit(h.id!, h.fit)).then(
+        () => setHiltNote((n) => (n?.startsWith('Could not save the fit') ? null : n)),
+        (err) => setHiltNote(`Could not save the fit: ${errText(err)}. Your changes are shown but will be lost when you leave the room.`));
+    };
+    fitSave.current = { key: h.key, t: setTimeout(run, 300), run };
+  };
+  useEffect(() => { if (fitSave.current && fitSave.current.key !== hilt?.key) flushFit(); }, [hilt?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { flushFit(); const s = sceneSave.current; if (s) { clearTimeout(s.t); s.run(); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const room = scene.current;
     if (!room) return;
@@ -193,53 +241,90 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
     void (async () => {
       try {
         // Parsing is the slow part: only when the file changes, not for every nudge of a slider.
-        if (loaded.current?.name !== hilt.name) loaded.current = { name: hilt.name, model: hilt.packId ? meshFromPack(await api().packs.mesh(hilt.packId)) : await parseHilt(hilt.format, hilt.data.slice(0), hilt.sideFiles ?? []) };
-        if (live) { setHiltLength(room.setHilt(loaded.current.model, hilt.fit)); setHiltNote(null); }
+        const want = `${hilt.key}#${hilt.rev ?? 0}`;
+        if (loaded.current?.key !== want) {
+          let model: Object3D;
+          if (hilt.packId) model = meshFromPack(await api().packs.mesh(hilt.packId));
+          else { const m = await api().hilts.model(hilt.id!); model = await parseHilt(m.format, asArrayBuffer(m.data), m.sideFiles.map((f) => ({ name: f.name, data: asArrayBuffer(f.data) }))); }
+          loaded.current = { key: want, model };
+        }
+        if (live) { setHiltLength(room.setHilt(loaded.current.model, hilt.fit)); setHiltNote((n) => (n?.startsWith('That model could not be read') ? null : n)); }
       } catch (err) { if (live) { room.setHilt(null, DEFAULT_FIT); setHiltNote(`That model could not be read: ${String(err).replace(/^Error: /, '')}`); } }
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hilt?.name, hilt?.fit.flip, hilt?.fit.rollDeg, hilt?.fit.lengthCm, hilt?.fit.offsetXmm, hilt?.fit.offsetZmm, hilt?.fit.seatMm, hilt?.fit.staffSeatMm, hilt?.fit.tiltXDeg, hilt?.fit.tiltZDeg, hilt?.fit.axis, hilts.length]);
+  }, [hilt?.key, hilt?.rev, hilt?.fit.flip, hilt?.fit.rollDeg, hilt?.fit.lengthCm, hilt?.fit.offsetXmm, hilt?.fit.offsetZmm, hilt?.fit.seatMm, hilt?.fit.staffSeatMm, hilt?.fit.tiltXDeg, hilt?.fit.tiltZDeg, hilt?.fit.axis, hilts.length]);
+  /** Keep a loaded model. A taken name asks first; nothing is listed unless it was kept. */
+  const addHilt = async (input: HiltInput, mode: HiltAddMode, note: string | null) => {
+    try {
+      const r = await api().hilts.add(input, mode);
+      if ('taken' in r) { setTaken({ input, ...r.taken, note }); return; }
+      const entry = ownEntry(r.added);
+      setHilts((all) => (all.some((h) => h.key === entry.key) ? all.map((h) => (h.key === entry.key ? { ...entry, rev: (h.rev ?? 0) + 1 } : h)) : [...all, entry]));
+      setHiltKey(entry.key); setFitOpen(true);
+      setHiltNote(note);
+    } catch (err) { setHiltNote(`Could not keep this hilt: ${errText(err)}. It has not been added.`); }
+  };
   /** One model file, plus for an OBJ its .mtl and any textures, chosen together in the file picker. */
   const loadHiltFiles = async (files: FileList | null) => {
     const all = Array.from(files ?? []);
     const file = all.find((f) => formatOf(f.name));
     if (!file) { if (all.length) setHiltNote('Use a .glb, .obj or .stl file. For an OBJ with colours, select its .mtl (and any texture images) along with it.'); return; }
-    const format = formatOf(file.name)!;
+    const format = formatOf(file.name) as 'glb' | 'obj' | 'stl';
     const sideFiles: SideFile[] = await Promise.all(all.filter((f) => f !== file).map(async (f) => ({ name: f.name, data: await f.arrayBuffer() })));
-    const entry: StoredHilt = { name: file.name.replace(/\.[^.]+$/, ''), format, data: await file.arrayBuffer(), fit: { ...DEFAULT_FIT }, ...(sideFiles.length ? { sideFiles } : {}) };
-    try { await parseHilt(format, entry.data.slice(0), sideFiles); } catch (err) { setHiltNote(`That model could not be read: ${String(err).replace(/^Error: /, '')}`); return; }
-    if (format === 'obj' && !sideFiles.some((f) => /\.mtl$/i.test(f.name))) setHiltNote('Loaded without colours. To keep them, pick the .obj and its .mtl together (Ctrl+click both in the file dialog).');
-    await saveHilt(entry).catch(() => undefined);
-    loaded.current = null;
-    setHilts((all) => [...all.filter((h) => h.name !== entry.name), entry]);
-    setHiltName(entry.name); setFitOpen(true);
-    if (format !== 'obj' || sideFiles.some((f) => /\.mtl$/i.test(f.name))) setHiltNote(null);
+    const data = await file.arrayBuffer();
+    try { await parseHilt(format, data.slice(0), sideFiles); } catch (err) { setHiltNote(`That model could not be read: ${String(err).replace(/^Error: /, '')}`); return; }
+    const note = format === 'obj' && !sideFiles.some((f) => /\.mtl$/i.test(f.name)) ? 'Loaded without colours. To keep them, pick the .obj and its .mtl together (Ctrl+click both in the file dialog).' : null;
+    await addHilt({ name: file.name.replace(/\.[^.]+$/, ''), format, data, sideFiles }, 'new', note);
   };
   const setFit = (patch: Partial<HiltFit>) => {
     if (!hilt) return;
     const next = { ...hilt, fit: { ...hilt.fit, ...patch } };
-    setHilts((all) => all.map((h) => (h.name === hilt.name ? next : h)));
-    void saveHilt(next).catch(() => undefined);
+    setHilts((all) => all.map((h) => (h.key === hilt.key ? next : h)));
+    saveFit(next);
   };
   /** Credit a hilt the owner loaded to whoever made it. Kept with the hilt. */
-  const setHiltCreator = (h: StoredHilt, creator: string) => {
-    const { creator: _old, ...rest } = h;
-    const next: StoredHilt = creator ? { ...rest, creator } : rest;
-    setHilts((all) => all.map((x) => (x.name === h.name ? next : x)));
-    void saveHilt(next).catch(() => undefined);
+  const setHiltCreator = async (h: RoomHilt, creator: string) => {
+    if (!h.id) return;
+    try { await api().hilts.setCreator(h.id, creator); } catch (err) { setHiltNote(`Could not save the credit: ${errText(err)}`); return; }
+    setHilts((all) => all.map((x) => { if (x.key !== h.key) return x; const { creator: _old, ...rest } = x; return creator ? { ...rest, creator } : rest; }));
   };
-  /** A loaded hilt is removed; a pack hilt goes back to the pack's own fit. */
-  const forgetHilt = () => {
+  /** After the owner confirms: a loaded hilt is removed; a pack hilt goes back to the pack's own fit. */
+  const forgetHilt = async () => {
+    setConfirm(null);
     if (!hilt) return;
-    if (hilt.packId) { const p = packs.find((x) => x.id === hilt.packId); const reset = { ...hilt, fit: { ...DEFAULT_FIT, ...(p?.fit ?? {}) } }; setHilts((all) => all.map((h) => (h.name === hilt.name ? reset : h))); void removeHilt(hilt.name).catch(() => undefined); return; }
-    void removeHilt(hilt.name).catch(() => undefined); setHilts((all) => all.filter((h) => h.name !== hilt.name)); setHiltName('');
+    dropFit(hilt.key);
+    if (hilt.packId) {
+      const p = packs.find((x) => x.id === hilt.packId);
+      try { await api().hilts.resetPackFit(hilt.packId); } catch (err) { setHiltNote(`Could not reset the fit: ${errText(err)}`); return; }
+      setHilts((all) => all.map((h) => (h.key === hilt.key ? { ...h, fit: { ...DEFAULT_FIT, ...(p?.fit ?? {}) } } : h)));
+      return;
+    }
+    try { await api().hilts.remove(hilt.id!); } catch (err) { setHiltNote(`Could not remove ${hilt.name}: ${errText(err)}`); return; }
+    setHilts((all) => all.filter((h) => h.key !== hilt.key)); setHiltKey('');
+  };
+  /** Every hilt the owner loaded, with its fit and credit, and every pack fit adjustment, to one zip, and back. */
+  const exportHilts = async () => {
+    flushFit();
+    try {
+      const r = await api().hilts.export();
+      if (r) setHiltNote(`Exported ${r.hilts} hilt${r.hilts === 1 ? '' : 's'}${r.packFits ? ` and ${r.packFits} pack fit${r.packFits === 1 ? '' : 's'}` : ''} to ${r.file}.`);
+    } catch (err) { setHiltNote(`Could not export your hilts: ${errText(err)}`); }
+  };
+  const importHilts = async () => {
+    flushFit();
+    try {
+      const r = await api().hilts.import();
+      if (!r) return;
+      await loadHiltList();
+      setHiltNote(`Imported ${r.added || r.fits ? counted(r) : 'nothing new'}${r.skipped ? `; ${r.skipped} ${r.skipped === 1 ? 'was' : 'were'} already here` : ''}.`);
+    } catch (err) { setHiltNote(`Could not import those hilts: ${errText(err)}`); }
   };
   /** The fit as text, for sending to whoever makes the pack. */
   const copyFit = () => { if (!hilt) return; const f = Object.fromEntries(Object.entries(hilt.fit).filter(([k, v]) => v !== (DEFAULT_FIT as unknown as Record<string, unknown>)[k] && v != null)); void navigator.clipboard.writeText(JSON.stringify({ hilt: hilt.packId ?? hilt.name, fit: f })); setHiltNote('Fit copied.'); };
 
   const [sceneOpen, setSceneOpen] = useState(() => { try { return localStorage.getItem('hiltwright.demo.sceneOpen') !== '0'; } catch { return true; } });
-  useEffect(() => { if (look3d.staff) scene.current?.setLook(staffLook.id, staffArgs, 'staff'); scene.current?.applySettings(look3d); try { localStorage.setItem('hiltwright.demo.scene', JSON.stringify(look3d)); } catch { /* private mode */ } }, [look3d]);
+  useEffect(() => { if (look3d.staff) scene.current?.setLook(staffLook.id, staffArgs, 'staff'); scene.current?.applySettings(look3d); }, [look3d]);
   useEffect(() => { try { localStorage.setItem('hiltwright.demo.sceneOpen', sceneOpen ? '1' : '0'); } catch { /* private mode */ } }, [sceneOpen]);
   useEffect(() => { scene.current?.setControlMode(control); try { localStorage.setItem('hiltwright.demo.control', control); } catch { /* private mode */ } }, [control]);
   const look = LOOKS.find((l) => l.id === lookId) ?? LOOKS[0];
@@ -563,10 +648,23 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
             <div className="row" style={{ gap: 8 }}>
               <span className="dim" style={{ width: 76, flex: 'none' }}>Model</span>
               <span className="input sans" style={{ height: 28, fontSize: 12 }}><span className="ellip">{hilt?.name ?? 'Built-in'}</span><span className="caret"><Icon name="down" /></span>
-                <Select value={hilt && hilt !== builtIn ? hilt.name : ''} aria-label="Hilt model" onChange={(e) => setHiltName(e.target.value)}><option value="">Built-in</option>{hilts.filter((h) => h !== builtIn).map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}</Select></span>
+                <Select value={hilt && hilt !== builtIn ? hilt.key : ''} aria-label="Hilt model" onChange={(e) => { setConfirm(null); setHiltKey(e.target.value); }}><option value="">Built-in</option>
+                  {hilts.some((h) => !h.packId) && <optgroup label="Your hilts">{hilts.filter((h) => !h.packId).map((h) => <option key={h.key} value={h.key}>{h.name}</option>)}</optgroup>}
+                  {hilts.some((h) => h.packId && h !== builtIn) && <optgroup label="From packs">{hilts.filter((h) => h.packId && h !== builtIn).map((h) => <option key={h.key} value={h.key}>{h.name}</option>)}</optgroup>}
+                </Select></span>
               <label className="chip" style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden' }} title="Load a .glb, .obj or .stl file. For an OBJ, select its .mtl and textures with it."><Icon name="import" />Load
                 <input type="file" multiple accept=".glb,.gltf,.obj,.stl,.mtl,.png,.jpg,.jpeg,.webp,.tga" aria-label="Load a hilt model" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={(e) => { void loadHiltFiles(e.target.files); e.target.value = ''; }} /></label>
             </div>
+            {taken && (
+              <div className="note amber" role="alertdialog" aria-label="A hilt with this name is already here"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+                <span>You already have a hilt called {taken.name}. Replace its model, keeping its fit and credit, or keep both?</span>
+                <span className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn sm pri" onClick={() => { const t = taken; setTaken(null); void addHilt(t.input, { replace: t.id }, t.note); }}><span className="b"><span className="i">Replace</span></span></button>
+                  <button type="button" className="btn sm" onClick={() => { const t = taken; setTaken(null); void addHilt(t.input, 'keepBoth', t.note); }}><span className="b"><span className="i">Keep both</span></span></button>
+                  <button type="button" className="btn sm ghost" onClick={() => setTaken(null)}><span className="b"><span className="i">Cancel</span></span></button>
+                </span>
+              </span></div>
+            )}
             {hilt && (
               <button type="button" className="row nowrap" style={{ gap: 6, alignSelf: 'flex-start' }} aria-expanded={fitOpen} onClick={() => setFitOpen((o) => !o)}><span style={{ display: 'flex', width: 14, height: 14, color: 'var(--mute)' }}><Icon name={fitOpen ? 'down' : 'chev'} /></span><span className="small dim">Fit and placement</span></button>
             )}
@@ -615,11 +713,24 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
                   </div>
                 </div>
                 <label className="row" style={{ gap: 10 }}><button type="button" className={`tog ${hilt.fit.flip ? 'on' : ''}`} role="switch" aria-checked={hilt.fit.flip} aria-label="Blade comes out of the other end" onClick={() => setFit({ flip: !hilt.fit.flip })}><i /></button><span className="dim">Blade at the other end</span></label>
-                <div className="row" style={{ gap: 14, justifyContent: 'flex-end' }}><button type="button" className="holo small" title="Copy the fit as text" onClick={copyFit}>Copy fit</button><button type="button" className="holo small" onClick={forgetHilt}>{hilt.packId ? 'Reset fit' : 'Remove'}</button></div>
+                <div className="row" style={{ gap: 14, justifyContent: 'flex-end' }}><button type="button" className="holo small" title="Copy the fit as text" onClick={copyFit}>Copy fit</button><button type="button" className="holo small" onClick={() => setConfirm(hilt.packId ? 'reset' : 'remove')}>{hilt.packId ? 'Reset fit' : 'Remove'}</button></div>
+                {confirm && (
+                  <div className="note amber" role="alertdialog" aria-label={confirm === 'remove' ? 'Remove this hilt' : 'Reset this fit'}><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+                    <span>{confirm === 'remove' ? `Remove ${hilt.name} from Hiltwright? Its fit and credit go with it. Your original file is not touched.` : `Reset the fit of ${hilt === builtIn ? 'the built-in hilt' : hilt.name} to the pack's own? Your adjustments will be lost.`}</span>
+                    <span className="row" style={{ gap: 8 }}>
+                      <button type="button" className="btn sm danger" onClick={() => void forgetHilt()}><span className="b"><span className="i">{confirm === 'remove' ? 'Remove' : 'Reset'}</span></span></button>
+                      <button type="button" className="btn sm ghost" onClick={() => setConfirm(null)}><span className="b"><span className="i">Keep</span></span></button>
+                    </span>
+                  </span></div>
+                )}
               </>
             )}
-            {hilt && <HiltCredit key={hilt.name} hilt={hilt} title={hilt === builtIn ? 'Punk Saber' : hilt.name} licence={packs.find((p) => p.id === hilt.packId)?.licence ?? null} onCreator={(creator) => setHiltCreator(hilt, creator)} />}
-            {hiltNote && <span className={hiltNote === 'Fit copied.' ? 'hint' : 'red small'}>{hiltNote}</span>}
+            {hilt && <HiltCredit key={hilt.key} hilt={hilt} title={hilt === builtIn ? 'Punk Saber' : hilt.name} licence={packs.find((p) => p.id === hilt.packId)?.licence ?? null} onCreator={(creator) => void setHiltCreator(hilt, creator)} />}
+            {hiltNote && <span className={OK_NOTE.test(hiltNote) ? 'hint' : 'red small'} role={OK_NOTE.test(hiltNote) ? undefined : 'alert'}>{hiltNote}</span>}
+            <div className="row" style={{ gap: 14 }} title="Keep your hilts, their fits and credits in one zip file, to move to another computer or keep safe">
+              <button type="button" className="holo small" onClick={() => void exportHilts()}>Export hilts…</button>
+              <button type="button" className="holo small" onClick={() => void importHilts()}>Import hilts…</button>
+            </div>
           </div>
         )}
       </section>
@@ -631,7 +742,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
  * Who made the hilt in the room, with their logo. A pack's creator comes with the pack; a hilt the owner loaded can
  * be credited here, and then counts among that person's work on the Contributors page.
  */
-function HiltCredit({ hilt, title, licence, onCreator }: { hilt: StoredHilt; title: string; licence: string | null; onCreator: (creator: string) => void }) {
+function HiltCredit({ hilt, title, licence, onCreator }: { hilt: RoomHilt; title: string; licence: string | null; onCreator: (creator: string) => void }) {
   const people = useContributors();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');

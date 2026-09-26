@@ -78,7 +78,8 @@ export async function extractZip(file: string, dest: string, keep: (name: string
       if (data.length !== e.size || crc32(data) !== e.crc) throw new Error(`This package is damaged (${e.name} does not match its checksum). Download it again.`);
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, data);
-      onFile?.(e.name, ++done, entries.length);
+      done++;
+      onFile?.(e.name, done, entries.length);
     }
   } finally { await fh.close(); }
   return done;

@@ -23,10 +23,8 @@ import { disposeObject, fitHilt, type HiltFit } from './hiltModel';
 
 const BLADE_LENGTH = 0.92; // metres: a 36 inch blade, the default
 const BLADE_RADIUS = 0.0127; // a one inch tube, the default
-export const BLADE_DIAMETERS = { '1': 0.0254, '7/8': 0.022225 } as const;
-export type BladeDiameter = keyof typeof BLADE_DIAMETERS;
-/** LED strips come in a few densities; 144 per metre is the usual saber strip. */
-export const STRIP_DENSITIES = [60, 100, 120, 144] as const;
+export { BLADE_DIAMETERS, STRIP_DENSITIES, DEFAULT_SCENE, type BladeDiameter, type SceneSettings } from '../../shared/demoSettings';
+import { DEFAULT_SCENE, BLADE_DIAMETERS, type SceneSettings } from '../../shared/demoSettings';
 /** How many LEDs a blade of `metres` holds: the strip is cut to the blade, never crammed. */
 export const ledsFor = (metres: number, perMetre: number): number => Math.max(1, Math.round(metres * perMetre));
 const HILT_LENGTH = 0.27;
@@ -53,30 +51,6 @@ const BOOST = 1.2;
  * 'hold': the drag moves the hand that holds the hilt and the blade follows with its own weight (wield.ts).
  */
 export type ControlMode = 'steer' | 'hold';
-
-/** How the room is lit and drawn. Every value is a plain number the page can put on a slider. */
-export interface SceneSettings {
-  /** Strength of the glow around the blade, and how far it spreads (0 to 1). */
-  glow: number; glowSpread: number;
-  /** How far past white the blade itself is drawn. Higher is hotter and paler; lower keeps more colour in the core. */
-  bladeBrightness: number;
-  /** How strongly the blade lights the floor and hilt. */
-  bladeLight: number;
-  /** The room's own lighting, a multiplier on its lamps. 0 leaves only the blade. */
-  roomLight: number;
-  /** Haze in the air: how quickly things fade with distance. */
-  haze: number;
-  grid: boolean;
-  /** The blade itself: length in inches and tube diameter. */
-  bladeInches: number;
-  bladeDiameter: BladeDiameter;
-  ledsPerMetre: number;
-  /** A second blade out of the pommel, as on a staff. It shows the same LEDs as the first: a staff preset drives both blades alike. */
-  staff: boolean;
-  /** Show the unlit polycarbonate tube when the saber is off. Off, the blade only exists while it is lit. */
-  bladeWhenOff: boolean;
-}
-export const DEFAULT_SCENE: SceneSettings = { glow: 1.2, glowSpread: 0.5, bladeBrightness: 1.2, bladeLight: 1, roomLight: 1, haze: 0.09, grid: true, bladeInches: 36, bladeDiameter: '1', ledsPerMetre: 144, staff: false, bladeWhenOff: true };
 
 export interface Motion { swing: number; tilt: number; turn: number; twist: number; on: boolean; /** Preon is playing: the blade lights when it ends. */ preon?: boolean }
 /** What the saber did, for whoever makes its sounds. `motion` comes every frame with the blade's turn rate. */

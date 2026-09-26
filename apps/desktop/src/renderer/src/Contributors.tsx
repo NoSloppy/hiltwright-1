@@ -25,9 +25,9 @@ export function Contributors({ onFonts, onLooks, onDemo }: { onFonts: () => void
     void api().fontLibrary.list().then(setFonts).catch(() => undefined);
     void api().looks.list().then(setSaved).catch(() => undefined);
     // Hilts for the demo room: those in packs, credited by the pack, and those the owner loaded and credited.
-    void Promise.all([api().packs.list().catch(() => [] as PackInfo[]), listHilts().catch(() => [])]).then(([packs, own]) => setHilts([
+    void api().packs.list().catch(() => [] as PackInfo[]).then(async (packs) => [packs, await listHilts(packs).catch(() => [])] as const).then(([packs, own]) => setHilts([
       ...packs.filter((p) => p.kind === 'hilt' && p.creator).map((p) => ({ name: p.name, creator: p.creator, licence: p.licence || null })),
-      ...own.filter((h) => !h.packId && h.creator).map((h) => ({ name: h.name, creator: h.creator!, licence: null })),
+      ...own.filter((h) => h.creator).map((h) => ({ name: h.name, creator: h.creator!, licence: null })),
     ]));
   }, []);
 
