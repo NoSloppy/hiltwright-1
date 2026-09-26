@@ -117,7 +117,7 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 - [x] 3.5 Deliver `board-side-test-coverage`: characterisation tests before the library and presets are touched; verify it is archived
 - [x] 3.6 Deliver `library-integrity`: builds the shared safe store (design D8) that 3.7-3.9 reuse; also covers the unflagged preset-sets store; verify it is archived
 - [x] 3.7 Deliver `font-library-integrity`; verify it is archived
-- [ ] 3.8 Deliver `style-save-integrity`; verify it is archived
+- [x] 3.8 Deliver `style-save-integrity`; verify it is archived
 - [ ] 3.9 Deliver `contributors-integrity`; verify it is archived
 - [ ] 3.10 Deliver `demo-hilt-safety`; verify it is archived
 

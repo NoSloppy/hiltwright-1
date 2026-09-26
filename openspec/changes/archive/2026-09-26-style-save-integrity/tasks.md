@@ -76,4 +76,5 @@
     - Found along the way, not this change's: HW-2026-09-26a (the preset action ignores where the style already is, filed in `style-to-saber-fixes`), HW-2026-09-26b (hote2 went silent while showing Connected, filed in `connection-robustness`), and HW-2026-09-26c (the voice-pack warning when the card could not be checked, filed in `diagnostics-feedback`).
 - [x] 5.3 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 178 core and 208 desktop tests pass (7 gated skipped), and the type check is clean.
-- [ ] 5.4 After archive, tick roadmap task 3.8 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 5.4 After archive, tick roadmap task 3.8 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-26.** Archived as `2026-09-26-style-save-integrity`. style-editor (2 modified) and style-library (5 modified) were synced, and roadmap 3.8 is ticked.
