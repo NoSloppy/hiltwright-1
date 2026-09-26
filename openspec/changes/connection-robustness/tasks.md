@@ -53,7 +53,7 @@
 - [ ] 3.2 Owner check on V2.2 hote2 and the V3.9 from a development build (design D7). Verify on each board that:
   - unplugging while idle reads "Not connected", and replugging reconnects
   - unplugging during a console `list_fonts` ends the command and reads "Not connected"
-  - an edit made while unplugged shows "Not sent: the saber is not connected."
+  - pulling the cable just as a preset edit (for example a font change) is saved leaves the save status saying what happened (saved, failed, or "Not sent: the saber is not connected."), never nothing. The exact case, an edit still waiting its turn at the unplug, is covered by `boardOps.test.ts`, because the page offers no edits once the saber is unplugged.
 - [x] 3.3 Correct the stale statements of design D8 in `protocol.test.ts`, `docs/09-board-protocol-notes.md` and `docs/00-plan.md`. Verify by reading each.
   - **Result, 2026-09-26.** Done, read back after editing:
     - The `protocol.test.ts` test is now "OS 8.10 rejects help, id, list_named_style (singular) and get_style, and tags written without a space after the pipe".
