@@ -13,7 +13,11 @@ export interface StoreProblem {
   /** File name the damaged store was kept as, in the same folder. */
   keptAs: string;
   startedFrom: 'backup' | 'readable records' | 'nothing';
+  /** Which folder it is in: the app's data folder, or the font library's own folder. */
+  place: StorePlace;
 }
+
+export type StorePlace = 'data' | 'fonts';
 
 const problems: StoreProblem[] = [];
 
@@ -33,6 +37,8 @@ export interface StoreOptions<T> {
   empty: () => T;
   /** The readable part of what was on disk and how many records were left out, or null if it is not recognisable. */
   clean: (raw: unknown) => { value: T; dropped: number } | null;
+  /** Where the file lives, for telling the owner (default: the app's data folder). */
+  place?: StorePlace;
   now?: () => Date;
 }
 
@@ -83,7 +89,8 @@ export class JsonStore<T> {
       return (this.value = await this.setAside(String(err)));
     }
     let raw: unknown;
-    try { raw = JSON.parse(text); } catch (err) { return (this.value = await this.setAside(String(err))); }
+    // A file saved by Notepad or PowerShell can start with a byte-order mark; that is not damage.
+    try { raw = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (err) { return (this.value = await this.setAside(String(err))); }
     const cleaned = this.opts.clean(raw);
     if (!cleaned) return (this.value = await this.setAside('not in the expected shape'));
     if (cleaned.dropped > 0) {
@@ -119,7 +126,7 @@ export class JsonStore<T> {
   }
 
   private report(keptAs: string, startedFrom: StoreProblem['startedFrom'], why: string): void {
-    problems.push({ store: this.opts.name, keptAs, startedFrom });
+    problems.push({ store: this.opts.name, keptAs, startedFrom, place: this.opts.place ?? 'data' });
     console.warn(`[store] the ${this.opts.name} could not be read (${why}); kept as ${keptAs}, started from ${startedFrom}${this.blocked ? `; not saving this run: ${this.blocked}` : ''}`);
   }
 

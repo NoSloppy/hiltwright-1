@@ -46,6 +46,8 @@
   - `app:storeProblems` also awaits the font details before reporting.
   - The Font library page shows its own problems too, filtered by `place === 'fonts'`.
 
+**Byte-order mark (found during implementation).** A settings file saved with a UTF-8 byte-order mark (Notepad, PowerShell's `-Encoding utf8`) failed `JSON.parse` and was set aside as damaged. `JsonStore` now strips a leading mark before parsing, so every store benefits. A test in `jsonStore.test.ts` covers it.
+
 **Rejected:**
 - *Moving the details file to userData.* The spec keeps it with the fonts, so a library copied or moved by hand keeps its details.
 
@@ -76,6 +78,8 @@
 
 `moveTo(next, move, onLine, { keepBack })` then leaves `keepBack` fonts, and their entries in the old details file, untouched.
 
+A clash is anything already at that name, file or folder. On Windows, a rename would silently replace a plain file with the moved folder, which a test caught during implementation.
+
 **Rejected:**
 - *Renaming clashes, or refusing on any clash.* The owner chose keeping the destination's fonts with a list, on 2026-09-25.
 
@@ -92,7 +96,8 @@ If a font fails, the loop stops and throws `Moved N of M fonts to <next> (…nam
 When everything moves, the old details file is removed. The side files are left: its backup and any damaged copy, which are the owner's.
 
 ### D5. Imports (SF5–SF8)
-- **SF5 variants.**
+- **SF5 variants (corrected 2026-09-25, during implementation).** The first version looked only at the folders above each font. That missed the common layout where the board-named folder *is* the font folder (`Kyber Ember/Proffie`, `Kyber Ember/CFX`), and the existing test caught it. The rule now counts a font's own folder too, but only when its whole name is a board's name (`BOARD_ONLY`: "Proffie", "ProffieOS v2", "CFX", …). A font named "ProffieOS Default" is never a variant.
+- **SF5 variants (original wording, kept for the record).**
   - `findFontDirs` collects all font dirs as today, then works out each font's parent path inside the pick (its relative path without the font's own folder).
   - Variants are recognised only when at least one parent path has a segment matching `proffie`, and at least one other font's parent path has a segment naming another board: `cfx`, `crystal ?focus`, `xeno(pixel)?`, `golden ?harvest`, `ghv?\d`, `verso`, `asteria`, `plecter`, `lgt`, `sn-?pixel`, `darkwolf`, `polaris`, `emb`, `smoothswing ?v?\d? ?board`.
   - Then fonts under another board's segment are dropped, each reported as `{ name, why: "for <segment>, not Proffie" }`, and all others are kept.
@@ -102,6 +107,7 @@ When everything moves, the old details file is removed. The side files are left:
   - A candidate must exist and must not be `d`'s own tracks folder.
   - When the font is the pick itself, no outside folder is looked at.
 - **SF7 files.** One `junk(path)` rule is shared by the zip and folder paths: any path segment starting with `.`, `__MACOSX`, `Thumbs.db` or `desktop.ini`. Everything else is kept, including folders with dots in their names.
+- **Escape check (found during implementation).** `extractZip` checked paths only for the entries its filter kept. With a filter, an escaping entry the filter dropped (a `..` segment counts as a hidden name) was skipped silently instead of refusing the package. That was true of the old whitelist too, for `../x.exe`. Every entry's path is now checked before filtering.
 - **SF8 CRC.** `listZip` reads the CRC-32 (central directory +16) into `ZipEntry.crc`. `extractZip` checks `zlib.crc32(data) === e.crc` and `data.length === e.size`. Otherwise it throws "This package is damaged (<file> does not match its checksum). Download it again." `zlib.crc32` is available in Electron 37's Node 22.21 and in the test Node 24. The test zip builder writes real CRCs.
 
 ### D6. Tests

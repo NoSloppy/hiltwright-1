@@ -86,6 +86,8 @@ export interface FontLibraryStatus {
   root: string;
   /** The library is in its default place, userData/fonts. */
   isDefault: boolean;
+  /** The folder the owner chose is not there (its drive unplugged, say); nothing was created in its place. */
+  missing: boolean;
   /** A folder chosen as the old "font bank", offered once for import. */
   legacyBank: string | null;
 }
@@ -309,7 +311,7 @@ export interface HiltwrightApi {
   };
   app: {
     /** Stores that could not be read at start and were set aside: what the owner calls each, and the file it was kept as. */
-    storeProblems(): Promise<{ store: string; keptAs: string; startedFrom: 'backup' | 'readable records' | 'nothing' }[]>;
+    storeProblems(): Promise<{ store: string; keptAs: string; startedFrom: 'backup' | 'readable records' | 'nothing'; place: 'data' | 'fonts' }[]>;
     userDataPath(): Promise<string>;
     /** False when a development run was started with HILTWRIGHT_NO_BOARD: no board can be reached. */
     boardAccess(): Promise<boolean>;

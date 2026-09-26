@@ -18,7 +18,7 @@ export function cleanBanks(raw: unknown): { value: BanksFile; dropped: number } 
 export class BanksStore {
   private store: JsonStore<BanksFile>;
   constructor(file: string) {
-    this.store = new JsonStore(file, { name: 'preset sets', empty: () => ({ version: 1, banks: [] }), clean: cleanBanks });
+    this.store = new JsonStore(file, { name: 'preset sets', place: 'data', empty: () => ({ version: 1, banks: [] }), clean: cleanBanks });
   }
   async list(): Promise<PresetBank[]> { return [...(await this.store.read()).banks]; }
   /** Add or replace by id, keeping the list's order for a replacement. */

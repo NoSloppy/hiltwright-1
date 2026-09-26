@@ -3,7 +3,7 @@
 import { app, dialog, ipcMain, shell, BrowserWindow } from 'electron';
 import { arch, release, version as osVersion } from 'node:os';
 import { basename, join, resolve } from 'node:path';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { generateConfig, isBank, isStyleDoc, isTreeDoc, validateModel, type PresetBank, type PresetRecord, type SaberConfigModel } from '@hiltwright/core';
 import { Library, libraryPath } from './library';
 import { LooksStore, looksPath } from './looksStore';
@@ -23,7 +23,7 @@ import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { backupFlash, describeBootloader, listBackups, restoreBackup, usbState, waitFor, writeFirmware } from './flash';
 import { logged } from './ipcLog';
-import { storeProblems } from './jsonStore';
+import { JsonStore, storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
 import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
 import type { FontLibraryStatus, JobEvent } from '../shared/api';
@@ -134,23 +134,37 @@ export function registerIpc(): void {
   handle('sd:locate', async () => { const cards = await locateCards(); knownRoots = new Set(cards.map((c) => c.root)); return cards; });
   handle('sd:listFonts', (_e, r: unknown) => listFonts(root(r)));
   handle('sd:eject', (_e, r: unknown) => ejectVolume(root(r)));
-  // The font library: fonts the owner added, in a folder of their choosing (default userData/fonts).
-  const libSettingsFile = join(userData, 'fontlibrary.json');
-  let libSettings: { root?: string; legacyDismissed?: boolean } = {};
-  try { libSettings = JSON.parse(readFileSync(libSettingsFile, 'utf8')) as typeof libSettings; } catch { /* defaults */ }
+  // The font library: fonts the owner added, in a folder of their choosing (default userData/fonts). Where it is lives
+  // in fontlibrary.json, kept by the safe store; every font library request waits until that has been read.
+  interface LibSettings { root?: string; legacyDismissed?: boolean }
+  const cleanLibSettings = (raw: unknown): { value: LibSettings; dropped: number } | null => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    return { value: { ...(typeof o.root === 'string' ? { root: o.root } : {}), ...(o.legacyDismissed === true ? { legacyDismissed: true } : {}) }, dropped: 0 };
+  };
+  const libSettingsStore = new JsonStore<LibSettings>(join(userData, 'fontlibrary.json'), { name: 'font library location', place: 'data', empty: () => ({}), clean: cleanLibSettings });
+  let libSettings: LibSettings = {};
   const defaultLibRoot = join(userData, 'fonts');
-  const fontLib = new FontLibrary(process.env.HILTWRIGHT_FONT_LIBRARY || libSettings.root || defaultLibRoot, (p) => shell.trashItem(p));
-  const saveLibSettings = () => { try { writeFileSync(libSettingsFile, JSON.stringify(libSettings)); } catch { /* kept for this run */ } };
+  const fontLib = new FontLibrary(defaultLibRoot, (p) => shell.trashItem(p), defaultLibRoot);
+  const libReady = (async () => {
+    libSettings = { ...(await libSettingsStore.read()) };
+    fontLib.setRoot(process.env.HILTWRIGHT_FONT_LIBRARY || libSettings.root || defaultLibRoot);
+  })();
+  const saveLibSettings = (patch: Partial<LibSettings>) => libSettingsStore.update((s) => {
+    for (const [k, v] of Object.entries(patch) as [keyof LibSettings, LibSettings[keyof LibSettings]][]) { if (v === undefined) delete s[k]; else (s as Record<string, unknown>)[k] = v; }
+    libSettings = { ...s };
+  });
+  const fontHandle = (channel: string, fn: Parameters<typeof ipcMain.handle>[1]) => handle(channel, async (...args) => { await libReady; return fn(...args); });
   // Before the library there was the "font bank", a folder the owner pointed at. Offered once as something to import.
   let legacyBank: string | null = null;
   try { legacyBank = (JSON.parse(readFileSync(join(userData, 'fontbank.json'), 'utf8')) as { root?: string }).root ?? null; } catch { /* never chosen */ }
-  const libStatus = (): FontLibraryStatus => ({ root: fontLib.root, isDefault: resolve(fontLib.root) === resolve(defaultLibRoot), legacyBank: libSettings.legacyDismissed || !legacyBank || !existsSync(legacyBank) ? null : legacyBank });
+  const libStatus = async (): Promise<FontLibraryStatus> => ({ root: fontLib.root, isDefault: resolve(fontLib.root) === resolve(defaultLibRoot), missing: await fontLib.missing(), legacyBank: libSettings.legacyDismissed || !legacyBank || !existsSync(legacyBank) ? null : legacyBank });
   const folder = (v: unknown) => str(v, 120);
   const libEmit = (line: string) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('fontlib:progress', line); };
-  handle('fontlib:status', () => libStatus());
-  handle('fontlib:list', () => fontLib.list());
-  handle('fontlib:detail', (_e, f: unknown) => fontLib.detail(folder(f)));
-  handle('fontlib:setMeta', (_e, f: unknown, patch: unknown) => {
+  fontHandle('fontlib:status', () => libStatus());
+  fontHandle('fontlib:list', () => fontLib.list());
+  fontHandle('fontlib:detail', (_e, f: unknown) => fontLib.detail(folder(f)));
+  fontHandle('fontlib:setMeta', (_e, f: unknown, patch: unknown) => {
     const p = (patch ?? {}) as Record<string, unknown>;
     const out: { name?: string; maker?: string; notes?: string; bundle?: string } = {};
     if (typeof p.name === 'string') out.name = str(p.name, 120).trim() || folder(f);
@@ -163,7 +177,7 @@ export function registerIpc(): void {
   // makers before this list existed are brought over once, at start.
   const contributors = new ContributorStore(userData);
   const contributorsReady = (async () => {
-    try { for (const l of await fontLib.legacyLogos()) if (!(await contributors.has(l.name)) && existsSync(l.file)) await contributors.setLogo(l.name, l.file); } catch (err) { console.log(`[contributors] bringing over font makers' logos: ${String(err)}`); }
+    try { await libReady; for (const l of await fontLib.legacyLogos()) if (!(await contributors.has(l.name)) && existsSync(l.file)) await contributors.setLogo(l.name, l.file); } catch (err) { console.log(`[contributors] bringing over font makers' logos: ${String(err)}`); }
   })();
   handle('contributors:list', async () => { await contributorsReady; return contributors.list(); });
   // A logo comes only from a file the owner picked in the dialog.
@@ -176,11 +190,11 @@ export function registerIpc(): void {
   handle('contributors:setUrl', (_e, who: unknown, url: unknown) => contributors.setUrl(str(who, 120), str(url, 500)));
   // Opens only the link saved for that person, in the system browser.
   handle('contributors:open', async (_e, who: unknown) => { const url = await contributors.urlOf(str(who, 120)); if (url) await shell.openExternal(url); });
-  handle('fontlib:remove', (_e, f: unknown) => fontLib.remove(folder(f)));
-  handle('fontlib:readSound', (_e, f: unknown, rel: unknown) => fontLib.readSound(folder(f), str(rel, 400)));
-  handle('fontlib:readFont', (e, f: unknown) => fontLib.readFont(folder(f), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total })));
-  handle('fontlib:copyToCard', (_e, f: unknown, r: unknown, replace: unknown) => fontLib.copyToCard(folder(f), root(r), replace === true));
-  handle('fontlib:open', async (_e, f: unknown) => { await shell.openPath(f == null ? fontLib.root : join(fontLib.root, basename(folder(f)))); });
+  fontHandle('fontlib:remove', (_e, f: unknown) => fontLib.remove(folder(f)));
+  fontHandle('fontlib:readSound', (_e, f: unknown, rel: unknown) => fontLib.readSound(folder(f), str(rel, 400)));
+  fontHandle('fontlib:readFont', (e, f: unknown) => fontLib.readFont(folder(f), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total })));
+  fontHandle('fontlib:copyToCard', (_e, f: unknown, r: unknown, replace: unknown) => fontLib.copyToCard(folder(f), root(r), replace === true));
+  fontHandle('fontlib:open', async (_e, f: unknown) => { await shell.openPath(f == null ? fontLib.root : join(fontLib.root, basename(folder(f)))); });
   // Adding: the owner picks .zip packages or folders; only paths the dialog returned are ever read.
   const importPicked = async (paths: string[]): Promise<ImportResult> => {
     const all: ImportResult = { added: [], skipped: [] };
@@ -189,36 +203,52 @@ export function registerIpc(): void {
     }
     return all;
   };
-  handle('fontlib:addZip', async () => {
+  fontHandle('fontlib:addZip', async () => {
     const r = await dialog.showOpenDialog({ title: 'Add sound font packages', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Font packages', extensions: ['zip'] }] });
     return r.canceled ? null : importPicked(r.filePaths);
   });
-  handle('fontlib:addFolder', async () => {
+  fontHandle('fontlib:addFolder', async () => {
     const r = await dialog.showOpenDialog({ title: 'Add a font folder (or a folder of fonts)', properties: ['openDirectory', 'multiSelections'] });
     return r.canceled ? null : importPicked(r.filePaths);
   });
-  handle('fontlib:importLegacy', async () => { if (!legacyBank) return null; const r = await importPicked([legacyBank]); libSettings.legacyDismissed = true; saveLibSettings(); return r; });
-  handle('fontlib:dismissLegacy', () => { libSettings.legacyDismissed = true; saveLibSettings(); return libStatus(); });
-  handle('fontlib:chooseRoot', async () => {
+  fontHandle('fontlib:importLegacy', async () => { if (!legacyBank) return null; const r = await importPicked([legacyBank]); await saveLibSettings({ legacyDismissed: true }); return r; });
+  fontHandle('fontlib:dismissLegacy', async () => { await saveLibSettings({ legacyDismissed: true }); return libStatus(); });
+  // Choosing a folder: refused into itself or its surroundings, clashes listed before anything moves, nothing renamed.
+  // With the library folder missing there is nothing to move: the chosen folder is simply where it is now.
+  fontHandle('fontlib:chooseRoot', async () => {
     const r = await dialog.showOpenDialog({ title: 'Where should the font library live?', properties: ['openDirectory', 'createDirectory'] });
     if (r.canceled || !r.filePaths[0] || resolve(r.filePaths[0]) === resolve(fontLib.root)) return libStatus();
     const next = r.filePaths[0];
-    const have = (await fontLib.list()).length;
+    const missing = await fontLib.missing();
+    const have = missing ? 0 : (await fontLib.list()).length;
     let move = false;
+    let keepBack: string[] = [];
     if (have) {
+      const plan = await fontLib.planMove(next);
+      if (plan.refused) throw new Error(plan.refused);
       const ask = await dialog.showMessageBox({ type: 'question', title: 'Font library', message: `Move your ${have} font${have === 1 ? '' : 's'} to ${next}?`, detail: 'Or leave them where they are and use whatever fonts the new folder already holds.', buttons: ['Move them', 'Use the new folder as it is', 'Cancel'], defaultId: 0, cancelId: 2 });
       if (ask.response === 2) return libStatus();
       move = ask.response === 0;
+      if (move && plan.clashes.length) {
+        const shown = plan.clashes.slice(0, 12).join(', ') + (plan.clashes.length > 12 ? ` and ${plan.clashes.length - 12} more` : '');
+        const clash = await dialog.showMessageBox({
+          type: 'warning', title: 'Font library', noLink: true,
+          message: `${plan.clashes.length} of your fonts have the same folder name as a font already in ${next}.`,
+          detail: `${shown}.\n\nPresets find fonts by their folder name, so nothing is renamed. You can keep the ones already there and move the rest (yours stay untouched in ${fontLib.root}), or cancel.`,
+          buttons: ['Keep the ones already there and move the rest', 'Cancel'], defaultId: 1, cancelId: 1,
+        });
+        if (clash.response !== 0) return libStatus();
+        keepBack = plan.clashes;
+      }
     }
-    await fontLib.moveTo(next, move, libEmit);
-    libSettings.root = resolve(next) === resolve(defaultLibRoot) ? undefined : next;
-    saveLibSettings();
+    await fontLib.moveTo(next, move, libEmit, { keepBack });
+    await saveLibSettings({ root: resolve(next) === resolve(defaultLibRoot) ? undefined : next });
     return libStatus();
   });
-  handle('fontlib:resetRoot', async () => {
+  fontHandle('fontlib:resetRoot', async () => {
     if (resolve(fontLib.root) === resolve(defaultLibRoot)) return libStatus();
     await fontLib.moveTo(defaultLibRoot, false);
-    libSettings.root = undefined; saveLibSettings();
+    await saveLibSettings({ root: undefined });
     return libStatus();
   });
   // A font's sounds, for playing in the app, from a known card.
@@ -353,7 +383,7 @@ export function registerIpc(): void {
   });
 
   // Stores set aside at start (jsonStore.ts). Reading them first makes sure the library and sets have been loaded.
-  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list()]); return storeProblems(); });
+  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list(), libReady.then(() => fontLib.list())]); return storeProblems(); });
   handle('app:userDataPath', () => userData);
   // False in a development run started with HILTWRIGHT_NO_BOARD (packaged builds never have it).
   handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);

@@ -180,7 +180,9 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
   // Stores that could not be read at start were kept aside (jsonStore.ts); say so until dismissed.
   const [problems, setProblems] = useState<Awaited<ReturnType<typeof window.hiltwright.app.storeProblems>>>([]);
   useEffect(() => { void window.hiltwright.app.storeProblems().then(setProblems, () => setProblems([])); }, []);
-  const openDataFolder = async () => { try { await window.hiltwright.app.openPath(await window.hiltwright.app.userDataPath()); } catch { /* nothing to open */ } };
+  const openFolder = async (place: 'data' | 'fonts') => {
+    try { if (place === 'fonts') await window.hiltwright.fontLibrary.open(); else await window.hiltwright.app.openPath(await window.hiltwright.app.userDataPath()); } catch { /* nothing to open */ }
+  };
   // Adoption asks first: which plan the owner said this saber is.
   const [adopting, setAdopting] = useState<SaberRecord | null>(null);
   const steps = flowStatus(ws);
@@ -196,8 +198,8 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
       <div className="col" style={{ gap: 16, minHeight: 0 }}>
         {problems.map((p) => (
           <div key={p.keptAs} className="note amber" role="alert"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
-            <span>Your {p.store} could not be read. It was kept as <b className="mono">{p.keptAs}</b> in Hiltwright's data folder, and Hiltwright started {p.startedFrom === 'backup' ? 'from its backup copy' : p.startedFrom === 'readable records' ? 'with the entries it could read' : 'with an empty one'}.</span>
-            <span className="row" style={{ gap: 8 }}><button type="button" className="btn sm" onClick={() => void openDataFolder()}><span className="b"><span className="i">Open folder</span></span></button><button type="button" className="btn sm ghost" onClick={() => setProblems((ps) => ps.filter((x) => x !== p))}><span className="b"><span className="i">Dismiss</span></span></button></span>
+            <span>Your {p.store} could not be read. It was kept as <b className="mono">{p.keptAs}</b> in {p.place === 'fonts' ? 'the font library folder' : "Hiltwright's data folder"}, and Hiltwright started {p.startedFrom === 'backup' ? 'from its backup copy' : p.startedFrom === 'readable records' ? 'with the entries it could read' : 'with an empty one'}.</span>
+            <span className="row" style={{ gap: 8 }}><button type="button" className="btn sm" onClick={() => void openFolder(p.place)}><span className="b"><span className="i">Open folder</span></span></button><button type="button" className="btn sm ghost" onClick={() => setProblems((ps) => ps.filter((x) => x !== p))}><span className="b"><span className="i">Dismiss</span></span></button></span>
           </span></div>
         ))}
         <section className="panel" aria-label="Connection">

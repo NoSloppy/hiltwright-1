@@ -27,13 +27,19 @@ describe('the safe store', () => {
     expect(storeProblems()).toEqual([]);
   });
 
+  it('reads a file that starts with a byte-order mark (saved by Notepad or PowerShell) as good', async () => {
+    writeFileSync(file, '\uFEFF' + JSON.stringify({ version: 1, items: [{ id: 'bom' }] }));
+    expect((await store().read()).items).toEqual([{ id: 'bom' }]);
+    expect(storeProblems()).toEqual([]);
+  });
+
   it('sets an unparseable file aside unchanged and starts from the backup copy', async () => {
     writeFileSync(join(dir, 'things.bak.json'), JSON.stringify({ version: 1, items: [{ id: 'from backup' }] }));
     writeFileSync(file, '{ broken');
     const s = store();
     expect((await s.read()).items).toEqual([{ id: 'from backup' }]);
     expect(readFileSync(join(dir, 'things.damaged-20260925-161500.json'), 'utf8')).toBe('{ broken');
-    expect(storeProblems()).toEqual([{ store: 'test list', keptAs: 'things.damaged-20260925-161500.json', startedFrom: 'backup' }]);
+    expect(storeProblems()).toEqual([{ store: 'test list', keptAs: 'things.damaged-20260925-161500.json', startedFrom: 'backup', place: 'data' }]);
     await s.update((d) => { d.items.push({ id: 'new' }); });
     expect(onDisk().items).toEqual([{ id: 'from backup' }, { id: 'new' }]);
     expect(readFileSync(join(dir, 'things.damaged-20260925-161500.json'), 'utf8')).toBe('{ broken');

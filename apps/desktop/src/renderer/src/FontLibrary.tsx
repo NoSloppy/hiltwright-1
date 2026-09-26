@@ -61,6 +61,8 @@ export function FontLibrary({ onDemo }: { onDemo: (folder: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: 'green' | 'amber' | 'red'; text: string } | null>(null);
+  // A details file that could not be read was kept aside (jsonStore.ts); said here as well as on the Armory.
+  const [problems, setProblems] = useState<Awaited<ReturnType<typeof window.hiltwright.app.storeProblems>>>([]);
   const [card, setCard] = useState<CardInfo | null>(null);
   const people = useContributors();
   const [groupBy, setGroupBy] = useState<GroupBy>(() => { try { const g = localStorage.getItem('hiltwright.fontlib.group'); return g === 'maker' || g === 'bundle' ? g : 'none'; } catch { return 'none'; } });
@@ -74,6 +76,7 @@ export function FontLibrary({ onDemo }: { onDemo: (folder: string) => void }) {
     try { [st, list] = await Promise.all([api().fontLibrary.status(), api().fontLibrary.list()]); }
     catch (err) { setLoaded(true); setNote({ tone: 'red', text: `Could not read the font library: ${cleanErr(err)}` }); return; }
     setStatus(st); setFonts(list); setLoaded(true);
+    void api().app.storeProblems().then((ps) => setProblems(ps.filter((x) => x.place === 'fonts')), () => undefined);
     setSelected((s) => (s && list.some((f) => f.folder === s) ? s : list[0]?.folder ?? null));
   }, []);
   useEffect(() => { void refresh(); void api().sd.locate().then((cs) => setCard(cs.find((c) => c.proffie) ?? null)).catch(() => undefined); }, [refresh]);
@@ -209,6 +212,19 @@ export function FontLibrary({ onDemo }: { onDemo: (folder: string) => void }) {
         {status?.legacyBank && (
           <div className="note"><Icon name="info" /><span>You pointed Hiltwright at <span className="mono">{status.legacyBank}</span> as a font bank before. <button type="button" className="holo" disabled={busy} onClick={() => void run(() => api().fontLibrary.importLegacy())}>Add its fonts to the library</button> (copied; the folder is left as it is) or <button type="button" className="holo" onClick={() => void api().fontLibrary.dismissLegacy().then(setStatus)}>don't ask again</button>.</span></div>
         )}
+        {status?.missing && (
+          <div className="note red" role="alert"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+            <span>The font library folder cannot be found: <span className="mono">{status.root}</span>. If it is on a drive that is not plugged in, plug it in and look again. Nothing was created in its place.</span>
+            <span className="row wrap" style={{ gap: 8 }}>
+              <button type="button" className="btn sm" disabled={busy} onClick={() => void refresh()}><span className="b"><span className="i">Look again</span></span></button>
+              <button type="button" className="btn sm" disabled={busy} onClick={() => void moveLibrary(false)}><span className="b"><span className="i">Choose where it is</span></span></button>
+              <button type="button" className="btn sm ghost" disabled={busy} onClick={() => void moveLibrary(true)}><span className="b"><span className="i">Use the default folder</span></span></button>
+            </span>
+          </span></div>
+        )}
+        {problems.map((p) => (
+          <div key={p.keptAs} className="note amber"><Icon name="warn" /><span>The font details (names, makers, notes) could not be read. The file was kept as <b className="mono">{p.keptAs}</b> in the library folder, and Hiltwright started {p.startedFrom === 'backup' ? 'from its backup copy' : p.startedFrom === 'readable records' ? 'with the entries it could read' : 'with none'}. <button type="button" className="holo" onClick={() => void api().fontLibrary.open()}>Open the folder</button></span></div>
+        ))}
         {(busy || progress) && <div className="note"><span className="spinner on" style={{ width: 16, height: 16 }}><Icon name="spin" /></span><span>{progress ?? 'Working…'}</span></div>}
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}</span></div>}
 
@@ -219,7 +235,7 @@ export function FontLibrary({ onDemo }: { onDemo: (folder: string) => void }) {
               <tbody>
                 {groups.map((g) => (groupBy === 'none' ? g.fonts.map(row) : [groupHead(g), ...(folded.has(g.key) ? [] : g.fonts.map(row))]))}
                 {!loaded && <tr><td colSpan={7} className="hint" style={{ padding: 24 }}><span className="row" style={{ gap: 10 }}><span className="spinner on" style={{ width: 16, height: 16 }}><Icon name="spin" /></span>Reading your fonts… the first look at a big library takes a few seconds.</span></td></tr>}
-                {loaded && fonts.length === 0 && <tr><td colSpan={7} className="hint" style={{ padding: 24 }}>No fonts yet. Add a font package as you downloaded it (.zip), or a font folder. They are copied into the library; your originals are left alone.</td></tr>}
+                {loaded && fonts.length === 0 && !status?.missing && <tr><td colSpan={7} className="hint" style={{ padding: 24 }}>No fonts yet. Add a font package as you downloaded it (.zip), or a font folder. They are copied into the library; your originals are left alone.</td></tr>}
                 {fonts.length > 0 && visible.length === 0 && <tr><td colSpan={7} className="hint">No fonts match. Clear a filter.</td></tr>}
               </tbody>
             </table>

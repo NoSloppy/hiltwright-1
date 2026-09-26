@@ -1,13 +1,15 @@
 // The font library: sound fonts the owner has bought or downloaded, kept in one folder on this computer so every
 // part of the app can use them (Presets, the demo room, copying onto a card). Each font is a plain ProffieOS font
 // folder, untouched; what the owner says about it (display name, maker, notes) lives in one index file beside them,
-// so a font folder copied onto a card carries nothing extra.
+// kept by the safe store (jsonStore.ts), so a font folder copied onto a card carries nothing extra.
 
-import { cp, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { cp, mkdir, open, readFile, readdir, rename, rm, rmdir, stat } from 'node:fs/promises';
+import { statSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { checkFont, classifySound, parseWavHeader, type FontFile, type FontReport } from '@hiltwright/core';
 import { copyFont, looksLikeFont, readFontSounds, type FontEntry, type FontSounds } from './sd';
 import { extractZip, listZip } from './unzip';
+import { JsonStore } from './jsonStore';
 
 export const INDEX_FILE = 'hiltwright-fonts.json';
 /** Where makers' logos were kept before the shared contributors list; moved with the library, never listed as a font. */
@@ -179,11 +181,7 @@ export async function scanFont(dir: string): Promise<{ sounds: FontSound[]; trac
   };
 }
 
-/**
- * The font folders inside a folder someone downloaded: the folder itself, or folders below it. Packages often hold
- * the same font for several boards; when one of the candidates sits under a folder named for Proffie, only those
- * are kept.
- */
+/** The font folders inside a folder someone downloaded: the folder itself, or folders below it, four levels down. */
 export async function findFontDirs(dir: string, depth = 0): Promise<string[]> {
   if (await looksLikeFont(dir)) return [dir];
   if (depth >= 4) return [];
@@ -195,9 +193,40 @@ export async function findFontDirs(dir: string, depth = 0): Promise<string[]> {
     const p = join(dir, n);
     if (await isDir(p)) out.push(...(await findFontDirs(p, depth + 1)));
   }
-  if (depth > 0) return out;
-  const proffie = out.filter((p) => /proffie/i.test(relative(dir, p)));
-  return proffie.length ? proffie : out;
+  return out;
+}
+
+const PROFFIE = /proffie/i;
+/** Folder names that say a copy of a font is for another board. */
+const OTHER_BOARD = /(^|[^a-z])(cfx|crystal ?focus|xeno(pixel)?|golden ?harvest|ghv?\d|verso|asteria|plecter|lgt|sn-?pixel|darkwolf|polaris)([^a-z]|$)/i;
+
+/** A folder named only for a board ("Proffie", "ProffieOS v2", "CFX"): a variant folder, not a font's own name. */
+const BOARD_ONLY = /^(proffie(os|board)?|cfx|crystal ?focus|xeno(pixel)?|golden ?harvest|ghv?\d|verso|asteria|plecter|lgt|sn-?pixel|darkwolf|polaris)([ _-]?(v|ver|version)?[ _-]?\d+(\.\d+)*)?$/i;
+
+/**
+ * Packages often hold the same font for several boards. Only when a package has both a folder named for Proffie and
+ * a folder named for another board are the other boards' copies left out; everything else is kept. Folders above a
+ * font count, and so does the font's own folder when its whole name is a board's ("Kyber Ember/CFX"); a font whose
+ * name merely mentions a board ("ProffieOS Default") never does.
+ */
+export function chooseVariants(top: string, dirs: string[]): { keep: string[]; dropped: { dir: string; board: string }[] } {
+  const above = (d: string) => relative(top, dirname(d)).split(/[\\/]+/).filter((x) => x && x !== '.');
+  const parents = dirs.map((d) => (BOARD_ONLY.test(basename(d)) ? [...above(d), basename(d)] : above(d)));
+  const hasProffie = parents.some((segs) => segs.some((x) => PROFFIE.test(x)));
+  const hasOther = parents.some((segs) => segs.some((x) => OTHER_BOARD.test(x) && !PROFFIE.test(x)));
+  if (!hasProffie || !hasOther) return { keep: dirs, dropped: [] };
+  const keep: string[] = [];
+  const dropped: { dir: string; board: string }[] = [];
+  dirs.forEach((d, i) => {
+    const board = parents[i].find((x) => OTHER_BOARD.test(x) && !PROFFIE.test(x));
+    if (board) dropped.push({ dir: d, board }); else keep.push(d);
+  });
+  return { keep, dropped };
+}
+
+/** System clutter that never comes into the library: hidden files, macOS resource forks, Windows thumbnails. */
+export function isJunk(rel: string): boolean {
+  return rel.split(/[\\/]+/).some((p) => p.startsWith('.') || p === '__MACOSX' || /^(thumbs\.db|desktop\.ini)$/i.test(p));
 }
 
 const GENERIC = /^(proffie(os|board)?|proffie[ _-]?(os|board)[ _-]?v?\d*|sound[ _-]?fonts?|fonts?|sounds?|\d+|v\d+(\.\d+)*)$/i;
@@ -218,28 +247,58 @@ export function nameFor(dir: string, top: string, topName: string): string {
   return d === t ? topName : basename(d);
 }
 
-const KEEP_FILE = /\.(wav|ini|txt|md|pdf|jpg|jpeg|png)$/i;
+interface IndexFile { version: 1; fonts: Record<string, FontMeta>; makers: Record<string, MakerMeta> }
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** The readable part of a details file, and how many font entries were not. Null when it is not a details file. */
+export function cleanIndex(raw: unknown): { value: IndexFile; dropped: number } | null {
+  if (!isObj(raw) || !isObj(raw.fonts)) return null;
+  const fonts: Record<string, FontMeta> = {};
+  let dropped = 0;
+  for (const [k, v] of Object.entries(raw.fonts)) {
+    if (isObj(v) && typeof v.name === 'string') {
+      const m = v as Partial<FontMeta>;
+      fonts[k] = { ...m, name: v.name, maker: m.maker ?? '', notes: m.notes ?? '', added: m.added ?? '' };
+    }
+    else dropped++;
+  }
+  const makers: Record<string, MakerMeta> = {};
+  if (isObj(raw.makers)) for (const [k, v] of Object.entries(raw.makers)) if (isObj(v)) makers[k] = v as MakerMeta;
+  return { value: { version: 1, fonts, makers }, dropped };
+}
+
+const same = (a: string, b: string) => relative(resolve(a), resolve(b)) === '';
+/** Anything at all at that path, file or folder: a move never replaces it (on Windows a rename would). */
+const taken = (p: string) => stat(p).then(() => true, () => false);
+const inside = (outer: string, inner: string) => { const r = relative(resolve(outer), resolve(inner)); return !!r && !r.startsWith('..') && !isAbsolute(r); };
 
 export class FontLibrary {
-  private index: Record<string, FontMeta> | null = null;
-  private makerIndex: Record<string, MakerMeta> = {};
+  private store!: JsonStore<IndexFile>;
   private cache = new Map<string, LibraryFontDetail>();
 
-  constructor(public root: string, private trash: (p: string) => Promise<void>) {}
-
-  private async readIndex(): Promise<Record<string, FontMeta>> {
-    if (this.index) return this.index;
-    try {
-      const raw = JSON.parse(await readFile(join(this.root, INDEX_FILE), 'utf8')) as { fonts?: Record<string, FontMeta>; makers?: Record<string, MakerMeta> };
-      this.index = raw.fonts && typeof raw.fonts === 'object' ? raw.fonts : {};
-      this.makerIndex = raw.makers && typeof raw.makers === 'object' ? raw.makers : {};
-    } catch { this.index = {}; this.makerIndex = {}; }
-    return this.index;
+  /** `defaultRoot`: the app's own folder, the only one created when missing. */
+  constructor(public root: string, private trash: (p: string) => Promise<void>, private defaultRoot: string | null = null) {
+    this.makeStore();
   }
 
-  private async writeIndex(): Promise<void> {
+  private makeStore(): void {
+    this.store = new JsonStore<IndexFile>(join(this.root, INDEX_FILE), { name: 'font details', place: 'fonts', empty: () => ({ version: 1, fonts: {}, makers: {} }), clean: cleanIndex });
+  }
+
+  private async readIndex(): Promise<Record<string, FontMeta>> {
+    return (await this.store.read()).fonts;
+  }
+
+  /** A library folder the owner chose that is not there (its drive unplugged, say). The default is simply made. */
+  async missing(): Promise<boolean> {
+    if (this.defaultRoot && same(this.root, this.defaultRoot)) return false;
+    return !(await isDir(this.root));
+  }
+
+  private async ready(): Promise<void> {
+    if (await this.missing()) throw new Error(`The font library folder cannot be found (${this.root}). Plug its drive in, or choose where it is now.`);
     await mkdir(this.root, { recursive: true });
-    await writeFile(join(this.root, INDEX_FILE), JSON.stringify({ version: 1, fonts: this.index ?? {}, makers: this.makerIndex }, null, 2));
   }
 
   /** A folder name that must already be a font in the library: never a path. */
@@ -249,6 +308,7 @@ export class FontLibrary {
   }
 
   async list(): Promise<LibraryFont[]> {
+    if (await this.missing()) return [];
     await mkdir(this.root, { recursive: true });
     const index = await this.readIndex();
     const names = (await readdir(this.root)).filter((n) => !n.startsWith('.') && n !== MAKERS_DIR).sort((a, b) => a.localeCompare(b));
@@ -279,23 +339,19 @@ export class FontLibrary {
 
   async setMeta(folder: string, patch: Partial<Pick<FontMeta, 'name' | 'maker' | 'notes' | 'bundle'>>): Promise<LibraryFont> {
     const d = await this.detail(folder);
-    const index = await this.readIndex();
     const next: FontMeta = { ...d.meta, ...patch };
     if (!next.bundle) delete next.bundle;
-    index[folder] = next;
-    await this.writeIndex();
+    await this.store.update((f) => { f.fonts[folder] = next; });
     const { sounds: _s, tracks: _t, ...rest } = d;
-    return { ...rest, meta: index[folder] };
+    return { ...rest, meta: next };
   }
 
   /** Move a font to the recycle bin (never deleted outright) and forget what was said about it. */
   async remove(folder: string): Promise<void> {
     const dir = this.folderPath(folder);
     await this.trash(dir);
-    const index = await this.readIndex();
-    delete index[folder];
     this.cache.delete(folder);
-    await this.writeIndex();
+    await this.store.update((f) => { delete f.fonts[folder]; });
   }
 
   /**
@@ -303,9 +359,9 @@ export class FontLibrary {
    * file, so they can be handed over once.
    */
   async legacyLogos(): Promise<{ name: string; file: string }[]> {
-    await this.readIndex();
+    const { makers } = await this.store.read();
     const out: { name: string; file: string }[] = [];
-    for (const [name, m] of Object.entries(this.makerIndex)) if (m.logo && m.logo === basename(m.logo)) out.push({ name, file: join(this.root, MAKERS_DIR, m.logo) });
+    for (const [name, m] of Object.entries(makers)) if (m.logo && m.logo === basename(m.logo)) out.push({ name, file: join(this.root, MAKERS_DIR, m.logo) });
     return out;
   }
 
@@ -322,7 +378,8 @@ export class FontLibrary {
     return readFontSounds(this.folderPath(folder), onFile);
   }
 
-  copyToCard(folder: string, cardRoot: string, replace: boolean): Promise<FontEntry> {
+  async copyToCard(folder: string, cardRoot: string, replace: boolean): Promise<FontEntry> {
+    await this.ready();
     return copyFont(this.folderPath(folder), cardRoot, replace);
   }
 
@@ -334,11 +391,11 @@ export class FontLibrary {
   }
 
   /**
-   * Add what the owner downloaded: a .zip package, a font folder, or a folder holding several fonts. Everything is
-   * copied in; the original stays where it was.
+   * Add what the owner downloaded: a .zip package, a font folder, or a folder holding several fonts. Every file of a
+   * font is copied in (not system clutter); the original stays where it was.
    */
   async importFrom(src: string, onLine?: (line: string) => void): Promise<ImportResult> {
-    await mkdir(this.root, { recursive: true });
+    await this.ready();
     const result: ImportResult = { added: [], skipped: [] };
     const label = basename(src).replace(/\.zip$/i, '');
     let top = src;
@@ -350,12 +407,13 @@ export class FontLibrary {
         const wavs = entries.filter((e) => /\.wav$/i.test(e.name)).length;
         if (!wavs) throw new Error(`${basename(src)} has no sounds in it. Is it a sound font package?`);
         onLine?.(`Unpacking ${basename(src)} (${wavs} sounds)…`);
-        await extractZip(src, staging, (n) => KEEP_FILE.test(n) && !n.startsWith('__MACOSX/'), (_n, done, total) => { if (done % 100 === 0 || done === total) onLine?.(`Unpacked ${done} of ${total} files`); });
+        await extractZip(src, staging, (n) => !isJunk(n), (_n, done, total) => { if (done % 100 === 0 || done === total) onLine?.(`Unpacked ${done} of ${total} files`); });
         top = staging;
       } else if (!(await isDir(src))) throw new Error('Choose a font folder or a .zip package');
-      const dirs = await findFontDirs(top);
-      if (!dirs.length) throw new Error(`No sound font found in ${basename(src)}. A font folder has hum sounds in it (hum.wav, hum01.wav or hum/…).`);
-      const index = await this.readIndex();
+      const found = await findFontDirs(top);
+      if (!found.length) throw new Error(`No sound font found in ${basename(src)}. A font folder has hum sounds in it (hum.wav, hum01.wav or hum/…).`);
+      const { keep: dirs, dropped } = chooseVariants(top, found);
+      for (const x of dropped) result.skipped.push({ name: basename(x.dir), why: `the copy in "${x.board}" is for another board, not Proffie` });
       for (const d of dirs) {
         const want = nameFor(d, top, label);
         const folder = await this.freeName(want);
@@ -364,18 +422,21 @@ export class FontLibrary {
         if (staging) {
           try { await rename(d, dest); } catch { await cp(d, dest, { recursive: true }); }
         } else {
-          await cp(d, dest, { recursive: true, filter: (s) => !basename(s).startsWith('.') && (extname(s) === '' || KEEP_FILE.test(s)) });
+          await cp(d, dest, { recursive: true, filter: (x) => !isJunk(relative(d, x)) });
         }
-        // A package with one font and its tracks beside it rather than inside: the tracks go into the font, where
-        // ProffieOS finds them as <font>/tracks/<name>.wav.
-        const beside = [join(dirname(d), 'tracks'), join(top, 'tracks')].find((x) => x !== join(d, 'tracks'));
-        if (dirs.length === 1 && beside && (await isDir(beside)) && !(await isDir(join(dest, 'tracks')))) {
-          await cp(beside, join(dest, 'tracks'), { recursive: true, filter: (s) => extname(s) === '' || /\.wav$/i.test(s) });
+        // A single font with its tracks beside it rather than inside: the tracks go into the font, where ProffieOS
+        // finds them as <font>/tracks/<name>.wav. Only from inside what the owner picked.
+        const candidates = [...(inside(top, dirname(d)) ? [join(dirname(d), 'tracks')] : []), join(top, 'tracks')].filter((x) => !same(x, join(d, 'tracks')));
+        let beside: string | undefined;
+        for (const c of candidates) if (await isDir(c)) { beside = c; break; }
+        if (dirs.length === 1 && beside && !(await isDir(join(dest, 'tracks')))) {
+          const from = beside;
+          await cp(from, join(dest, 'tracks'), { recursive: true, filter: (x) => !isJunk(relative(from, x)) && (/\.wav$/i.test(x) || statSync(x).isDirectory()) });
         }
-        index[folder] = { name: want.replace(/_/g, ' '), maker: '', notes: '', added: new Date().toISOString(), from: basename(src), ...(dirs.length > 1 ? { bundle: label.replace(/_/g, ' ') } : {}) };
+        const meta: FontMeta = { name: want.replace(/_/g, ' '), maker: '', notes: '', added: new Date().toISOString(), from: basename(src), ...(dirs.length > 1 ? { bundle: label.replace(/_/g, ' ') } : {}) };
+        await this.store.update((f) => { f.fonts[folder] = meta; });
         result.added.push(folder);
       }
-      await this.writeIndex();
     } finally {
       if (staging) await rm(staging, { recursive: true, force: true }).catch(() => undefined);
     }
@@ -383,39 +444,90 @@ export class FontLibrary {
   }
 
   /**
-   * Point the library at another folder. With `move`, the fonts here go with it (a rename when both are on the same
-   * drive, a copy then delete otherwise); without, the new folder is used as it is.
+   * Whether the library can move to `next`: refused when `next` is the library folder, inside it, or holds it; and
+   * which fonts' folder names are already taken there (on disk or in its details file).
    */
-  async moveTo(next: string, move: boolean, onLine?: (line: string) => void): Promise<void> {
-    await mkdir(next, { recursive: true });
-    if (move && resolve(next) !== resolve(this.root)) {
-      const index = await this.readIndex();
+  async planMove(next: string): Promise<{ refused: string | null; clashes: string[] }> {
+    if (same(next, this.root)) return { refused: 'That folder is already the font library.', clashes: [] };
+    if (inside(this.root, next)) return { refused: 'That folder is inside the font library, so the library cannot move into it. Choose a folder outside it.', clashes: [] };
+    if (inside(next, this.root)) return { refused: 'That folder holds the font library, so its fonts would be mixed with other files. Choose an empty folder or one that is only for fonts.', clashes: [] };
+    let theirs: Record<string, unknown> = {};
+    try { theirs = cleanIndex(JSON.parse(await readFile(join(next, INDEX_FILE), 'utf8')))?.value.fonts ?? {}; } catch { /* none, or unreadable: the disk decides */ }
+    const clashes: string[] = [];
+    for (const n of await this.fontFolders()) if ((await taken(join(next, n))) || theirs[n]) clashes.push(n);
+    return { refused: null, clashes };
+  }
+
+  /** Folders a move carries: everything but hidden folders and the old logos folder. */
+  private async fontFolders(): Promise<string[]> {
+    if (!(await isDir(this.root))) return [];
+    const out: string[] = [];
+    for (const n of (await readdir(this.root)).sort()) if (!n.startsWith('.') && n !== MAKERS_DIR && (await isDir(join(this.root, n)))) out.push(n);
+    return out;
+  }
+
+  /**
+   * Point the library at another folder. With `move`, the fonts here go with it one by one, each with its details (a
+   * rename on the same drive, a copy then delete otherwise); `keepBack` fonts stay where they are. Nothing is renamed
+   * or overwritten. If a font cannot be moved, this stops, says which fonts moved, and the library stays here.
+   */
+  async moveTo(next: string, move: boolean, onLine?: (line: string) => void, opts: { keepBack?: string[] } = {}): Promise<void> {
+    if (move && !same(next, this.root)) {
+      const plan = await this.planMove(next);
+      if (plan.refused) throw new Error(plan.refused);
+      await mkdir(next, { recursive: true });
+      const keep = new Set(opts.keepBack ?? []);
       const target = new FontLibrary(next, this.trash);
-      const theirs = await target.readIndex();
-      for (const n of await readdir(this.root)) {
-        const from = join(this.root, n);
-        if (n === INDEX_FILE || n.startsWith('.') || !(await isDir(from))) continue;
-        if (n === MAKERS_DIR) {
-          // Logos merge into the new library's own folder of them.
-          await mkdir(join(next, MAKERS_DIR), { recursive: true });
-          for (const f of await readdir(from)) await cp(join(from, f), join(next, MAKERS_DIR, f));
-          await rm(from, { recursive: true, force: true });
-          continue;
+      const todo = (await this.fontFolders()).filter((n) => !keep.has(n));
+      const moved: string[] = [];
+      for (const n of todo) {
+        try {
+          if (await taken(join(next, n))) throw new Error(`something named ${n} is already there`);
+          onLine?.(`Moving ${n}…`);
+          const from = join(this.root, n);
+          try { await rename(from, join(next, n)); } catch { await cp(from, join(next, n), { recursive: true, errorOnExist: true, force: false }); await rm(from, { recursive: true, force: true }); }
+        } catch (err) {
+          throw new Error(`Moved ${moved.length} of ${todo.length} fonts to ${next}${moved.length ? ` (${moved.join(', ')})` : ''}; ${n} could not be moved: ${err instanceof Error ? err.message : String(err)}. The library is still at ${this.root}.`);
         }
-        const name = await target.freeName(n);
-        onLine?.(`Moving ${n}…`);
-        try { await rename(from, join(next, name)); } catch { await cp(from, join(next, name), { recursive: true }); await rm(from, { recursive: true, force: true }); }
-        if (index[n]) theirs[name] = index[n];
+        const meta = (await this.readIndex())[n];
+        if (meta) {
+          await target.store.update((f) => { f.fonts[n] = meta; });
+          await this.store.update((f) => { delete f.fonts[n]; });
+        }
+        this.cache.delete(n);
+        moved.push(n);
       }
-      for (const [k, v] of Object.entries(this.makerIndex)) if (!Object.keys(target.makerIndex).some((t) => t.toLowerCase() === k.toLowerCase())) target.makerIndex[k] = v;
-      await target.writeIndex();
-      await rm(join(this.root, INDEX_FILE), { force: true });
+      await this.moveLogos(next, target);
+      if (!keep.size) await rm(join(this.root, INDEX_FILE), { force: true });
+    } else {
+      await mkdir(next, { recursive: true });
     }
-    this.root = next;
-    this.index = null;
-    this.makerIndex = {};
+    this.setRoot(next);
+  }
+
+  /** Old logos go to the new folder's own logos folder; one already there is kept, and ours stays where it was. */
+  private async moveLogos(next: string, target: FontLibrary): Promise<void> {
+    const from = join(this.root, MAKERS_DIR);
+    const { makers } = await this.store.read();
+    if (await isDir(from)) {
+      const to = join(next, MAKERS_DIR);
+      await mkdir(to, { recursive: true });
+      for (const f of await readdir(from)) {
+        if (await stat(join(to, f)).then(() => true, () => false)) continue;
+        await cp(join(from, f), join(to, f), { recursive: true, force: false, errorOnExist: false });
+        await rm(join(from, f), { recursive: true, force: true });
+      }
+      await rmdir(from).catch(() => undefined);
+    }
+    await target.store.update((t) => { for (const [k, v] of Object.entries(makers)) if (!Object.keys(t.makers).some((x) => x.toLowerCase() === k.toLowerCase())) t.makers[k] = v; });
+  }
+
+  /** Use another folder as the library as it is (no move), e.g. once the owner has found where it went. */
+  setRoot(root: string): void {
+    this.root = root;
+    this.makeStore();
     this.cache.clear();
   }
 
-  forget(): void { this.index = null; this.makerIndex = {}; this.cache.clear(); }
+  forget(): void { this.makeStore(); this.cache.clear(); }
 }

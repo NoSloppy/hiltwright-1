@@ -31,7 +31,7 @@ export function cleanLibrary(raw: unknown): { value: LibraryFile; dropped: numbe
 export class Library {
   private store: JsonStore<LibraryFile>;
   constructor(file: string) {
-    this.store = new JsonStore(file, { name: 'saber list', empty: () => ({ version: 1, sabers: [] }), clean: cleanLibrary });
+    this.store = new JsonStore(file, { name: 'saber list', place: 'data', empty: () => ({ version: 1, sabers: [] }), clean: cleanLibrary });
   }
 
   async list(): Promise<SaberRecord[]> {

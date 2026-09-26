@@ -3,8 +3,9 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deflateRawSync } from 'node:zlib';
+import { crc32, deflateRawSync } from 'node:zlib';
 import { FontLibrary, INDEX_FILE, MAKERS_DIR, classifyFontFile, nameFor, safeFolderName } from '../src/main/fontLibrary';
+import { resetStoreProblems, storeProblems } from '../src/main/jsonStore';
 
 /** A minimal 16-bit mono 44.1 kHz PCM wav, `samples` long. */
 function wav(samples = 0): Buffer {
@@ -15,15 +16,16 @@ function wav(samples = 0): Buffer {
   return b;
 }
 
-/** A zip with every entry deflated (CRCs left at zero: the reader does not check them). */
-function zip(files: Record<string, Buffer>): Buffer {
+/** A zip with every entry deflated and its real CRC-32; `badCrc` names an entry whose recorded CRC is wrong. */
+function zip(files: Record<string, Buffer>, badCrc?: string): Buffer {
   const locals: Buffer[] = []; const central: Buffer[] = []; let offset = 0;
   for (const [name, data] of Object.entries(files)) {
     const n = Buffer.from(name, 'utf8'); const body = deflateRawSync(data);
+    const sum = (crc32(data) ^ (name === badCrc ? 0x1 : 0)) >>> 0;
     const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x800, 6); lh.writeUInt16LE(8, 8);
-    lh.writeUInt32LE(body.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(n.length, 26);
+    lh.writeUInt32LE(sum, 14); lh.writeUInt32LE(body.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(n.length, 26);
     const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x800, 8); ch.writeUInt16LE(8, 10);
-    ch.writeUInt32LE(body.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(n.length, 28); ch.writeUInt32LE(offset, 42);
+    ch.writeUInt32LE(sum, 16); ch.writeUInt32LE(body.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(n.length, 28); ch.writeUInt32LE(offset, 42);
     locals.push(lh, n, body); central.push(ch, n); offset += 30 + n.length + body.length;
   }
   const cd = Buffer.concat(central);
@@ -133,5 +135,183 @@ describe('font library', () => {
     const pkg = join(dir, 'evil.zip');
     await writeFile(pkg, zip({ 'Font/hum.wav': wav(), '../../escape.wav': wav() }));
     await expect(lib.importFrom(pkg)).rejects.toThrow(/outside/);
+  });
+});
+
+// font-library-integrity (SF1-SF8).
+const trash = async (p: string) => { trashed.push(p); await rm(p, { recursive: true, force: true }); };
+const tmp = (name: string) => mkdtemp(join(tmpdir(), `hw-${name}-`));
+async function font(dir: string, ...extra: [string, Buffer][]): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  for (const f of ['hum.wav', 'out.wav', 'in.wav', 'clash1.wav']) await writeFile(join(dir, f), wav());
+  for (const [rel, data] of extra) { await mkdir(join(dir, rel, '..'), { recursive: true }); await writeFile(join(dir, rel), data); }
+}
+const meta = (name: string) => ({ name, maker: '', notes: '', added: '2026-09-25T00:00:00Z' });
+
+describe('the font details file (SF2)', () => {
+  it('sets an unreadable details file aside, starts from its backup, and saves the next change', async () => {
+    resetStoreProblems();
+    const root = await tmp('lib');
+    await font(join(root, 'Kylo'));
+    await writeFile(join(root, INDEX_FILE), '{ "fonts": { broken');
+    await writeFile(join(root, 'hiltwright-fonts.bak.json'), JSON.stringify({ version: 1, fonts: { Kylo: meta('Kylo from backup') }, makers: {} }));
+    const lib = new FontLibrary(root, trash);
+    const [f] = await lib.list();
+    expect(f.meta.name).toBe('Kylo from backup');
+    const [p] = storeProblems();
+    expect(p).toMatchObject({ store: 'font details', startedFrom: 'backup', place: 'fonts' });
+    expect(await readFile(join(root, p.keptAs), 'utf8')).toBe('{ "fonts": { broken');
+    await lib.setMeta('Kylo', { name: 'Kylo Ren' });
+    expect((await new FontLibrary(root, trash).list())[0].meta.name).toBe('Kylo Ren');
+    expect(await readFile(join(root, p.keptAs), 'utf8')).toBe('{ "fonts": { broken');
+  });
+});
+
+describe('a missing library folder (SF1)', () => {
+  it('is reported, not recreated, when the owner chose it', async () => {
+    const base = await tmp('gone');
+    const gone = join(base, 'USB drive', 'Fonts');
+    const lib = new FontLibrary(gone, trash, join(base, 'default'));
+    expect(await lib.missing()).toBe(true);
+    expect(await lib.list()).toEqual([]);
+    expect(existsSync(gone)).toBe(false);
+    await expect(lib.importFrom(base)).rejects.toThrow(/cannot be found/);
+    expect(existsSync(gone)).toBe(false);
+  });
+
+  it('is simply made when it is the default folder', async () => {
+    const base = await tmp('default');
+    const def = join(base, 'fonts');
+    const lib = new FontLibrary(def, trash, def);
+    expect(await lib.missing()).toBe(false);
+    expect(await lib.list()).toEqual([]);
+    expect(existsSync(def)).toBe(true);
+  });
+});
+
+describe('moving the library (SF3, SF4)', () => {
+  it('refuses the library folder itself, a folder inside it, and a folder that holds it', async () => {
+    const root = await tmp('lib');
+    await font(join(root, 'Alpha'));
+    const lib = new FontLibrary(root, trash);
+    expect((await lib.planMove(root)).refused).toMatch(/already the font library/);
+    expect((await lib.planMove(join(root, 'Sub'))).refused).toMatch(/inside the font library/);
+    expect((await lib.planMove(join(root, '..'))).refused).toMatch(/holds the font library/);
+    await expect(lib.moveTo(join(root, 'Sub'), true)).rejects.toThrow(/inside the font library/);
+    expect((await lib.list()).map((f) => f.folder)).toEqual(['Alpha']);
+    expect(existsSync(join(root, 'Sub'))).toBe(false);
+  });
+
+  it('lists clashes, keeps them back untouched, moves the rest with their details, and keeps an existing logo', async () => {
+    const root = await tmp('lib');
+    const next = await tmp('next');
+    for (const f of ['Alpha', 'Beta', 'Gamma']) await font(join(root, f));
+    const lib = new FontLibrary(root, trash);
+    await lib.setMeta('Alpha', { name: 'Our Alpha' });
+    await lib.setMeta('Gamma', { name: 'Our Gamma', maker: 'Kyberphonic' });
+    await font(join(next, 'Alpha'), ['theirs.txt', Buffer.from('theirs')]);
+    await writeFile(join(next, INDEX_FILE), JSON.stringify({ version: 1, fonts: { Beta: meta('Their Beta') }, makers: {} }));
+    await mkdir(join(root, MAKERS_DIR), { recursive: true });
+    await writeFile(join(root, MAKERS_DIR, 'k.png'), 'ours');
+    await mkdir(join(next, MAKERS_DIR), { recursive: true });
+    await writeFile(join(next, MAKERS_DIR, 'k.png'), 'theirs');
+    await writeFile(join(root, MAKERS_DIR, 'only-ours.png'), 'ours only');
+
+    const plan = await lib.planMove(next);
+    expect(plan).toEqual({ refused: null, clashes: ['Alpha', 'Beta'] });
+    await lib.moveTo(next, true, undefined, { keepBack: plan.clashes });
+
+    expect(lib.root).toBe(next);
+    // Kept back: untouched in the old folder, with their details, and nothing renamed at the destination.
+    expect(existsSync(join(root, 'Alpha', 'hum.wav'))).toBe(true);
+    expect(existsSync(join(root, 'Beta', 'hum.wav'))).toBe(true);
+    const old = new FontLibrary(root, trash);
+    expect((await old.list()).find((f) => f.folder === 'Alpha')?.meta.name).toBe('Our Alpha');
+    expect(await readFile(join(next, 'Alpha', 'theirs.txt'), 'utf8')).toBe('theirs');
+    expect(existsSync(join(next, 'Alpha-2'))).toBe(false);
+    // Moved, with its details.
+    expect(existsSync(join(root, 'Gamma'))).toBe(false);
+    const moved = await new FontLibrary(next, trash).list();
+    expect(moved.find((f) => f.folder === 'Gamma')?.meta).toMatchObject({ name: 'Our Gamma', maker: 'Kyberphonic' });
+    // Beta was named in their details (no folder there): ours stays back, and their entry is untouched.
+    expect(existsSync(join(next, 'Beta'))).toBe(false);
+    expect((JSON.parse(await readFile(join(next, INDEX_FILE), 'utf8')) as { fonts: Record<string, { name: string }> }).fonts.Beta.name).toBe('Their Beta');
+    // A logo already there is kept; ours stays where it was; one they did not have comes across.
+    expect(await readFile(join(next, MAKERS_DIR, 'k.png'), 'utf8')).toBe('theirs');
+    expect(await readFile(join(root, MAKERS_DIR, 'k.png'), 'utf8')).toBe('ours');
+    expect(await readFile(join(next, MAKERS_DIR, 'only-ours.png'), 'utf8')).toBe('ours only');
+  });
+
+  it('stops part-way with a report, keeps the library where it was, and each moved font keeps its details', async () => {
+    const root = await tmp('lib');
+    const next = await tmp('next');
+    for (const f of ['Alpha', 'Beta', 'Gamma']) await font(join(root, f));
+    const lib = new FontLibrary(root, trash);
+    await lib.setMeta('Alpha', { name: 'Our Alpha' });
+    await writeFile(join(next, 'Beta'), 'a file where the Beta folder would go');
+    await expect(lib.moveTo(next, true)).rejects.toThrow(/Moved 1 of 3 fonts to .*\(Alpha\); Beta could not be moved: .*The library is still at/);
+    expect(lib.root).toBe(root);
+    expect((await new FontLibrary(next, trash).list()).map((f) => [f.folder, f.meta.name])).toEqual([['Alpha', 'Our Alpha']]);
+    expect((await lib.list()).map((f) => f.folder)).toEqual(['Beta', 'Gamma']);
+  });
+});
+
+describe('adding fonts (SF5-SF8)', () => {
+  it('refuses a package whose contents do not match their checksum, and adds nothing (SF8)', async () => {
+    const lib = await newLibrary();
+    const dir = await tmp('zip');
+    const pkg = join(dir, 'Broken.zip');
+    await writeFile(pkg, zip({ 'Font/hum.wav': wav(), 'Font/clash1.wav': wav() }, 'Font/clash1.wav'));
+    await expect(lib.importFrom(pkg)).rejects.toThrow(/damaged.*clash1\.wav/);
+    expect(await lib.list()).toEqual([]);
+  });
+
+  it('brings every file of a font in, but not system clutter (SF7)', async () => {
+    const lib = await newLibrary();
+    const src = await tmp('src');
+    const f = join(src, 'Ahsoka');
+    await font(f,
+      ['License.rtf', Buffer.from('l')], ['Readme.docx', Buffer.from('r')], ['preview.mp3', Buffer.from('m')], ['v1.2/extra.wav', wav()],
+      ['Thumbs.db', Buffer.from('t')], ['desktop.ini', Buffer.from('d')], ['.hidden', Buffer.from('h')], ['__MACOSX/._hum.wav', Buffer.from('x')]);
+    expect((await lib.importFrom(f)).added).toEqual(['Ahsoka']);
+    const got = join(lib.root, 'Ahsoka');
+    for (const kept of ['License.rtf', 'Readme.docx', 'preview.mp3', 'v1.2/extra.wav']) expect(existsSync(join(got, kept))).toBe(true);
+    for (const dropped of ['Thumbs.db', 'desktop.ini', '.hidden', '__MACOSX']) expect(existsSync(join(got, dropped))).toBe(false);
+  });
+
+  it('keeps every font of a folder even when one is named after Proffie (SF5)', async () => {
+    const lib = await newLibrary();
+    const src = await tmp('src');
+    for (const n of ['Grey Jedi', 'Kylo', 'ProffieOS Default']) await font(join(src, n));
+    const r = await lib.importFrom(src);
+    expect(r.added.sort()).toEqual(['Grey Jedi', 'Kylo', 'ProffieOS Default']);
+    expect(r.skipped).toEqual([]);
+  });
+
+  it('leaves another board\'s copy out and says so (SF5)', async () => {
+    const lib = await newLibrary();
+    const dir = await tmp('zip');
+    const pkg = join(dir, 'Rey.zip');
+    await writeFile(pkg, zip({ 'Rey/Proffie/hum.wav': wav(), 'Rey/Proffie/out.wav': wav(), 'Rey/CFX/hum.wav': wav(), 'Rey/Xenopixel/hum.wav': wav() }));
+    const r = await lib.importFrom(pkg);
+    expect(r.added).toEqual(['Rey']);
+    expect(r.skipped.map((s) => s.name).sort()).toEqual(['CFX', 'Xenopixel']);
+    expect(r.skipped[0].why).toMatch(/another board, not Proffie/);
+  });
+
+  it('takes tracks only from inside what was picked (SF6)', async () => {
+    const lib = await newLibrary();
+    const downloads = await tmp('downloads');
+    await font(join(downloads, 'Vader'));
+    await mkdir(join(downloads, 'tracks'), { recursive: true });
+    await writeFile(join(downloads, 'tracks', 'unrelated.wav'), wav());
+    await lib.importFrom(join(downloads, 'Vader'));
+    expect(existsSync(join(lib.root, 'Vader', 'tracks'))).toBe(false);
+
+    const dir = await tmp('zip');
+    const pkg = join(dir, 'Obi.zip');
+    await writeFile(pkg, zip({ 'Obi/hum.wav': wav(), 'Obi/out.wav': wav(), 'tracks/theme.wav': wav() }));
+    await lib.importFrom(pkg);
+    expect(existsSync(join(lib.root, 'Obi', 'tracks', 'theme.wav'))).toBe(true);
   });
 });
