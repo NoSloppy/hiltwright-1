@@ -125,6 +125,9 @@ Docs 00 and 02 are brought in line with the code:
   - On their PC, the panel flags the open `C:\ProgramData\Hiltwright`. Repair asks Windows for approval and then reports it locked, and `icacls` shows Users `(RX)` only.
   - Build & Install to V2.2 hote2 from the per-user build folder. It finishes "Installed", and the build lands under `%LOCALAPPDATA%\Hiltwright\b`.
 
+### D9. Notes wrap (added at the owner's request, 3.3)
+The Build page's notes overflowed the 360 px rail with a long backup path. Notes are flex rows whose text span kept its natural width. `.note>span` now has `min-width: 0` and `overflow-wrap: anywhere`, so long unbroken text breaks inside the note. It applies to every note in the app, and ordinary text still wraps at spaces.
+
 ## Risks / Trade-offs
 
 - [GitHub regenerates the v8.10 archive and its hash changes] → The setup stops with "not the file Hiltwright expects" instead of installing something unverified. The pin is updated in a release. GitHub has committed to stable archives since 2023.

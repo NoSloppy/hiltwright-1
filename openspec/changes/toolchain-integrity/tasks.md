@@ -78,12 +78,21 @@
     - **The build:** a V2 build into a temp build root compiled in 18.2 s at 70% of flash. 53 s in total.
     - **The deepest build path** below the saber folder is 58 characters (`build\sketch\config\proffieboard_v2_verification_config2.h`), so the fallback threshold is 150.
     - **The footprint** is 1.88 GB, including 362 MB of archives kept. The "1.7 GB" in the panel and the space check became 1.9 GB.
-- [ ] 3.2 Owner check on their PC, from a development build. Verify that:
+- [x] 3.2 Owner check on their PC, from a development build. Verify that:
   - the panel flags `C:\ProgramData\Hiltwright` as changeable by other users
   - Repair asks for Windows approval, then the notice clears
   - `icacls C:\ProgramData\Hiltwright` shows `BUILTIN\Users:(OI)(CI)(RX)` with no write entry
   - the toolchain shows the three versions and "ProffieOS v8.10 ready", after the setup re-fetches the unstamped ProffieOS source
-- [ ] 3.3 Hardware check on V2.2 hote2, by the owner, from a development build. Verify that Build & Install finishes "Installed", and that the build is under `%LOCALAPPDATA%\Hiltwright\b\<saber id>`.
+  - **Result, 2026-09-26 (owner).** All passed:
+    - the open-folder notice
+    - Repair with Windows' approval, after which the notice cleared
+    - `icacls` showing Users read and run only
+    - the setup re-fetching the source and ending "ProffieOS v8.10 ready", with "arduino-cli 1.3.1 · board support 4.6 · ProffieOS v8.10" (seen in the 3.3 screenshot)
+- [x] 3.3 Hardware check on V2.2 hote2, by the owner, from a development build. Verify that Build & Install finishes "Installed", and that the build is under `%LOCALAPPDATA%\Hiltwright\b\<saber id>`.
+  - **Result, 2026-09-26 (owner).** Passed on hote2: "Installed" with the backup's location, and the build under the per-user folder.
+    - **The owner noticed** that the Build page's notes overflowed the rail: the long backup path and the voice-pack note ran past it, with a horizontal scrollbar.
+    - **Fixed here at the owner's request (design D9):** `.note` text can now shrink and break long unbroken strings, for every note in the app.
+    - **Checked:** in a development run, a note holding that exact backup path wraps within the 345 px rail, with the rail's scroll width equal to its width. Screenshot taken.
 - [x] 3.4 Correct docs 00 and 02 (design D7). Verify by reading each changed line against the code.
   - **Result, 2026-09-26.** Each changed line was read back.
     - **Doc 00:**
