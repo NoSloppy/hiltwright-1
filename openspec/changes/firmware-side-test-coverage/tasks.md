@@ -75,7 +75,8 @@
     - FST-3 in `wiring-validation` (beside FW6)
 - [x] 4.3 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 179 core and 246 desktop tests pass, including the 3 expected failures (FST-1 to FST-3). 9 gated tests are skipped, 2 of them the new FW20 compiles run in 4.1, and the type check is clean in both workspaces. The first type check failed because `installFlow.ts` imported the `Board` type; fixed as design D2 records.
-- [ ] 4.4 Hardware check on V2.2 hote2, by the owner, from a development build on their own data (design D7). Verify that:
+- [x] 4.4 Hardware check on V2.2 hote2, by the owner, from a development build on their own data (design D7). Verify that:
   - Build & Install finishes "Installed" with the backup's location
   - the Backups tab lists that backup as usable
+  - **Result, 2026-09-26.** Owner check passed on V2.2 hote2 (V3 unplugged), from a development build on the owner's own data. Build & Install finished "Installed" with the backup's location, through the extracted `installFlow.ts` sequence. The Backups tab listed that backup as usable.
 - [ ] 4.5 After archive, tick roadmap task 3.11 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
