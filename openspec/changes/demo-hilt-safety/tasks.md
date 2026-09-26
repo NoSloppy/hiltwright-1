@@ -89,7 +89,8 @@
     - **Run C.** A damaged `hilts.json` gave "Your demo room hilts could not be read. It was kept as hilts.damaged-20260926-132341.json in Hiltwright's data folder, and Hiltwright started with an empty one." That file exists.
 - [x] 4.2 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 178 core and 226 desktop tests pass (7 gated skipped), and the type check is clean in both workspaces.
-- [ ] 4.3 Owner check on an installed build (`npm run dist` in `apps/desktop`, then install). Verify that:
+- [x] 4.3 Owner check on an installed build (`npm run dist` in `apps/desktop`, then install). Verify that:
   - a hilt the owner loads in a development run on their own data appears in the installed app with its fit
   - Export hilts, removing that hilt, then Import hilts brings it back with its fit and credit
+  - **Result, 2026-09-26.** Owner check passed. A hilt loaded, fitted (seat) and credited in a development run on the owner's own data appeared in the installed build under Your hilts with that seat and credit. Export hilts, Remove (confirmed), then Import hilts brought it back with its seat and credit.
 - [ ] 4.4 After archive, tick roadmap task 3.10 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
