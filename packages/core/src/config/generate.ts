@@ -85,6 +85,14 @@ export function lookForSlot(m: SaberConfigModel, pi: number, bi: number): LookDe
   return chosen ?? starterLookFor(m.blades[bi]?.role ?? 'main');
 }
 
+/**
+ * What a look compiles to, as a short hash: its code and its alias define. Kept per look in the firmware record, so a
+ * look edited since the install shows as needing a build. Names, authors and previews do not change it.
+ */
+export function lookFingerprint(look: Pick<LookDef, 'code' | 'define'>): string {
+  return contentHash(`${look.code}\n${look.define ?? ''}`);
+}
+
 /** Small stable hash for identity headers. Not cryptographic. */
 export function contentHash(text: string): string {
   let h1 = 0x811c9dc5;
@@ -199,7 +207,7 @@ export function generateConfig(m: SaberConfigModel): GeneratedConfig {
   const manifest: GeneratedConfig['manifest'] = {
     hash: '',
     bladeId: swapping,
-    looks: usedLooks.map((l) => ({ id: l.id, name: l.name, args: l.args, ...(l.defaults ? { defaults: l.defaults } : {}) })),
+    looks: usedLooks.map((l) => ({ id: l.id, name: l.name, args: l.args, ...(l.defaults ? { defaults: l.defaults } : {}), hash: lookFingerprint(l) })),
     presets: slotLooks.map((row, pi) => ({ name: m.presets[pi].name, looks: row.map((l) => l.id) })),
     wiring: { board: m.board, blades: m.blades },
   };

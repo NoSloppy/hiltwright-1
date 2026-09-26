@@ -216,7 +216,8 @@ export interface FirmwareManifest {
   hash: string;
   os: string;
   at: string;
-  looks: { id: string; name: string; args: number[]; defaults?: Record<number, string> }[];
+  /** `hash`: the look's fingerprint (`lookFingerprint`) when built; absent on records from before 2026-09-26. */
+  looks: { id: string; name: string; args: number[]; defaults?: Record<number, string>; hash?: string }[];
   /** Built with Blade ID scanning on, so `scanid` readings from this firmware are the ones the rows must use. */
   bladeId?: boolean;
   /** Per preset, the look id compiled into each blade slot (index 0 = blade 1). */

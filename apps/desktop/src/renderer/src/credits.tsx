@@ -63,7 +63,7 @@ export function ContributorLogo({ name, logo, size = 22 }: { name: string; logo:
  * Credit for one person: their logo, name and link, with the means to add or change them. `onRename` makes the name
  * editable (for the owner's own looks, where the author was typed in by hand).
  */
-export function CreditCard({ name, label = 'By', onRename, onError }: { name: string; label?: string; onRename?: (name: string) => void; onError?: (text: string) => void }) {
+export function CreditCard({ name, label = 'By', onRename, onError }: { name: string; label?: string; onRename?: (name: string) => void | Promise<void>; onError?: (text: string) => void }) {
   const people = useContributors();
   const [editing, setEditing] = useState<'name' | 'url' | null>(null);
   const [draft, setDraft] = useState('');
@@ -73,7 +73,8 @@ export function CreditCard({ name, label = 'By', onRename, onError }: { name: st
   const fail = (err: unknown) => onError?.(String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, ''));
   const submit = async () => {
     try {
-      if (editing === 'name') onRename?.(draft.trim());
+      // Awaited, so a failed rename is reported and the form stays open for another try.
+      if (editing === 'name') await onRename?.(draft.trim());
       else if (editing === 'url') await people.setUrl(name, draft);
       setEditing(null);
     } catch (err) { fail(err); }

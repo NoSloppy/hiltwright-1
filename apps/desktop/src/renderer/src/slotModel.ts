@@ -1,7 +1,7 @@
 // Which look goes in which preset slot: pure functions over the build model, kept apart from anything that
 // touches the board or the window so they can be tested under node.
 
-import type { LookDef, SaberConfigModel } from '@hiltwright/core';
+import { STARTER_LOOKS, lookFingerprint, type LookDef, type SaberConfigModel } from '@hiltwright/core';
 import type { SaberRecord } from '../../shared/api';
 
 /**
@@ -25,11 +25,29 @@ export function withLookInSlot(model: SaberConfigModel, look: LookDef, preset: n
   };
 }
 
-/** Look ids the model will compile that the installed firmware does not have yet. */
+/**
+ * Whether the installed firmware has this version of a look: it lists the id, and either recorded no fingerprint
+ * (firmware from before fingerprints, taken as having the version it names) or the fingerprint of `current`.
+ */
+export function installedVersion(firmware: SaberRecord['firmware'], id: string, current: LookDef | undefined): boolean {
+  const had = firmware?.looks.find((l) => l.id === id);
+  if (!had) return false;
+  return !had.hash || !current || had.hash === lookFingerprint(current);
+}
+
+/** Ids of looks whose installed version is `current`'s, for the Styles page's "On the saber". */
+export function installedLookIds(firmware: SaberRecord['firmware'], current: (id: string) => LookDef | undefined): Set<string> {
+  return new Set((firmware?.looks ?? []).map((l) => l.id).filter((id) => installedVersion(firmware, id, current(id))));
+}
+
+/**
+ * Look ids the model will compile that the installed firmware does not have yet, or has an older version of (its
+ * fingerprint differs from the plan's copy, or the starter's).
+ */
 export function queuedLookIds(model: SaberConfigModel | undefined, firmware: SaberRecord['firmware']): string[] {
   if (!model) return [];
   const wanted = new Set<string>();
   for (const p of model.presets) for (const id of p.looks ?? []) if (id) wanted.add(id);
-  const have = new Set((firmware?.looks ?? []).map((l) => l.id));
-  return [...wanted].filter((id) => !have.has(id));
+  const copy = (id: string) => (model.looks ?? []).find((l) => l.id === id) ?? STARTER_LOOKS.find((l) => l.id === id);
+  return [...wanted].filter((id) => !installedVersion(firmware, id, copy(id)));
 }

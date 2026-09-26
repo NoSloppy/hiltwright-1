@@ -6,7 +6,7 @@ import { basename, join, resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { generateConfig, isBank, isStyleDoc, isTreeDoc, validateModel, type PresetBank, type PresetRecord, type SaberConfigModel } from '@hiltwright/core';
 import { Library, libraryPath } from './library';
-import { LooksStore, looksPath } from './looksStore';
+import { LooksStore, cleanLook, looksPath } from './looksStore';
 import { BanksStore, banksPath } from './banksStore';
 import type { LookDef } from '@hiltwright/core';
 import { Snapshots } from './snapshots';
@@ -95,22 +95,8 @@ export function registerIpc(): void {
   });
 
   const looksStore = new LooksStore(looksPath(userData));
-  const look = (v: unknown): LookDef => {
-    const l = v as LookDef;
-    if (!l || typeof l !== 'object' || !/^[A-Za-z_][A-Za-z0-9_]{0,60}$/.test(String(l.id)) || typeof l.code !== 'string') throw new Error('Expected a style');
-    return {
-      id: l.id, name: str(l.name, 120), source: l.source === 'built' ? 'built' : 'pasted', by: str(l.by ?? '', 120), code: str(l.code, 200000), header: l.header == null ? null : str(l.header, 20000),
-      roles: Array.isArray(l.roles) ? l.roles.filter((r): r is LookDef['roles'][number] => ['main', 'crystal', 'accent', 'side', 'motor'].includes(String(r))) : ['main'],
-      args: Array.isArray(l.args) ? l.args.map(Number).filter((n) => Number.isInteger(n) && n > 0 && n < 100) : [],
-      preview: /^#[0-9a-fA-F]{6}$/.test(String(l.preview)) ? l.preview : '#ffffff', description: str(l.description ?? '', 2000),
-      ...(l.defaults ? { defaults: hexMap(l.defaults) } : {}),
-      ...(l.preview2 && /^#[0-9a-fA-F]{6}$/.test(String(l.preview2)) ? { preview2: l.preview2 } : {}),
-      // A look built in the style editor: its alias define is what gets compiled, its layers let it be edited again.
-      ...(typeof l.define === 'string' ? { define: str(l.define, 200000) } : {}),
-      ...(l.usesFx ? { usesFx: true } : {}),
-      ...(isStyleDoc(l.style) || isTreeDoc(l.style) ? { style: JSON.parse(JSON.stringify(l.style)) as unknown } : {}),
-    };
-  };
+  // One shape check for a style, the same one the store applies when it reads its file back.
+  const look = (v: unknown): LookDef => { const l = cleanLook(v); if (!l) throw new Error('Expected a style'); return l; };
   // Preset banks: checked for shape, then kept as given (names and font paths are the owner's own text).
   const banksStore = new BanksStore(banksPath(userData));
   const bank = (v: unknown): PresetBank => { if (!isBank(v) || !/^bank_[a-z0-9]{1,40}$/.test(v.id)) throw new Error('Expected a preset bank'); return { id: v.id, name: str(v.name, 120), updated: str(v.updated ?? new Date().toISOString(), 40), presets: v.presets.slice(0, 200).map((p) => ({ name: str(p.name, 120), font: str(p.font, 200), track: str(p.track, 300), looks: Object.fromEntries(Object.entries(p.looks).filter(([r, id]) => ['main', 'crystal', 'accent', 'side', 'motor'].includes(r) && typeof id === 'string').map(([r, id]) => [r, str(id as string, 80)])), ...(p.lookArgs ? { lookArgs: Object.fromEntries(Object.entries(p.lookArgs).filter(([r, a]) => ['main', 'crystal', 'accent', 'side', 'motor'].includes(r) && typeof a === 'string').map(([r, a]) => [r, str(a as string, 2000)])) } : {}) })) }; };
@@ -120,7 +106,15 @@ export function registerIpc(): void {
   handle('looks:list', () => looksStore.list());
   handle('looks:add', (_e, l: unknown) => looksStore.add(look(l)));
   handle('looks:remove', (_e, id: unknown) => looksStore.remove(str(id, 80)));
-  handle('looks:update', (_e, id: unknown, l: unknown) => { const v = look(l); if (v.id !== str(id, 80)) throw new Error('Style id mismatch'); return looksStore.add(v); });
+  // Saving a style again also refreshes every saber plan's copy of it, so their next build compiles this version.
+  handle('looks:update', async (_e, id: unknown, l: unknown) => {
+    const v = look(l);
+    if (v.id !== str(id, 80)) throw new Error('Style id mismatch');
+    const looks = await looksStore.add(v);
+    const sabersUpdated = await library.replaceLook(v);
+    if (sabersUpdated) console.log(`[styles] ${v.id} saved; ${sabersUpdated} saber plan(s) now have this version`);
+    return { looks, sabersUpdated };
+  });
 
   handle('snapshots:list', (_e, id: unknown) => snapshots.list(str(id, 40)));
   handle('snapshots:save', (_e, id: unknown, label: unknown, list: unknown) => snapshots.save(str(id, 40), str(label, 120), presets(list)));
@@ -383,7 +377,7 @@ export function registerIpc(): void {
   });
 
   // Stores set aside at start (jsonStore.ts). Reading them first makes sure the library and sets have been loaded.
-  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list(), libReady.then(() => fontLib.list())]); return storeProblems(); });
+  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list(), looksStore.list(), libReady.then(() => fontLib.list())]); return storeProblems(); });
   handle('app:userDataPath', () => userData);
   // False in a development run started with HILTWRIGHT_NO_BOARD (packaged builds never have it).
   handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { STARTER_LOOKS, generateConfig, type ModelBlade, type SaberConfigModel } from '@hiltwright/core';
-import { queuedLookIds, withLookInSlot } from '../src/renderer/src/slotModel';
+import { STARTER_LOOKS, generateConfig, lookFingerprint, type LookDef, type ModelBlade, type SaberConfigModel } from '@hiltwright/core';
+import { installedLookIds, queuedLookIds, withLookInSlot } from '../src/renderer/src/slotModel';
 import type { SaberRecord } from '../src/shared/api';
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
@@ -54,5 +54,33 @@ describe('a new style on a live saber', () => {
   it('6.14 is queued, every chosen style, on firmware Hiltwright did not build', () => {
     expect(queuedLookIds(withLookInSlot(withLookInSlot(model, fire, 0, 1), heart, 1, 1), undefined).sort()).toEqual(['hw_fire', 'hw_heartbeat']);
     expect(queuedLookIds(undefined, undefined)).toEqual([]);
+  });
+});
+
+// style-library "A style's state on the working saber is shown" (style-save-integrity ST2).
+describe('a style edited since the install', () => {
+  const mine: LookDef = { id: 'look_mine', name: 'Mine', source: 'built', by: 'you', code: 'StylePtr<Red>()', header: null, roles: ['main'], args: [], preview: '#ff0000', description: '' };
+  const edited: LookDef = { ...mine, code: 'StylePtr<Blue>()' };
+  const planWith = (look: LookDef) => withLookInSlot(model, look, 0, 1);
+  const installed = (look: LookDef, withHash = true): SaberRecord['firmware'] => ({ hash: 'h', os: 'v8.10', at: '2026-09-26T00:00:00Z', looks: [{ id: look.id, name: look.name, args: [], ...(withHash ? { hash: lookFingerprint(look) } : {}) }], presets: [] });
+
+  it('is queued again once the plan holds a new version', () => {
+    const plan = { ...planWith(mine), looks: [edited] };
+    expect(queuedLookIds(plan, installed(mine))).toEqual(['look_mine']);
+  });
+
+  it('is not queued while the plan holds the installed version', () => {
+    expect(queuedLookIds(planWith(mine), installed(mine))).toEqual([]);
+  });
+
+  it('counts as installed on firmware from before fingerprints', () => {
+    const plan = { ...planWith(mine), looks: [edited] };
+    expect(queuedLookIds(plan, installed(mine, false))).toEqual([]);
+    expect([...installedLookIds(installed(mine, false), () => edited)]).toEqual(['look_mine']);
+  });
+
+  it('shows on the saber only for the installed version', () => {
+    expect([...installedLookIds(installed(mine), () => mine)]).toEqual(['look_mine']);
+    expect([...installedLookIds(installed(mine), () => edited)]).toEqual([]);
   });
 });

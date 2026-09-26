@@ -175,3 +175,29 @@ describe('a saber expected back after its install (F15)', () => {
     expect(back.id).toBe(a.id);
   });
 });
+
+describe('a style saved again reaches every plan that holds it (style-save-integrity ST1)', () => {
+  const red = { id: 'look_kylo', name: 'Kylo', source: 'built', by: 'you', code: 'StylePtr<Red>()', header: null, roles: ['main'], args: [], preview: '#ff0000', description: '' } as const;
+  const withLooks = (looks: unknown[]) => ({ ...model, looks }) as unknown as SaberConfigModel;
+
+  it('replaces the copy in every record that has it, planned or not, and counts them', async () => {
+    const lib = new Library(file);
+    const s = await connect(lib, hote2);
+    await lib.update(s.id, { model: withLooks([red]) });
+    const plan = await lib.plan('Kylo build', withLooks([{ ...red }, { ...red, id: 'look_other', code: 'StylePtr<Blue>()' }]));
+    const bystander = await lib.plan('Other build', withLooks([{ ...red, id: 'look_other' }]));
+    const blue = { ...red, code: 'StylePtr<Blue>()' };
+    expect(await lib.replaceLook(blue as never)).toBe(2);
+    const all = await new Library(file).list();
+    const by = (id: string) => all.find((x) => x.id === id)!.model!.looks!;
+    expect(by(s.id)).toEqual([blue]);
+    expect(by(plan.id).map((l) => [l.id, l.code])).toEqual([['look_kylo', 'StylePtr<Blue>()'], ['look_other', 'StylePtr<Blue>()']]);
+    expect(by(bystander.id)).toEqual([{ ...red, id: 'look_other' }]);
+  });
+
+  it('counts none when no plan holds the style', async () => {
+    const lib = new Library(file);
+    await lib.plan('Empty', model);
+    expect(await lib.replaceLook(red as never)).toBe(0);
+  });
+});

@@ -11,6 +11,14 @@ describe('the firmware record a saber keeps', () => {
     expect(cleanFirmware(record()).wiring).toEqual({ board: 'V2', blades: [main] });
   });
 
+  it("keeps each look's fingerprint, and drops one that is not a short hex string (style-save-integrity ST2)", () => {
+    const r = record();
+    expect(r.looks.every((l) => typeof l.hash === 'string')).toBe(true);
+    expect(cleanFirmware(r).looks.map((l) => l.hash)).toEqual(r.looks.map((l) => l.hash));
+    const bad = { ...r, looks: r.looks.map((l, i) => ({ ...l, hash: i === 0 ? '<script>' : 'z'.repeat(40) })) };
+    expect(cleanFirmware(bad).looks.every((l) => l.hash === undefined)).toBe(true);
+  });
+
   it('still accepts a record from before the layout was kept', () => {
     const { wiring: _w, ...old } = record();
     expect(cleanFirmware(old).wiring).toBeUndefined();

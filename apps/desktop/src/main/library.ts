@@ -3,7 +3,7 @@
 
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import type { PresetRecord, SaberConfigModel } from '@hiltwright/core';
+import type { LookDef, PresetRecord, SaberConfigModel } from '@hiltwright/core';
 import type { SaberIdentity, SaberPatch, SaberRecord } from '../shared/api';
 import { JsonStore } from './jsonStore';
 
@@ -116,6 +116,22 @@ export class Library {
       if (patch.model !== undefined) { if (patch.model) rec.model = patch.model; else delete rec.model; }
       if (patch.firmware !== undefined) { if (patch.firmware) rec.firmware = patch.firmware; else delete rec.firmware; }
       return rec;
+    });
+  }
+
+  /**
+   * A style was saved again: every saber whose plan holds a copy of it (planned or not) gets the new version for its
+   * next build. Returns how many records changed.
+   */
+  replaceLook(look: LookDef): Promise<number> {
+    return this.store.update((lib) => {
+      let n = 0;
+      for (const s of lib.sabers) {
+        const looks = s.model?.looks;
+        const i = looks ? looks.findIndex((l) => l.id === look.id) : -1;
+        if (s.model && looks && i >= 0) { s.model = { ...s.model, looks: looks.map((l, k) => (k === i ? look : l)) }; n++; }
+      }
+      return n;
     });
   }
 

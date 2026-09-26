@@ -71,6 +71,8 @@ export function App() {
   // The Styles page opened from the Contributors page shows that person's styles.
   const [styleCreator, setStyleCreator] = useState<string | null>(null);
   const [editingLook, setEditingLook] = useState<LookDef | null>(null);
+  // Bumped each time Styles opens the editor on a style (or a new one); saving never remounts the editor.
+  const [editorOpen, setEditorOpen] = useState(0);
   // Saved looks get a simulator at startup (built ones from their layers, pasted ones from their code), so they preview like library looks.
   useEffect(() => { void window.hiltwright.looks.list().then((ls) => { for (const l of ls) registerLookSim(l); }); }, []);
   const { status, info } = board;
@@ -138,8 +140,10 @@ export function App() {
             : page === 'presets' ? <Presets ws={ws} board={board} go={go} />
             : page === 'fonts' ? <Fonts board={board} ws={ws} go={go} />
             : page === 'build' ? <Build ws={ws} board={board} go={go} />
-            : page === 'looks' ? <Looks ws={ws} board={board} initialCreator={styleCreator} onPresets={() => setPage('presets')} onBuild={() => setPage('build')} onDemo={(id) => { setDemoLook(id); setPage('demo'); }} onEdit={(l) => { setEditingLook(l); setPage('editor'); }} onNew={() => { setEditingLook(null); setPage('editor'); }} />
-            : page === 'editor' ? <StyleEditor key={editingLook?.id ?? 'new'} editing={editingLook} onSaved={() => undefined} onDemo={(id) => setPage('demo', () => setDemoLook(id))} onLeaveGuard={(g) => { leaveGuard.current = g; }} />
+            : page === 'looks' ? <Looks ws={ws} board={board} initialCreator={styleCreator} onPresets={() => setPage('presets')} onBuild={() => setPage('build')} onDemo={(id) => { setDemoLook(id); setPage('demo'); }} onEdit={(l) => { setEditingLook(l); setEditorOpen((n) => n + 1); setPage('editor'); }} onNew={() => { setEditingLook(null); setEditorOpen((n) => n + 1); setPage('editor'); }} />
+            : page === 'editor' ? <EditorLoader key={editorOpen} lookId={editingLook?.id ?? null}>{(fresh) => (
+                <StyleEditor key={fresh?.id ?? 'new'} editing={fresh} onSaved={(look) => { setEditingLook(look); void board.refreshLibrary(); }} onDemo={(id) => setPage('demo', () => setDemoLook(id))} onLeaveGuard={(g) => { leaveGuard.current = g; }} />
+              )}</EditorLoader>
             : page === 'library' ? <FontLibrary onDemo={(folder) => { setDemoFont(folder); setPage('demo'); }} />
             : page === 'contributors' ? <Contributors onFonts={() => setPage('library')} onLooks={(name) => { setStyleCreator(name); setPage('looks'); }} onDemo={() => setPage('demo')} />
             : page === 'demo' ? <Suspense fallback={<span className="hint">Opening the demo room…</span>}><Demo initialLook={demoLook} initialFont={demoFont} board={board} /></Suspense>
@@ -291,6 +295,22 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
       </aside>
     </div>
   );
+}
+
+/**
+ * The style editor always opens the stored, current version of a style: fetched each time the page is entered, from
+ * Styles or from the sidebar, never a copy held since Styles last opened it. A style removed meanwhile opens a new one.
+ */
+function EditorLoader({ lookId, children }: { lookId: string | null; children: (look: LookDef | null) => React.ReactNode }) {
+  const [state, setState] = useState<{ look: LookDef | null; gone: boolean } | null>(lookId ? null : { look: null, gone: false });
+  useEffect(() => {
+    if (!lookId) return;
+    let live = true;
+    void window.hiltwright.looks.list().then((all) => { const look = all.find((l) => l.id === lookId) ?? null; if (live) setState({ look, gone: !look }); }, () => { if (live) setState({ look: null, gone: true }); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!state) return <div className="pb hint">Loading the style…</div>;
+  return <>{state.gone && <div className="note amber" style={{ margin: '0 0 12px' }}><Icon name="warn" /><span>That style is no longer in your Styles, so the editor starts a new one.</span></div>}{children(state.look)}</>;
 }
 
 function FaultForDev(): never {

@@ -9,6 +9,7 @@ import { Icon } from './Icon';
 import { ContributorLogo, CreditCard, NOT_A_CONTRIBUTOR, useContributors } from './credits';
 import { BladePreview, canSimulate } from './BladePreview';
 import { queuedLookIds, withLookInSlot } from './saberModel';
+import { installedLookIds } from './slotModel';
 import type { Workspace } from './workspace';
 import { Select } from './Select';
 
@@ -55,7 +56,8 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
 
   const looks = useMemo(() => [...STARTER_LOOKS, ...pasted], [pasted]);
   const queued = new Set(queuedLookIds(model ?? undefined, saber?.firmware));
-  const compiled = new Set((saber?.firmware?.looks ?? []).map((l) => l.id));
+  // On the saber only when the firmware holds this version: a style edited since the install is not.
+  const compiled = installedLookIds(saber?.firmware, (id) => looks.find((l) => l.id === id));
   const stateOf = (id: string): LookState => (compiled.has(id) ? 'compiled' : queued.has(id) ? 'queued' : 'new');
   const creators = useMemo(() => {
     const m = new Map<string, { name: string; count: number }>();
@@ -77,27 +79,40 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
   const fittingBlade = bladesForLook.find((b) => b.n === targetBlade) ?? bladesForLook.find((b) => b.fits) ?? bladesForLook[0];
   const isDot = (l: LookDef) => !l.roles.includes('main') && !l.roles.includes('side');
 
+  const [pasteState, setPasteState] = useState<{ saving: boolean; error: string | null }>({ saving: false, error: null });
   const savePasted = async () => {
-    if (!analysis?.ok) return;
+    if (!analysis?.ok || pasteState.saving) return;
     const id = `look_${(lookName || 'pasted').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'pasted'}_${Date.now().toString(36)}`;
     const roles: BladeRole[] = ['main', 'side'];
     const look: LookDef = { id, name: lookName.trim() || 'Pasted style', source: 'pasted', by: lookBy.trim() || 'unknown', code: analysis.expression, header: analysis.header, roles, args: analysis.args, preview: analysis.preview, defaults: analysis.defaults, description: analysis.header ? analysis.header.split('\n').map((l) => l.replace(/^\/\/\s?|\/\*|\*\//g, '').trim()).filter(Boolean).slice(0, 3).join(' · ') : 'Pasted style code.' };
-    registerLookSim(look);
-    setPasted(await api().looks.add(look));
-    setSelectedId(id);
-    setPasting(false); setCode(''); setLookName('');
+    setPasteState({ saving: true, error: null });
+    try {
+      registerLookSim(look);
+      setPasted(await api().looks.add(look));
+      setSelectedId(id);
+      setPasting(false); setCode(''); setLookName('');
+      setPasteState({ saving: false, error: null });
+    } catch (err) {
+      setPasteState({ saving: false, error: String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '') });
+    }
   };
 
   const people = useContributors();
   /** The author of one of the owner's own looks, typed in when it was pasted; fixed here if it was wrong. */
   const setAuthor = async (look: LookDef, by: string) => {
-    const next = await api().looks.update(look.id, { ...look, by: by || 'you' });
+    const next = (await api().looks.update(look.id, { ...look, by: by || 'you' })).looks;
     setPasted(next);
     registerLookSim(next.find((l) => l.id === look.id) ?? look);
   };
+  // Removing asks first, and names the sabers that have the style queued or installed (they keep their copies).
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const usersOf = (id: string) => board.library.map((s) => ({ name: s.name, queued: !!s.model?.presets.some((p) => (p.looks ?? []).includes(id)), installed: !!s.firmware?.looks.some((l) => l.id === id) })).filter((u) => u.queued || u.installed);
   const removePasted = async (id: string) => {
-    setPasted(await api().looks.remove(id));
-    if (selectedId === id) setSelectedId(STARTER_LOOKS[0].id);
+    try {
+      setPasted(await api().looks.remove(id));
+      if (selectedId === id) setSelectedId(STARTER_LOOKS[0].id);
+      setConfirmRemove(null);
+    } catch (err) { setNote({ tone: 'red', text: `Could not remove the style: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}` }); }
   };
 
   const presetName = (i: number) => (model?.presets[i]?.name ?? info?.presets[i]?.name)?.replace(/\s*\n\s*/g, ' ') ?? `preset ${i + 1}`;
@@ -140,13 +155,14 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
               <span className="hint">Paste the whole block from the Fett263 style library, comments included. Its copyright header stays with the style and goes into your config; Hiltwright never redistributes the library itself.</span>
               <textarea className="console" autoFocus style={{ minHeight: 220, resize: 'vertical', width: '100%', boxSizing: 'border-box', color: 'var(--text)', background: '#0b1016', border: '1px solid var(--line)', padding: 10 }} value={code} onChange={(e) => setCode(e.target.value)} aria-label="Style code" placeholder={'// Fett263 Style Library\n// Copyright ...\nStylePtr<Layers<...>>()'} spellCheck={false} />
               {analysis && !analysis.ok && analysis.problems.map((p) => <div key={p} className="note red"><Icon name="x" /><span>{p}</span></div>)}
+              {pasteState.error && <div className="note red" role="alert"><Icon name="x" /><span>Could not save the style: {pasteState.error}</span></div>}
               {analysis?.ok && (
                 <div className="note green"><Icon name="check" /><span>Looks like a style. {analysis.args.length ? `Colours and options you can change live: ${analysis.args.map((n) => argInfo(n).name).join(', ')}.` : 'It has no live arguments, so its colours are fixed.'}{analysis.header ? ' Header kept.' : ' No header found; add the library comment block if this came from Fett263.'}</span></div>
               )}
               <div className="row wrap" style={{ gap: 12 }}>
                 <label className="field grow"><span className="label">Name</span><span className="input sans"><input type="text" value={lookName} onChange={(e) => setLookName(e.target.value)} placeholder="Ember" aria-label="Style name" /></span></label>
                 <label className="field" style={{ width: 200 }}><span className="label">By</span><span className="input sans"><input type="text" value={lookBy} onChange={(e) => setLookBy(e.target.value)} aria-label="Style author" /></span></label>
-                <button type="button" className="btn pri" style={{ alignSelf: 'end' }} disabled={!analysis?.ok} onClick={() => void savePasted()}><span className="b"><span className="i"><Icon name="plus" />Save style</span></span></button>
+                <button type="button" className="btn pri" style={{ alignSelf: 'end' }} disabled={!analysis?.ok || pasteState.saving} onClick={() => void savePasted()}><span className="b"><span className="i"><Icon name="plus" />Save style</span></span></button>
               </div>
             </div>
           </section>
@@ -226,12 +242,24 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
               </div>
             )}
             <p className="dim" style={{ fontSize: 13 }}>{sel.description}</p>
-            <CreditCard key={`credit:${sel.id}`} name={sel.by} label={sel.source === 'starter' ? 'Made by' : sel.source === 'built' ? 'Built by' : 'Style by'} onRename={sel.source === 'starter' ? undefined : (by) => void setAuthor(sel, by)} onError={(text) => setNote({ tone: 'red', text })} />
+            <CreditCard key={`credit:${sel.id}`} name={sel.by} label={sel.source === 'starter' ? 'Made by' : sel.source === 'built' ? 'Built by' : 'Style by'} onRename={sel.source === 'starter' ? undefined : (by) => setAuthor(sel, by)} onError={(text) => setNote({ tone: 'red', text })} />
 
             {sel.args.length === 0 && <span className="hint">Nothing in this style can be changed live.</span>}
             {sel.source === 'pasted' && sel.header && <pre className="console" style={{ maxHeight: 110, margin: 0, fontSize: 11, flex: 'none' }}>{sel.header}</pre>}
             {sel.source === 'built' && <button type="button" className="btn sm" onClick={() => onEdit(sel)}><span className="b"><span className="i"><Icon name="gear" />Edit the layers</span></span></button>}
-            {(sel.source === 'pasted' || sel.source === 'built') && <button type="button" className="btn sm ghost" onClick={() => void removePasted(sel.id)}><span className="b"><span className="i"><Icon name="trash" />Remove from library</span></span></button>}
+            {(sel.source === 'pasted' || sel.source === 'built') && confirmRemove === sel.id && (() => {
+              const users = usersOf(sel.id);
+              return (
+                <div className="note amber" role="alertdialog" aria-label="Remove this style"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+                  <span>Remove "{sel.name}" from your Styles?{users.length ? ` ${users.map((u) => `${u.name} has it ${u.queued && u.installed ? 'installed and queued' : u.installed ? 'installed' : 'queued'}`).join('; ')}. ${users.length === 1 ? 'That saber keeps its' : 'Those sabers keep their'} own copy for the next build.` : ' No saber uses it.'}</span>
+                  <span className="row" style={{ gap: 8 }}>
+                    <button type="button" className="btn sm danger" onClick={() => void removePasted(sel.id)}><span className="b"><span className="i">Remove</span></span></button>
+                    <button type="button" className="btn sm ghost" onClick={() => setConfirmRemove(null)}><span className="b"><span className="i">Cancel</span></span></button>
+                  </span>
+                </span></div>
+              );
+            })()}
+            {(sel.source === 'pasted' || sel.source === 'built') && confirmRemove !== sel.id && <button type="button" className="btn sm ghost" onClick={() => setConfirmRemove(sel.id)}><span className="b"><span className="i"><Icon name="trash" />Remove from library</span></span></button>}
           </div>
           <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }}>
               {!connected && <span className="hint">No saber yet: start one in the Armory, and styles can be put into its presets before it is ever plugged in.</span>}

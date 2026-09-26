@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIBRARY_LOOKS, LOOK_FX, STARTER_LOOKS, analyzeStyleCode, scanStyleArgs, colorWordToHex, formatStyleArgs, generateConfig, hexToColorWord, lookAtSlot, lookSlots, parseStyleArgs, validateModel, type LookDef, type SaberConfigModel } from '../src';
+import { LIBRARY_LOOKS, LOOK_FX, STARTER_LOOKS, analyzeStyleCode, lookFingerprint, scanStyleArgs, colorWordToHex, formatStyleArgs, generateConfig, hexToColorWord, lookAtSlot, lookSlots, parseStyleArgs, validateModel, type LookDef, type SaberConfigModel } from '../src';
 
 const FETT263 = `// Hiltwright test look (header laid out like a library block)
 // Copyright 2026 Hiltwright contributors
@@ -70,6 +70,21 @@ describe('generateConfig with chosen looks', () => {
     ],
     looks: [ember],
   };
+  // style-save-integrity ST2. The config hash below was produced by the code before fingerprints were added
+  // (2026-09-26): the fingerprint lives only in the manifest, and the config text is the same.
+  it('records a fingerprint per compiled look, and the config text is unchanged by it', () => {
+    const g = generateConfig(model);
+    expect(g.hash).toBe('589fe34025a7');
+    expect(g.text.length).toBe(3587);
+    for (const l of g.manifest.looks) {
+      const def = [...STARTER_LOOKS, ember].find((x) => x.id === l.id)!;
+      expect(l.hash).toBe(lookFingerprint(def));
+      expect(g.text).not.toContain(l.hash);
+    }
+    expect(lookFingerprint({ ...ember, name: 'Renamed', by: 'Someone' } as LookDef)).toBe(lookFingerprint(ember));
+    expect(lookFingerprint({ ...ember, code: `${ember.code} ` })).not.toBe(lookFingerprint(ember));
+    expect(lookFingerprint({ ...ember, define: 'using X = StylePtr<Red>;' })).not.toBe(lookFingerprint(ember));
+  });
   it('compiles the chosen look into its slot and keeps the library header once', () => {
     expect(validateModel(model)).toEqual([]);
     const g = generateConfig(model);

@@ -196,7 +196,8 @@ export interface HiltwrightApi {
   looks: {
     list(): Promise<LookDef[]>;
     add(look: LookDef): Promise<LookDef[]>;
-    update(id: string, look: LookDef): Promise<LookDef[]>;
+    /** Store the new version, and give it to every saber whose plan holds a copy (how many is `sabersUpdated`). */
+    update(id: string, look: LookDef): Promise<{ looks: LookDef[]; sabersUpdated: number }>;
     remove(id: string): Promise<LookDef[]>;
   };
   snapshots: {

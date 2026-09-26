@@ -12,6 +12,7 @@ import { useHistory } from './editorHistory';
 import { Icon } from './Icon';
 import { PasteStyle, TreeEditor } from './TreeEditor';
 import { Select } from './Select';
+import { saveTarget, type EditorMode } from './styleSave';
 
 const api = () => window.hiltwright;
 
@@ -29,10 +30,18 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
   const { doc, tree, mode } = history.present;
   const setTree = (fn: (t: TreeDoc) => TreeDoc, step = false, keys?: string[]) => history.edit((s) => ({ ...s, tree: fn(s.tree), keys: keys ?? s.keys }), step);
   const setMode = (m: Draft['mode']) => history.view((s) => (s.mode === m ? s : { ...s, mode: m }));
-  const dirty = !history.saved || history.saved.doc !== doc || history.saved.tree !== tree;
-  // Worth a warning on the way out: changes since the last save, or, for a style never saved, any change at all.
+  // Once saved, further saves update the same look rather than making another.
+  const [editingId, setEditingId] = useState<string | null>(editing && (isStyleDoc(editing.style) || isTreeDoc(editing.style)) ? editing.id : null);
+  // What Save writes is the half the owner changed, not whichever tab is showing (styleSave.ts).
   const start = useRef(history.present);
-  const unsaved = history.saved ? dirty : start.current.doc !== doc || start.current.tree !== tree;
+  const [savedMode, setSavedMode] = useState<EditorMode>(editing && isTreeDoc(editing.style) ? 'tree' : 'simple');
+  const since = history.saved ?? start.current;
+  const docChanged = since.doc !== doc;
+  const treeChanged = since.tree !== tree;
+  const target = saveTarget({ showing: mode, docChanged, treeChanged, originalMode: savedMode, isNew: !editingId });
+  const dirty = target.dirty;
+  // Worth a warning on the way out: what Save would write, or, for a style never saved, any change at all.
+  const unsaved = editingId ? dirty : docChanged || treeChanged;
   const [leaving, setLeaving] = useState<{ proceed: () => void; error?: string } | null>(null);
   const unsavedRef = useRef(unsaved); unsavedRef.current = unsaved;
   useEffect(() => {
@@ -42,7 +51,12 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
     window.addEventListener('beforeunload', onUnload);
     return () => { onLeaveGuard?.(null); window.removeEventListener('beforeunload', onUnload); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [saved, setSaved] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ id: string; sabers: number } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // A new style's id is made once, so a second press can never make a second style.
+  const newId = useRef<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [pasting, setPasting] = useState(false);
   const [showCode, setShowCode] = useState(false);
@@ -50,9 +64,6 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
   // The full editor can hide layers from the preview while you work, and ask it to show a layer off.
   const [previewTree, setPreviewTree] = useState<Node | null>(null);
   const [cue, setCue] = useState<(Cue & { n: number; at: number }) | null>(null);
-  // Once saved, further saves update the same look rather than making another.
-  const [editingId, setEditingId] = useState<string | null>(editing && (isStyleDoc(editing.style) || isTreeDoc(editing.style)) ? editing.id : null);
-
   // The preview runs the current document through the simulator. Re-registered on every change; the preview restarts.
   const evaluated = useMemo(() => (mode === 'tree' ? evaluateStyle(previewTree ?? tree.tree) : null), [mode, tree, previewTree]);
   const docKey = useMemo(() => (mode === 'tree' ? JSON.stringify(previewTree ?? tree.tree) : JSON.stringify(doc)), [mode, tree, doc, previewTree]);
@@ -86,13 +97,28 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
   const openAsTree = () => history.edit((s) => ({ ...s, tree: treeFromCpp(styleToCpp(s.doc, 'X'), s.doc.name), mode: 'tree', keys: undefined }), true);
   const openParsed = (t: Node) => { history.edit((s) => ({ ...s, tree: { ...s.tree, tree: t, labels: [] }, mode: 'tree', keys: undefined }), true); setPasting(false); };
 
+  /** Save what the owner changed (see `target`). One at a time; a failure is shown and rethrown for the leave dialog. */
   const save = async () => {
-    const id = editingId ?? `look_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'built'}_${Date.now().toString(36)}`;
-    const look = mode === 'tree' ? treeToLook(tree, id, aliasFor(id)) : styleToLook(doc, id);
-    registerStyleSim(id, mode === 'tree' ? treeToSim(tree) : styleToSim(doc));
-    if (editingId) await api().looks.update(id, look); else await api().looks.add(look);
-    setSaved(id); setEditingId(id); history.markSaved();
-    onSaved(look);
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true); setSaveError(null);
+    try {
+      const write = target.write;
+      const title = write === 'tree' ? tree.name : doc.name;
+      newId.current ??= `look_${title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'built'}_${Date.now().toString(36)}`;
+      const id = editingId ?? newId.current;
+      const built = write === 'tree' ? treeToLook(tree, id, aliasFor(id)) : styleToLook(doc, id);
+      // The author set on Styles stays; a new style is credited to the owner.
+      const look: LookDef = { ...built, by: (editingId && editing?.by) || built.by };
+      registerStyleSim(id, write === 'tree' ? treeToSim(tree) : styleToSim(doc));
+      const sabers = editingId ? (await api().looks.update(id, look)).sabersUpdated : ((await api().looks.add(look)), 0);
+      setSaved({ id, sabers }); setEditingId(id); setSavedMode(write); history.markSaved();
+      onSaved(look);
+    } catch (err) {
+      setSaveError(String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, ''));
+      throw err;
+    } finally {
+      savingRef.current = false; setSaving(false);
+    }
   };
 
   return (
@@ -112,11 +138,13 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
             <button type="button" className="chip" disabled={!history.canRedo} aria-label="Redo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" onClick={history.redo}><Icon name="redo" /></button>
             <button type="button" className="chip" aria-label="Paste a style" title="Paste a style" onClick={() => setPasting((p) => !p)}><Icon name="import" /><span className="chiptext">Paste a style</span></button>
             <button type="button" className="chip" aria-label={showCode ? 'Hide the code' : 'Show the code'} title={showCode ? 'Hide the code' : 'Show the code'} onClick={() => setShowCode((s) => !s)}><Icon name="code" /><span className="chiptext">{showCode ? 'Hide the code' : 'Show the code'}</span></button>
-            <button type="button" className="btn sm pri" disabled={!name.trim()} onClick={() => void save()}><span className="b"><span className="i"><Icon name="check" />{editingId ? 'Save changes' : 'Save as a style'}</span></span></button>
+            <button type="button" className="btn sm pri" disabled={!name.trim() || saving} onClick={() => void save().catch(() => undefined)}><span className="b"><span className="i"><Icon name="check" />{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save as a style'}</span></span></button>
           </div>
         </div>
         <div className="pb col scroll" style={{ gap: 14 }}>
-          {saved && <div className="note green"><Icon name="check" /><span>Saved. It is in your Styles now: add it to a preset there, and its live colours can be changed once installed. <button type="button" className="holo" onClick={() => onDemo(saved)}>Swing it in the demo room</button>.</span></div>}
+          {target.dropsOther && <div className="note amber"><Icon name="warn" /><span>Saving keeps the {mode === 'tree' ? 'Full' : 'Simple'} version. Your changes in {mode === 'tree' ? 'Simple' : 'Full'} are not kept.</span></div>}
+          {saveError && <div className="note red" role="alert"><Icon name="x" /><span>Could not save the style: {saveError}</span></div>}
+          {saved && <div className="note green"><Icon name="check" /><span>Saved. It is in your Styles now: add it to a preset there, and its live colours can be changed once installed.{saved.sabers > 0 ? ` ${saved.sabers === 1 ? "1 saber's plan now has" : `${saved.sabers} sabers' plans now have`} this version; it needs a build to reach the saber.` : ''} <button type="button" className="holo" onClick={() => onDemo(saved.id)}>Swing it in the demo room</button>.</span></div>}
           {pasting && <PasteStyle onParsed={openParsed} onClose={() => setPasting(false)} />}
 
           {mode === 'tree' ? (
