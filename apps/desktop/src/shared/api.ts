@@ -146,7 +146,7 @@ export interface UsbState {
   bootloaderProblem: number | null;
 }
 
-export interface BackupInfo { file: string; at: string; label: string; bytes: number; /** Starts like real firmware; anything else is refused. */ valid: boolean }
+export interface BackupInfo { file: string; at: string; label: string; bytes: number; /** Starts like real firmware; anything else is refused. */ valid: boolean; /** The config the saber reported when this was taken, if known. */ configName: string | null }
 
 export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string }
 
@@ -290,7 +290,8 @@ export interface HiltwrightApi {
     usb(): Promise<UsbState>;
     /** Wait up to timeoutMs for the bootloader to enumerate with a usable driver. */
     waitForBootloader(timeoutMs: number): Promise<{ ok: boolean; text: string }>;
-    backup(saberId: string, label: string): Promise<FlashStepResult>;
+    /** `configName`: what the saber reported before its reboot, kept beside the backup so a restore can expect it back. */
+    backup(saberId: string, label: string, configName?: string | null): Promise<FlashStepResult>;
     write(dfuPath: string): Promise<FlashStepResult>;
     /** Windows: download the official bootloader driver installer, run it elevated, wait for WinUSB to bind. */
     installDriver(): Promise<{ ok: boolean; text: string }>;

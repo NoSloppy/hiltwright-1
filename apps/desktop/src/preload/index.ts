@@ -93,7 +93,7 @@ const api: HiltwrightApi = {
   flash: {
     usb: () => ipcRenderer.invoke('flash:usb'),
     waitForBootloader: (timeoutMs) => ipcRenderer.invoke('flash:waitForBootloader', timeoutMs),
-    backup: (saberId, label) => ipcRenderer.invoke('flash:backup', saberId, label),
+    backup: (saberId, label, configName) => ipcRenderer.invoke('flash:backup', saberId, label, configName ?? null),
     write: (dfuPath) => ipcRenderer.invoke('flash:write', dfuPath),
     installDriver: () => ipcRenderer.invoke('flash:installDriver'),
     listBackups: (saberId) => ipcRenderer.invoke('flash:listBackups', saberId),

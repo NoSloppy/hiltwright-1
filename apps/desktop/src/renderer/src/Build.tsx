@@ -119,7 +119,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
       // The board comes back as this saber, reporting this config, whether or not a USB serial can be read.
       if (model) board.expectAfterInstall(saber.id, `config/${model.name}.h`);
       setXfer(0); setStep('backup');
-      const bak = await api().flash.backup(saber.id, 'before-install');
+      const bak = await api().flash.backup(saber.id, 'before-install', info?.version?.config ?? null);
       if (!bak.ok) { setStep('failed'); setNote({ tone: 'red', text: `Backup failed, so nothing was written. ${bak.detail}` }); return; }
       setXfer(0); setStep('writing');
       const w = await api().flash.write(result.dfuPath);
@@ -137,7 +137,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
       setStep('failed');
       setNote({ tone: 'red', text: String(err) });
     }
-  }, [result, saber, board, model]);
+  }, [result, saber, board, model, info]);
 
   /** The install sequence. The renderer does the reboot because it owns the serial port. */
   const install2 = useCallback(async () => {
@@ -202,6 +202,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         const touched = await board.rebootToBootloader();
         if (!touched) { setStep('failed'); setNote({ tone: 'red', text: 'Could not reboot the saber into bootloader mode. Hold BOOT, tap RESET, release BOOT, then try again.' }); return; }
       }
+      // The restored firmware reports the config it had when this backup was taken; expect the saber back with it.
+      if (b.configName) board.expectAfterInstall(saberId, b.configName);
       const boot = await api().flash.waitForBootloader(20000);
       if (!boot.ok) { setStep('failed'); setNote({ tone: 'red', text: boot.text }); return; }
       setXfer(0); setStep('writing');

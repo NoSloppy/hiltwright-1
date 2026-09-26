@@ -83,6 +83,13 @@ The IPC call `app:storeProblems` returns the list. The Armory reads it once on m
 
 Separately, `Build.tsx` passes `saber.id` to `updateSaber` for the firmware record, so the record always lands on the saber installed.
 
+**Restores (added 2026-09-25, owner's decision).** A restored backup reports whatever config the firmware had when the backup was taken, which Hiltwright did not record. Now:
+- `flash:backup` takes the config the saber reported before the reboot (`info.version.config`), and writes it beside the image as `<file>.json` (`{ "configName": … }`).
+- `listBackups` returns it as `BackupInfo.configName`, which is null for older backups and for boards entered into the bootloader by hand.
+- The restore flow calls `expectAfterInstall(saberId, configName)` when it is known.
+
+Older backups restore as before, matched by serial or the three-part match.
+
 **Rejected:**
 - *Ignoring the install stamp whenever the config is a Hiltwright one.* Two sabers can share a config name, and a match without an expectation could merge them.
 - *Mapping the opened COM port to its USB serial through Windows PnP.* The page does not know which port main granted, and choosing between boards belongs to F4.

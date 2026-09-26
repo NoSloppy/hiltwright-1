@@ -29,6 +29,7 @@ When the store cannot be read, or holds records that are not in the expected sha
 ### Requirement: A returning saber is recognised
 When a saber connects, the app SHALL match it to an existing record by the board's USB serial number when one is available. Without a serial, it SHALL match:
 - a board reconnecting after an install to the saber that was installed, when the board reports the config that install wrote
+- a board reconnecting after a backup is put back to that saber, when the board reports the config of the firmware the backup was taken from (recorded with the backup when it was taken)
 - otherwise, only when the config name, the install stamp and the blade layout all agree
 
 It SHALL create a new record when nothing matches. A planned saber SHALL never be matched to a connecting board.
@@ -45,6 +46,11 @@ It SHALL create a new record when nothing matches. A planned saber SHALL never b
 #### Scenario: A reflash with two boards plugged in
 - **WHEN** two boards are plugged in (so no USB serial can be read), and the owner installs one of them and it reconnects reporting the config just written
 - **THEN** it is matched to the saber that was installed, and no second record appears
+- *Needs real boards (V2.2 and V3 together).*
+
+#### Scenario: A restore with two boards plugged in
+- **WHEN** two boards are plugged in and the owner puts back a backup that Hiltwright took before an install
+- **THEN** the board is matched to the saber the backup belongs to when it reconnects, and no second record appears
 - *Needs real boards (V2.2 and V3 together).*
 
 #### Scenario: A plan is never mistaken for a board

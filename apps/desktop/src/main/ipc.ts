@@ -310,7 +310,7 @@ export function registerIpc(): void {
     const bound = (await waitFor((u) => u.bootloaderPresent && /winusb/i.test(u.bootloaderDriver ?? ''), 5000)) ?? s;
     return describeBootloader(bound);
   })()));
-  handle('flash:backup', (_e, saberId: unknown, label: unknown) => backupFlash(toolchainRoot, join(userData, 'sabers', str(saberId, 40), 'backups'), str(label, 60), (l) => emit('flash', l)).then(result('backup')));
+  handle('flash:backup', (_e, saberId: unknown, label: unknown, configName: unknown) => backupFlash(toolchainRoot, join(userData, 'sabers', str(saberId, 40), 'backups'), str(label, 60), (l) => emit('flash', l), typeof configName === 'string' ? str(configName, 200) : null).then(result('backup')));
   handle('flash:write', (_e, dfuPath: unknown) => {
     const p = str(dfuPath, 1000);
     // Paths arrive with whatever slashes the builder used; compare them resolved and case-folded (Windows).

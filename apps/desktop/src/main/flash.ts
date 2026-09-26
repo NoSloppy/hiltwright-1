@@ -3,7 +3,7 @@
 // writes with dfu-util, and waits for the board to come back. Commands are exactly the ones the spike proved.
 
 import { execFile } from 'node:child_process';
-import { mkdir, open, readdir, stat } from 'node:fs/promises';
+import { mkdir, open, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { findDfuUtil, run, toolchainPaths, type Progress } from './toolchain';
 
@@ -68,7 +68,11 @@ export async function dfuInfo(dfuUtil: string): Promise<DfuInfo> {
 
 export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string }
 
-export async function backupFlash(toolchainRoot: string, backupDir: string, label: string, onLine: Progress): Promise<FlashStepResult> {
+/**
+ * Read the whole flash into a backup file. `configName` is the config the saber reported before its reboot; it is kept
+ * beside the image (<file>.json) so that putting this backup back can expect the saber to return reporting it.
+ */
+export async function backupFlash(toolchainRoot: string, backupDir: string, label: string, onLine: Progress, configName: string | null = null): Promise<FlashStepResult> {
   const p = toolchainPaths(toolchainRoot);
   const dfuUtil = await findDfuUtil(p);
   if (!dfuUtil) return { ok: false, ms: 0, detail: 'dfu-util is not installed with the toolchain.' };
@@ -79,6 +83,7 @@ export async function backupFlash(toolchainRoot: string, backupDir: string, labe
   onLine(`reading ${info.flashBytes} bytes of flash`);
   const r = await run(dfuUtil, ['-d', DFU_VIDPID, '-a', '0', '-s', `0x08000000:${info.flashBytes}`, '-U', file], { timeoutMs: 120000, onLine });
   const ok = r.code === 0 && (await stat(file).then((s) => s.size > 0, () => false));
+  if (ok && configName) { try { await writeFile(`${file}.json`, JSON.stringify({ configName }), 'utf8'); } catch { /* the backup still restores; only the match after it is lost */ } }
   return { ok, ms: r.ms, detail: ok ? `backup written (${info.flashBytes} bytes)` : (r.stderr || r.stdout).slice(-800), file };
 }
 
@@ -93,7 +98,15 @@ export async function writeFirmware(toolchainRoot: string, dfuFile: string, onLi
   return { ok, ms: r.ms, detail: ok ? `wrote ${size} bytes in ${(r.ms / 1000).toFixed(1)} s` : (r.stderr || r.stdout).slice(-800), file: dfuFile };
 }
 
-export interface BackupInfo { file: string; at: string; label: string; bytes: number; valid: boolean }
+export interface BackupInfo { file: string; at: string; label: string; bytes: number; valid: boolean; configName: string | null }
+
+/** The config recorded beside a backup when it was taken, or null (older backups, or none known). */
+async function backupConfig(path: string): Promise<string | null> {
+  try {
+    const c = (JSON.parse(await readFile(`${path}.json`, 'utf8')) as { configName?: unknown }).configName;
+    return typeof c === 'string' && c.length <= 200 ? c : null;
+  } catch { return null; }
+}
 
 /**
  * A flash image starts with the initial stack pointer, which on these chips always points into SRAM (0x20xxxxxx).
@@ -116,7 +129,7 @@ export async function listBackups(backupDir: string): Promise<BackupInfo[]> {
     const path = join(backupDir, file);
     const st = await stat(path).catch(() => null);
     if (!st) continue;
-    out.push({ file, at: m ? `${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z` : st.mtime.toISOString(), label: m ? m[6].replace(/_/g, ' ') : file, bytes: st.size, valid: await looksLikeFirmware(path) });
+    out.push({ file, at: m ? `${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z` : st.mtime.toISOString(), label: m ? m[6].replace(/_/g, ' ') : file, bytes: st.size, valid: await looksLikeFirmware(path), configName: await backupConfig(path) });
   }
   return out.sort((a, b) => b.at.localeCompare(a.at));
 }
