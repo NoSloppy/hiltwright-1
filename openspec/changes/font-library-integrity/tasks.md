@@ -27,7 +27,8 @@
 
   Verify with `npm test`.
   - **Result, 2026-09-25.** `planMove` refuses self, inside and holding destinations, and lists clashes where anything (file or folder) has that name, or the destination's details name it. `moveTo` moves font by font with details following, `keepBack` untouched, same names only, existing logos kept (ours stays), and a stop-and-report on failure. Three new tests pass. Found along the way: on Windows, renaming a folder onto a plain file replaced the file, so a clash is now any existing entry (design D3).
-- [ ] 3.2 In `fontlib:chooseRoot`, a refusal becomes the thrown message, and moving with clashes shows the listing message box with "Keep the ones already there and move the rest" or "Cancel" (design D3). Verify with `npm run typecheck` and in task 5.3.
+- [x] 3.2 In `fontlib:chooseRoot`, a refusal becomes the thrown message, and moving with clashes shows the listing message box with "Keep the ones already there and move the rest" or "Cancel" (design D3). Verify with `npm run typecheck` and in task 5.3.
+  - **Result, 2026-09-26.** `chooseRoot` throws the refusal before asking anything, and shows the clash message box (up to 12 names, "Keep the ones already there and move the rest" or Cancel) after "Move them". It skips the move question entirely when the folder is missing. The type check is clean. Checked by the owner in task 5.3.
 
 ## 4. Imports
 
@@ -49,9 +50,13 @@
   - **Result, 2026-09-25.** Scratch library with font "Kylo" and `hiltwright-fonts.json` = `{ "fonts": { broken`, no board. The Font library page said "The font details … could not be read. The file was kept as hiltwright-fonts.damaged-20260925-181108.json in the library folder, and Hiltwright started with none". The Armory said "Your font details could not be read. It was kept as … in the font library folder …" with Open folder. The damaged file is unchanged, and Kylo is listed.
 - [x] 5.2 Development run with no board and no `HILTWRIGHT_FONT_LIBRARY`, with a scratch data folder whose `fontlibrary.json` points at a folder that does not exist. Verify that the Font library page shows the missing panel with its three choices, and that the folder was not created.
   - **Result, 2026-09-25.** Scratch data folder whose `fontlibrary.json` (written by PowerShell, with a byte-order mark) points at `…\no-such-drive\Fonts`, and no `HILTWRIGHT_FONT_LIBRARY`. The Font library page showed "The font library folder cannot be found: … Nothing was created in its place" with Look again, Choose where it is, and Use the default folder. Neither `no-such-drive` nor `Fonts` was created, and the settings file was not set aside. The first run set it aside, which is how the byte-order-mark problem was found.
-- [ ] 5.3 The owner's check on the installed build, without moving the real library:
+- [x] 5.3 The owner's check on the installed build, without moving the real library:
   - "Change…" to a folder inside the library is refused with the explanation
   - "Change…" to a test folder holding a font folder named like one of theirs lists it before anything moves, and Cancel leaves everything as it was
+  - **Result, 2026-09-26, the owner's installed build.** The owner reported that all steps behaved as described:
+    - "Change…" to the `Crait` font folder inside the library was refused with the red note, and nothing moved.
+    - "Change…" to `C:\Temp\clash-test` (holding an empty `Crait` folder), then Move them, listed Crait with "Keep the ones already there and move the rest" or Cancel, and Cancel changed nothing.
+    - Afterwards, read through `\localhost\C$`: `fontlibrary.json` still has no `root` (the library is at the default folder), the library still has 38 font folders including Crait, `clash-test` holds only the empty `Crait`, and no damaged files appeared.
 - [x] 5.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-25.** 177 core and 192 desktop tests pass (7 gated skipped), and the type check is clean.
 - [ ] 5.5 After archive, tick roadmap task 3.7 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
