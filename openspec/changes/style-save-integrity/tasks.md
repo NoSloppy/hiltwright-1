@@ -64,10 +64,16 @@
     - (d) See the setup run: one style from a double click.
     - (e) Remove showed "Remove \"My style\" from your Styles? Style test has it queued. That saber keeps its own copy for the next build." Cancel kept the style.
     - The damaged `looks.json` run: the Armory said "Your styles could not be read. It was kept as looks.damaged-20260926-113957.json in Hiltwright's data folder …", and that file exists.
-- [ ] 5.2 Hardware check on V2.2 hote2, run by the owner on the installed build:
+- [x] 5.2 Hardware check on V2.2 hote2, run by the owner on the installed build:
   1. One of their built styles is used in a preset, and they build and install. Verify that Styles then shows it "On the saber".
   2. They edit that style (a colour) and save. Verify that Styles shows it "Queued", that "Use it in" is not offered, and that Build & Install counts one new style.
   3. Read the owner's `library.json` through `\\localhost\C$` to confirm the firmware record has a `hash` for each style.
+  - **Result, 2026-09-26, V2.2 hote2 (hotetest), the owner's installed build. Passed after one fix.**
+    - First pass: the owner built "Test Style 1", added it to Preset 4, and built and installed. Styles showed it "on the saber". The owner's `library.json` firmware record (at 2026-09-26T19:22:58Z) has a fingerprint for every style: hw_blade `fd3c15eca3a3`, hw_embers `236d6622b5b0`, hw_accent `f57d9972a4d1`, and look_test_style_1 `aadf9017ba22`.
+    - The owner then changed its colour and saved. The log has `[styles] look_test_style_1_muiruc0x saved; 1 saber plan(s) now have this version`, and hotetest's plan copy matched the stored style. The swatch dropped "on the saber", but showed "Needs a build" instead of **"Queued"**.
+    - Cause: the page kept the connected saber's old record (`board.saber`), so its plan still held the old copy. The no-board check in 5.1 only exercised unplugged sabers. Fixed in `87386bc`: `refreshLibrary` now also refreshes the connected saber's record.
+    - Second pass, on the rebuilt installer (hote2 replugged): another colour edit and save, and the swatch shows **"Queued"**.
+    - Found along the way, not this change's: HW-2026-09-26a (the preset action ignores where the style already is, filed in `style-to-saber-fixes`), HW-2026-09-26b (hote2 went silent while showing Connected, filed in `connection-robustness`), and HW-2026-09-26c (the voice-pack warning when the card could not be checked, filed in `diagnostics-feedback`).
 - [x] 5.3 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 178 core and 208 desktop tests pass (7 gated skipped), and the type check is clean.
 - [ ] 5.4 After archive, tick roadmap task 3.8 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
