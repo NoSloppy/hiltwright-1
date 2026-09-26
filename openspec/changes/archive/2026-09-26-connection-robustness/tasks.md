@@ -80,4 +80,5 @@
     - The plan names `list_named_styles`. Its 1200-baud line now says `RebootDFU` has done every V2.2 reboot, and that the Web Serial touch is a fallback never yet needed, still unexercised there, on macOS/Linux and on a V3. The design first called it confirmed; the logs show it never ran, so that was corrected.
 - [x] 3.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 184 core and 253 desktop tests pass (9 gated skipped), and the type check is clean in both workspaces.
-- [ ] 3.5 After archive, tick roadmap task 3.12 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 3.5 After archive, tick roadmap task 3.12 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-26.** Archived to `openspec/changes/archive/2026-09-26-connection-robustness`, with the board-connection spec synced (15 requirements, 28 scenarios). Roadmap 3.12 is ticked.
