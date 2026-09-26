@@ -47,6 +47,8 @@ export function useContributors() {
     setLogo: async (name: string) => { const r = await api().contributors.setLogo(name); await refresh(); return !!r; },
     clearLogo: async (name: string) => { await api().contributors.clearLogo(name); await refresh(); },
     setUrl: async (name: string, url: string) => { await api().contributors.setUrl(name, url); await refresh(); },
+    /** Give a renamed author the old name's logo and link (a copy). */
+    copyTo: async (from: string, to: string) => { const r = await api().contributors.copy(from, to); await refresh(); return r; },
     open: (name: string) => api().contributors.open(name),
     refresh,
   };

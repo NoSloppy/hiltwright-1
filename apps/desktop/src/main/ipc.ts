@@ -15,7 +15,7 @@ import { checkFontDir, copyFont, listFonts, listTracks, locateCards, readVoicePa
 import { defaultToolchainRoot, installToolchain, toolchainStatus } from './toolchain';
 import { listPacks, packFont, packMesh, userPacksDir } from './packs';
 import { FontLibrary, type ImportResult } from './fontLibrary';
-import { ContributorStore } from './contributors';
+import { ContributorStore, cleanUrl } from './contributors';
 import { buildFirmware } from './build';
 import { cleanFirmware, hexMap } from './firmwareRecord';
 import { insideFolder } from './paths';
@@ -178,12 +178,24 @@ export function registerIpc(): void {
   handle('contributors:setLogo', async (_e, who: unknown) => {
     const name = str(who, 120);
     const r = await dialog.showOpenDialog({ title: `Choose a logo for ${name}`, properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'] }] });
-    return r.canceled || !r.filePaths[0] ? null : contributors.setLogo(name, r.filePaths[0]);
+    if (r.canceled || !r.filePaths[0]) return null;
+    await contributorsReady;
+    return contributors.setLogo(name, r.filePaths[0]);
   });
-  handle('contributors:clearLogo', (_e, who: unknown) => contributors.clearLogo(str(who, 120)));
-  handle('contributors:setUrl', (_e, who: unknown, url: unknown) => contributors.setUrl(str(who, 120), str(url, 500)));
-  // Opens only the link saved for that person, in the system browser.
-  handle('contributors:open', async (_e, who: unknown) => { const url = await contributors.urlOf(str(who, 120)); if (url) await shell.openExternal(url); });
+  // Every change waits for the start-up handover of the font library's old logos, as listing does.
+  handle('contributors:clearLogo', async (_e, who: unknown) => { await contributorsReady; return contributors.clearLogo(str(who, 120)); });
+  handle('contributors:setUrl', async (_e, who: unknown, url: unknown) => { await contributorsReady; return contributors.setUrl(str(who, 120), str(url, 500)); });
+  // A renamed author can be given the old name's logo and link (a copy; the old name keeps its own).
+  handle('contributors:copy', async (_e, from: unknown, to: unknown) => { await contributorsReady; return contributors.copyTo(str(from, 120), str(to, 120)); });
+  // Opens only the link saved for that person, and only if it is still a web address, in the system browser.
+  handle('contributors:open', async (_e, who: unknown) => {
+    await contributorsReady;
+    const stored = await contributors.urlOf(str(who, 120));
+    let url: string | null = null;
+    try { url = stored ? cleanUrl(stored) : null; } catch { url = null; }
+    if (url && /^https?:\/\//i.test(url)) await shell.openExternal(url);
+    else if (stored) console.warn(`[contributors] not opening a stored link that is not a web address: ${stored}`);
+  });
   fontHandle('fontlib:remove', (_e, f: unknown) => fontLib.remove(folder(f)));
   fontHandle('fontlib:readSound', (_e, f: unknown, rel: unknown) => fontLib.readSound(folder(f), str(rel, 400)));
   fontHandle('fontlib:readFont', (e, f: unknown) => fontLib.readFont(folder(f), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total })));
@@ -377,7 +389,7 @@ export function registerIpc(): void {
   });
 
   // Stores set aside at start (jsonStore.ts). Reading them first makes sure the library and sets have been loaded.
-  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list(), looksStore.list(), libReady.then(() => fontLib.list())]); return storeProblems(); });
+  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list(), looksStore.list(), contributorsReady.then(() => contributors.list()), libReady.then(() => fontLib.list())]); return storeProblems(); });
   handle('app:userDataPath', () => userData);
   // False in a development run started with HILTWRIGHT_NO_BOARD (packaged builds never have it).
   handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);

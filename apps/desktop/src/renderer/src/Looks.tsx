@@ -99,10 +99,21 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
 
   const people = useContributors();
   /** The author of one of the owner's own looks, typed in when it was pasted; fixed here if it was wrong. */
+  // After a rename, the old name's logo and link can be carried to the new one (copied: others may still credit it).
+  const [carry, setCarry] = useState<{ from: string; to: string } | null>(null);
   const setAuthor = async (look: LookDef, by: string) => {
-    const next = (await api().looks.update(look.id, { ...look, by: by || 'you' })).looks;
+    const to = by || 'you';
+    const next = (await api().looks.update(look.id, { ...look, by: to })).looks;
     setPasted(next);
     registerLookSim(next.find((l) => l.id === look.id) ?? look);
+    const from = look.by;
+    const has = (n: string) => !!(people.ownLogoFor(n) || people.urlFor(n));
+    setCarry(from.trim().toLowerCase() !== to.trim().toLowerCase() && !NOT_A_CONTRIBUTOR.test(to.trim()) && has(from) && !has(to) ? { from, to } : null);
+  };
+  const giveCredit = async () => {
+    if (!carry) return;
+    try { await people.copyTo(carry.from, carry.to); setNote({ tone: 'green', text: `${carry.to} now has the same logo and link as ${carry.from}.` }); setCarry(null); }
+    catch (err) { setNote({ tone: 'red', text: `Could not copy the logo and link: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}` }); }
   };
   // Removing asks first, and names the sabers that have the style queued or installed (they keep their copies).
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
@@ -243,6 +254,15 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
             )}
             <p className="dim" style={{ fontSize: 13 }}>{sel.description}</p>
             <CreditCard key={`credit:${sel.id}`} name={sel.by} label={sel.source === 'starter' ? 'Made by' : sel.source === 'built' ? 'Built by' : 'Style by'} onRename={sel.source === 'starter' ? undefined : (by) => setAuthor(sel, by)} onError={(text) => setNote({ tone: 'red', text })} />
+            {carry && carry.to.toLowerCase() === sel.by.trim().toLowerCase() && (
+              <div className="note" role="dialog" aria-label="Carry the credit over"><Icon name="info" /><span className="col" style={{ gap: 8 }}>
+                <span>Give {carry.to} the logo and link of {carry.from}? {carry.from} keeps its own, in case other fonts or styles still credit it.</span>
+                <span className="row" style={{ gap: 8 }}>
+                  <button type="button" className="btn sm pri" onClick={() => void giveCredit()}><span className="b"><span className="i">Give them</span></span></button>
+                  <button type="button" className="btn sm ghost" onClick={() => setCarry(null)}><span className="b"><span className="i">No thanks</span></span></button>
+                </span>
+              </span></div>
+            )}
 
             {sel.args.length === 0 && <span className="hint">Nothing in this style can be changed live.</span>}
             {sel.source === 'pasted' && sel.header && <pre className="console" style={{ maxHeight: 110, margin: 0, fontSize: 11, flex: 'none' }}>{sel.header}</pre>}

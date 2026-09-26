@@ -71,8 +71,12 @@ export class JsonStore<T> {
   update<R>(fn: (value: T) => R | Promise<R>): Promise<R> {
     const run = async () => {
       const v = await this.read();
-      const r = await fn(v);
-      await this.persist(v);
+      // A change that cannot be written is undone in memory too, so what the app shows never runs ahead of the disk.
+      const before = JSON.stringify(v);
+      const undo = () => { const back = JSON.parse(before) as T; for (const k of Object.keys(v as object)) delete (v as Record<string, unknown>)[k]; Object.assign(v as object, back); };
+      let r: R;
+      try { r = await fn(v); } catch (err) { undo(); throw err; }
+      try { await this.persist(v); } catch (err) { undo(); throw err; }
       return r;
     };
     const next = this.tail.then(run);

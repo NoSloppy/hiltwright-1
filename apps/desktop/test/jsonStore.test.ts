@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { JsonStore, resetStoreProblems, storeProblems } from '../src/main/jsonStore';
@@ -76,6 +76,16 @@ describe('the safe store', () => {
     await Promise.all(Array.from({ length: 10 }, (_, i) => s.update((d) => { d.items.push({ id: String(i) }); })));
     expect(onDisk().items.map((x) => x.id)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
     expect(readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('undoes a change in memory when it cannot be written, or when the change itself fails part-way', async () => {
+    const s = store();
+    await s.update((d) => { d.items.push({ id: 'kept' }); });
+    rmSync(file); mkdirSync(file); // the store's file is now a folder: the next write cannot land
+    await expect(s.update((d) => { d.items.push({ id: 'lost' }); })).rejects.toThrow();
+    expect((await s.read()).items).toEqual([{ id: 'kept' }]);
+    await expect(s.update((d) => { d.items.push({ id: 'half' }); throw new Error('stopped'); })).rejects.toThrow('stopped');
+    expect((await s.read()).items).toEqual([{ id: 'kept' }]);
   });
 
   it('returns what the update returns, and one failed update does not stop the next', async () => {

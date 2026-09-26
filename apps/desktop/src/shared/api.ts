@@ -261,6 +261,8 @@ export interface HiltwrightApi {
     clearLogo(name: string): Promise<void>;
     /** An http(s) address, or '' to drop it. */
     setUrl(name: string, url: string): Promise<void>;
+    /** Give `to` a copy of `from`'s logo and link (after an author rename). False when `from` has neither. */
+    copy(from: string, to: string): Promise<boolean>;
     /** Open the person's saved link in the browser. */
     open(name: string): Promise<void>;
   };

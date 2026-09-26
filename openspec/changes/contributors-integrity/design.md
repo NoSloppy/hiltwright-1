@@ -42,6 +42,8 @@ It counts an entry as dropped when it had a field that failed, so the original i
 
 If the update throws, the new copy is removed, and the entry and old picture are as they were.
 
+**The safe store undoes a failed change (added during implementation).** `JsonStore.update` changed the in-memory value before writing, so a write that failed left memory ahead of the disk, in every store. It now snapshots the value before the change and puts it back if the change function or the write fails. A test in `jsonStore.test.ts` covers it. D2 relies on this: after a failed logo save the list still names the old picture.
+
 ### D3. Waiting for the handover (SR34)
 Every `contributors:*` handler awaits `contributorsReady` before touching the store, in `ipc.ts`. The handover itself uses the store directly, so it does not wait on itself.
 

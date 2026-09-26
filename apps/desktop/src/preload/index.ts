@@ -70,6 +70,7 @@ const api: HiltwrightApi = {
     setLogo: (name) => ipcRenderer.invoke('contributors:setLogo', name),
     clearLogo: (name) => ipcRenderer.invoke('contributors:clearLogo', name),
     setUrl: (name, url) => ipcRenderer.invoke('contributors:setUrl', name, url),
+    copy: (from, to) => ipcRenderer.invoke('contributors:copy', from, to),
     open: (name) => ipcRenderer.invoke('contributors:open', name),
   },
   packs: {
