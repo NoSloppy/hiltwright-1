@@ -123,7 +123,7 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 
 ### Wave C: the right firmware on the right board
 
-- [ ] 3.11 Deliver `firmware-side-test-coverage`: seams and tests for the flasher before it is changed; verify it is archived
+- [x] 3.11 Deliver `firmware-side-test-coverage`: seams and tests for the flasher before it is changed; verify it is archived
 - [ ] 3.12 Deliver `connection-robustness`: unplug and silence handling that installs rely on; verify it is archived
 - [ ] 3.13 Deliver `toolchain-integrity`: pinned, verified toolchain before builds are relied on; verify it is archived
 - [ ] 3.14 Deliver `build-correctness`; verify it is archived

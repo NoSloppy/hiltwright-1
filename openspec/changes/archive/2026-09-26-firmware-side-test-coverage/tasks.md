@@ -79,4 +79,5 @@
   - Build & Install finishes "Installed" with the backup's location
   - the Backups tab lists that backup as usable
   - **Result, 2026-09-26.** Owner check passed on V2.2 hote2 (V3 unplugged), from a development build on the owner's own data. Build & Install finished "Installed" with the backup's location, through the extracted `installFlow.ts` sequence. The Backups tab listed that backup as usable.
-- [ ] 4.5 After archive, tick roadmap task 3.11 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 4.5 After archive, tick roadmap task 3.11 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-26.** Archived to `openspec/changes/archive/2026-09-26-firmware-side-test-coverage` (no spec deltas: `skip_specs`). Roadmap 3.11 is ticked.
