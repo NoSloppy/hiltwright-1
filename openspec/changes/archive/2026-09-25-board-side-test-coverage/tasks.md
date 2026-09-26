@@ -72,4 +72,5 @@
     - preset-editing:
       - 6.14 → saberModel.test.ts, three "6.14" tests
       - 6.16 → draftModel.test.ts "6.16 presets reordered on the saber…", plus the BST-2 expected failures
-- [ ] 5.4 After archive, tick roadmap task 3.5 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 5.4 After archive, tick roadmap task 3.5 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-25.** Archived as `2026-09-25-board-side-test-coverage`, with no specs to sync. Roadmap 3.5 is ticked.
