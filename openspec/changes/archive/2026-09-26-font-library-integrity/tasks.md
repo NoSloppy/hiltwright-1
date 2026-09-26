@@ -59,4 +59,5 @@
     - Afterwards, read through `\localhost\C$`: `fontlibrary.json` still has no `root` (the library is at the default folder), the library still has 38 font folders including Crait, `clash-test` holds only the empty `Crait`, and no damaged files appeared.
 - [x] 5.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-25.** 177 core and 192 desktop tests pass (7 gated skipped), and the type check is clean.
-- [ ] 5.5 After archive, tick roadmap task 3.7 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 5.5 After archive, tick roadmap task 3.7 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-26.** Archived as `2026-09-26-font-library-integrity`. font-library was synced (5 modified requirements), and roadmap 3.7 is ticked.
