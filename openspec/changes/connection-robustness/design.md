@@ -73,6 +73,17 @@
 
 The one change: with no client, it sets `save` to `{ kind: 'failed', what: label, error: 'Not sent: the saber is not connected.' }` and logs it, instead of returning silently. `useBoard.run` becomes `enqueue(() => runOperation(deps, …))`.
 
+**Added after the owner's check (3.2, step 3):** pulling the cable while a font change was being written gave three problems.
+- **The failure was hidden while unplugged.** The Presets page swapped the save chip for "Staged for install" as soon as the saber was offline.
+- **The failure reappeared after reconnecting.** It described a saber that was now fine.
+- **The wrong cause was blamed.** The text came from `editCurrentPreset`'s dead-link probe ("The saber stopped answering. Unplug and replug it…"), which ran on the already-closed client.
+
+Now:
+- `runOperation` checks whether the client it started with is still the connection. If not, a failed or throwing operation reports `DISCONNECTED_DURING` ("Not saved: the saber was disconnected during the change.").
+- The Presets header shows a failed save beside "Staged for install".
+- `identify` clears the save status on a new connection.
+- On the owner's request, `.chip.err` wraps: `white-space: normal`, full width. The Presets header wraps it onto its own line. It overflowed with any long error before this change.
+
 ### D6. A development switch to make a saber silent
 In development builds only (`import.meta.env.DEV`), `window.hiltwrightMuteBoard(on = true)` sets `WebSerialTransport.muted`. The read loop keeps reading but hands nothing to its listeners, so the app sees a silent saber while the board is fine. It stays muted for new transports until turned off, so it also covers connecting. Packaged builds do not have it.
 

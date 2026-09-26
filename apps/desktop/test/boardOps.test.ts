@@ -84,6 +84,14 @@ describe('running a board operation', () => {
     expect(busy).toEqual([true, false]);
   });
 
+  it('a change under way when the saber is unplugged says so, not what its last command made of the silence', async () => {
+    let connected: { name: string } | null = { name: 'hote2' };
+    const saves: SaveState[] = [];
+    const d: OpDeps<{ name: string }> = { client: () => connected, setBusy: () => undefined, setSave: (s) => saves.push(s), log: () => undefined, snapshot: async () => undefined };
+    await runOperation(d, 'Font → Ben_Solo', async () => { connected = null; return { ok: false, error: 'The saber stopped answering. Unplug and replug it, then press Connect.' }; }, false);
+    expect(saves.at(-1)).toEqual({ kind: 'failed', what: 'Font → Ben_Solo', error: 'Not saved: the saber was disconnected during the change.' });
+  });
+
   it('an operation that throws is reported as failed and clears busy', async () => {
     const { d, saves, busy } = deps({ name: 'hote2' });
     await runOperation(d, 'Rename', async () => { throw new Error('Port closed'); }, false);

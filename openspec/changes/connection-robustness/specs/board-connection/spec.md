@@ -19,7 +19,7 @@ The header SHALL show one of: not connected, opening the port, reading the saber
 - *Needs a real board (either).*
 
 ### Requirement: Commands reach the board one at a time
-The app SHALL send commands to the board strictly one at a time, in order. Operations the owner starts while the board is busy SHALL wait their turn instead of being dropped. Everything that talks to the board SHALL share that order, including console commands, the Try it and Diagnostics controls, the checks a page makes on its own, and background polls, so that nothing lands between the steps of an edit. An operation that cannot reach the saber, because it is no longer connected, SHALL be reported as not sent.
+The app SHALL send commands to the board strictly one at a time, in order. Operations the owner starts while the board is busy SHALL wait their turn instead of being dropped. Everything that talks to the board SHALL share that order, including console commands, the Try it and Diagnostics controls, the checks a page makes on its own, and background polls, so that nothing lands between the steps of an edit. An operation that cannot reach the saber, because it is no longer connected, SHALL be reported as not sent. An operation under way when the saber goes away SHALL be reported as not saved because the saber was disconnected. Either report SHALL stay visible after the page has switched to the saber's stored presets, and a new connection SHALL start with a clear save status.
 
 #### Scenario: Two quick edits
 - **WHEN** the owner makes two edits in quick succession while the first is still being written
@@ -32,6 +32,11 @@ The app SHALL send commands to the board strictly one at a time, in order. Opera
 #### Scenario: An edit made just before an unplug
 - **WHEN** the owner makes an edit and the saber is unplugged before the edit's turn comes
 - **THEN** the save status says the edit was not sent because the saber is not connected
+
+#### Scenario: Unplugged while an edit is being written
+- **WHEN** the owner changes a preset's font and pulls the cable while the change is being written
+- **THEN** the page, now showing the stored presets, still says the change was not saved because the saber was disconnected. After reconnecting, that report is gone.
+- *Needs a real board (either).*
 
 ## ADDED Requirements
 

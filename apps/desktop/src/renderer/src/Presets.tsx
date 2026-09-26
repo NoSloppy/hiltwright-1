@@ -186,8 +186,9 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
         </section>
 
         <section className="panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }} aria-label="Preset editor">
-          <div className="ph"><h2 className="ellip" style={{ minWidth: 0 }}>{cur ? clean(cur.name) || 'Unnamed' : 'No preset'}</h2>
-            <div className="row" style={{ gap: 8 }}>{isLive ? <SaveChip save={board.save} /> : <span className="chip warn"><span className="dot" />Staged for install</span>}</div>
+          <div className="ph" style={{ flexWrap: 'wrap', rowGap: 8 }}><h2 className="ellip" style={{ minWidth: 0 }}>{cur ? clean(cur.name) || 'Unnamed' : 'No preset'}</h2>
+            {/* A change that failed as the saber went away stays visible once the page shows the stored presets. */}
+            <div className="row" style={{ gap: 8, minWidth: 0, maxWidth: '100%', flex: '0 1 auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>{isLive ? <SaveChip save={board.save} /> : <>{board.save.kind === 'failed' && <SaveChip save={board.save} />}<span className="chip warn"><span className="dot" />Staged for install</span></>}</div>
           </div>
           {cur && (
             <div className="pb col" style={{ gap: 16, overflowY: 'auto', overflowX: 'hidden' }}>

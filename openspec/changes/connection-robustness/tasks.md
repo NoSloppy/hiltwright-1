@@ -54,6 +54,18 @@
   - unplugging while idle reads "Not connected", and replugging reconnects
   - unplugging during a console `list_fonts` ends the command and reads "Not connected"
   - pulling the cable just as a preset edit (for example a font change) is saved leaves the save status saying what happened (saved, failed, or "Not sent: the saber is not connected."), never nothing. The exact case, an edit still waiting its turn at the unplug, is covered by `boardOps.test.ts`, because the page offers no edits once the saber is unplugged.
+  - **First run, 2026-09-26 (owner).** Steps 1 and 2 passed. Step 3 failed:
+    - While unplugged, the page read "Not connected" and noted the stored presets, but showed no failure.
+    - Only after reconnecting did the save chip say "Font → Ben_Solo failed: The saber stopped answering. Unplug and replug it, then…".
+    - The chip overflowed its container.
+
+    Fixed (design D5, added):
+    - An operation cut off by the connection going reports "Not saved: the saber was disconnected during the change." (new test in `boardOps.test.ts`).
+    - The Presets header shows a failed save while offline.
+    - A new connection clears the save status.
+    - `.chip.err` wraps, on its own line in the Presets header, measured and screenshotted inside the panel.
+
+    The spec gains the scenario "Unplugged while an edit is written". 184 core and 254 desktop tests pass, and the type check is clean. Awaiting the owner's re-run of step 3, and the V3.
 - [x] 3.3 Correct the stale statements of design D8 in `protocol.test.ts`, `docs/09-board-protocol-notes.md` and `docs/00-plan.md`. Verify by reading each.
   - **Result, 2026-09-26.** Done, read back after editing:
     - The `protocol.test.ts` test is now "OS 8.10 rejects help, id, list_named_style (singular) and get_style, and tags written without a space after the pipe".

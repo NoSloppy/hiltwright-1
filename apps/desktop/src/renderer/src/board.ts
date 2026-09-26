@@ -202,6 +202,8 @@ export function useBoard() {
     };
     setInfo(next);
     setStatus('connected');
+    // A new connection starts with a clean save status: a failure from before an unplug no longer describes this saber.
+    setSave({ kind: 'idle' });
     console.log(`[board] version=${next.version?.version ?? '?'} config=${next.version?.config ?? '?'} prop=${next.version?.prop ?? '?'} buttons=${next.version?.buttons ?? '?'} battery=${next.battery ?? '?'} volume=${next.volume ?? '?'} current=${next.currentPreset ?? '?'} presets=${next.presets.length} fonts=${next.fonts.length} tracks=${next.tracks.length} blades=${JSON.stringify(next.pixelBlades)} timings=${JSON.stringify(timings)}`);
 
     // Remember the saber.

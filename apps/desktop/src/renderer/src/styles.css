@@ -102,6 +102,8 @@ p{margin:0}
 .chip.live{border-color:rgba(95,211,255,.5);color:var(--holo)}.chip.live .dot{background:var(--holo);box-shadow:0 0 8px var(--holo)}
 .chip.warn{border-color:rgba(255,181,71,.5);color:var(--amber)}.chip.warn .dot{background:var(--amber)}
 .chip.err{border-color:rgba(255,92,92,.5);color:var(--red)}.chip.err .dot{background:var(--red)}
+/* An error says why in a sentence: it wraps inside its container rather than running out of it. */
+.chip.err{white-space:normal;height:auto;min-height:24px;padding:4px 10px;line-height:1.45;flex:0 1 auto;min-width:0;max-width:100%;overflow-wrap:break-word}.chip.err svg{flex:none}
 .chip svg{width:13px;height:13px}
 button.chip{cursor:pointer}
 button.chip.sel{background:rgba(95,211,255,.12);border-color:var(--holo);color:#fff}

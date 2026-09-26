@@ -38,9 +38,13 @@ export interface OpDeps<C> {
   snapshot: (label: string) => Promise<void>;
 }
 
+/** Why a change did not reach the saber when the connection went away while it was being written. */
+export const DISCONNECTED_DURING = 'Not saved: the saber was disconnected during the change.';
+
 /**
  * Run one board operation with busy state, snapshot and save-state bookkeeping. An operation whose turn comes after
- * the saber has gone (unplugged while it waited in the queue) is reported as not sent, never dropped silently.
+ * the saber has gone (unplugged while it waited in the queue) is reported as not sent, never dropped silently; one
+ * that was under way when the connection went says that, rather than whatever its last command made of the silence.
  */
 export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C) => Promise<OpResult>, withSnapshot: boolean): Promise<void> {
   const { setBusy, setSave, log, snapshot } = deps;
@@ -58,7 +62,12 @@ export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C)
     if (withSnapshot) await snapshot(`Before: ${label}`);
     log('in', label);
     const r = await op(client);
-    if (r.ok) {
+    const gone = deps.client() !== client;
+    if (!r.ok && gone) {
+      setSave({ kind: 'failed', what: label, error: DISCONNECTED_DURING });
+      log('out', `✗ ${label}: disconnected during the change`);
+      console.log(`[board] FAILED: ${label} · disconnected during the change (${r.error ?? 'no detail'})`);
+    } else if (r.ok) {
       setSave({ kind: 'saved', what: r.note ? `${label} · ${r.note}` : label, ms: r.ms ?? Date.now() - started, at: Date.now() });
       log('out', `✓ ${label}`);
       console.log(`[board] ok: ${label} · ${r.ms ?? Date.now() - started} ms`);
@@ -68,8 +77,9 @@ export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C)
       console.log(`[board] FAILED: ${label} · ${r.error}`);
     }
   } catch (err) {
-    setSave({ kind: 'failed', what: label, error: String(err) });
-    console.log(`[board] FAILED: ${label} · ${String(err)}`);
+    const gone = deps.client() !== client;
+    setSave({ kind: 'failed', what: label, error: gone ? DISCONNECTED_DURING : String(err) });
+    console.log(`[board] FAILED: ${label} · ${gone ? 'disconnected during the change: ' : ''}${String(err)}`);
   } finally {
     setBusy(false);
   }
