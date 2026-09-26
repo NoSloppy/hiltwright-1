@@ -53,6 +53,8 @@ Each is the body of today's callback, moved verbatim, with these substitutions:
 
 `job` carries `saber`, `model`, `result` (the build) and `info`.
 
+**Added during implementation:** `deps.board` is described in `installFlow.ts` itself (`info`, `send`, `rebootToBootloader`, `connect`, `expectAfterInstall`, `updateSaber`) rather than as `Pick<Board, …>`. Importing the `Board` type pulled the browser-only `board.ts` into the node test project's type check. `useBoard`'s return value satisfies the interface.
+
 `Build.tsx` keeps its callbacks as thin wrappers that build `deps` from `api()` and `board` and apply each report to state.
 
 The failure hint shown under a stopped install moves to an exported constant, `STOPPED_HINT`, which `Build.tsx` renders unchanged, so a test can check its words. It currently begins "If the saber does not show up after a reboot: hold BOOT, tap RESET…".
@@ -66,6 +68,10 @@ The failure hint shown under a stopped install moves to an exported constant, `S
 - **`installToolchain(root, onLine, sys = realToolchainSys)`.** `sys` = `{ run, download, extract, status }`, where `status` defaults to `toolchainStatus`, whose own `run` comes from `sys`.
 
 Callers in `ipc.ts` pass nothing and get today's behaviour.
+
+**Added during implementation:**
+- `DriverSys.expected` (`{ bytes, sha256 }`, defaulting to `DRIVER_BYTES` and `DRIVER_SHA256`) lets a test name the file that passes the check, for "a matching file is launched once", without the real 3 MB installer.
+- The toolchain checks and their constants (`MAX_ROOT_LENGTH`, `INSTALL_DISK_*`) live in `apps/desktop/src/shared/toolchainChecks.ts`, which `toolchain.ts` re-exports. The Build page runs in the renderer and cannot import the main-process module.
 
 **Rejected:**
 - *`vi.mock` of `node:child_process` and `fetch`.* It is brittle across the three call sites, and hides which calls a function makes.
@@ -117,6 +123,8 @@ Callers in `ipc.ts` pass nothing and get today's behaviour.
      - a motor on a FET
 
   Each must compile and produce a `.dfu`. When one fails, the translated error names the part, and the test is split to find it before anything is filed.
+
+**FST-3, found while writing the FW20 model.** `withKind(blade, 'star')` keeps the blade's one pin and pads the other channels with the first FET, so a new star LED repeats a pin, possibly another blade's. The V2 compile model gives the star its own three pins explicitly. The default is pinned as an expected failure in `hardware.test.ts`.
 
 ### D6. Findings are filed in the owning changes' proposals
 Findings are tagged `FST-<n>` and added to the owning change's What Changes, naming the test that pins them. This follows `board-side-test-coverage` D4.

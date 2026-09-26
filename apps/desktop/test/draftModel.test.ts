@@ -77,3 +77,14 @@ describe('drafts from what the saber reports', () => {
     expect(draftModel(infoFromRecord(rec), rec).board).toBe('V3');
   });
 });
+
+// Baseline audit (baseline-firmware hardware-wiring 1.4).
+describe('hardware-wiring audit: the first guess', () => {
+  it('1.4 a connected saber seen for the first time: one pixel blade per strip it reports', () => {
+    const rec = connected([board('One')], undefined, { pixelBlades: [140, 2, 1] });
+    const m = draftModel(infoFromRecord(rec), rec);
+    expect(m.blades.map((b) => [b.type, b.pixels])).toEqual([['pixel', 140], ['pixel', 2], ['pixel', 1]]);
+    expect(m.blades.map((b) => b.role)).toEqual(['main', 'crystal', 'accent']);
+    expect(new Set(m.blades.map((b) => (b.wiring as { dataPin: string }).dataPin)).size).toBe(3);
+  });
+});

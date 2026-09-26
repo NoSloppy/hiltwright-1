@@ -11,6 +11,8 @@ import type { Board } from './board';
 import { Icon } from './Icon';
 import { SaveDiagnostics } from './SaveDiagnostics';
 import { readTransfer } from './transfer';
+import { toolchainBlockers } from '../../shared/toolchainChecks';
+import { STOPPED_HINT, installSequence, restoreSequence, writeFromBootloader as writeFromBootloaderFlow, type InstallDeps } from './installFlow';
 
 const api = () => window.hiltwright;
 
@@ -112,66 +114,25 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     console.log(`[build] ok=${r.ok} cached=${r.cached} ms=${r.ms} text=${r.textBytes} pct=${r.flashPct} problems=${JSON.stringify(r.problems)}`);
   }, [model, saber]);
 
+  // The install and restore sequences live in installFlow.ts; these wrap them with the real calls and this page's state.
+  const flowDeps = useCallback((): InstallDeps => ({
+    flash: api().flash, snapshots: api().snapshots, board,
+    report: (r) => { if (r.xfer !== undefined) setXfer(r.xfer); if (r.step) setStep(r.step); if (r.note !== undefined) setNote(r.note); },
+    sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
+  }), [board]);
   /** From a board sitting in its bootloader with a usable driver: backup, write, wait, reconnect, record. */
   const writeFromBootloader = useCallback(async () => {
-    if (!result?.ok || !result.dfuPath || !saber) return;
-    try {
-      // The board comes back as this saber, reporting this config, whether or not a USB serial can be read.
-      if (model) board.expectAfterInstall(saber.id, `config/${model.name}.h`);
-      setXfer(0); setStep('backup');
-      const bak = await api().flash.backup(saber.id, 'before-install', info?.version?.config ?? null);
-      if (!bak.ok) { setStep('failed'); setNote({ tone: 'red', text: `Backup failed, so nothing was written. ${bak.detail}` }); return; }
-      setXfer(0); setStep('writing');
-      const w = await api().flash.write(result.dfuPath);
-      if (!w.ok) { setStep('failed'); setNote({ tone: 'red', text: `Writing failed. The backup from just now is at ${bak.file}. ${w.detail}` }); return; }
-      setStep('verifying');
-      const back = await api().flash.waitForRuntime(25000);
-      if (!back) { setStep('failed'); setNote({ tone: 'amber', text: 'The firmware was written but the saber has not reappeared yet. Unplug and replug it, then press Connect.' }); return; }
-      await new Promise((r) => setTimeout(r, 1500));
-      await board.connect(false);
-      setStep('done');
-      setNote({ tone: 'green', text: `Installed. Backup of the previous firmware: ${bak.file}` });
-      // Once installed, the bank's presets are the saber's own; the next draft reads them back from the saber.
-      if (model && result.manifest) { const { presetsFrom: _loaded, ...settled } = model; await board.updateSaber({ model: settled, firmware: { ...result.manifest, os: result.os, at: new Date().toISOString() } }, saber.id); }
-    } catch (err) {
-      setStep('failed');
-      setNote({ tone: 'red', text: String(err) });
-    }
-  }, [result, saber, board, model, info]);
+    if (!result || !saber) return;
+    await writeFromBootloaderFlow(flowDeps(), { saber, model, result, info });
+  }, [result, saber, model, info, flowDeps]);
 
   /** The install sequence. The renderer does the reboot because it owns the serial port. */
   const install2 = useCallback(async () => {
     if (!result?.ok || !result.dfuPath || !saber) return;
     setWithBackup(true);
     setNote(null); setElapsed(0);
-    try {
-      setStep('bootloader');
-      // A board already sitting in its bootloader (after an earlier failed attempt, or a manual BOOT+RESET) needs no reboot.
-      const already = (await api().flash.usb()).bootloaderPresent;
-      if (!already) {
-        // Presets loaded from a bank are compiled into this firmware; the saber only adopts compiled presets when it has
-        // no presets.ini of its own, so that file goes before the reboot, with a snapshot kept first.
-        if (model?.presetsFrom && board.info) {
-          try { await api().snapshots.save(saber.id, `Before bank "${model.presetsFrom.name}"`, board.info.presets); } catch { /* the snapshot is a courtesy */ }
-          await board.send('del presets.ini', { idleMs: 400 });
-          await board.send('del presets.tmp', { idleMs: 400 });
-        }
-        const touched = await board.rebootToBootloader();
-        if (!touched) { setStep('failed'); setNote({ tone: 'red', text: 'Could not reboot the saber into bootloader mode. Hold BOOT, tap RESET, release BOOT, then press Install again.' }); return; }
-      }
-      const boot = await api().flash.waitForBootloader(20000);
-      if (!boot.ok) {
-        const usb = await api().flash.usb();
-        // The board is there but Windows has no WinUSB driver for it: a one-time step, then the install resumes.
-        if (usb.bootloaderPresent) { setStep('driver'); setNote(null); return; }
-        setStep('failed'); setNote({ tone: 'red', text: boot.text }); return;
-      }
-      await writeFromBootloader();
-    } catch (err) {
-      setStep('failed');
-      setNote({ tone: 'red', text: String(err) });
-    }
-  }, [result, saber, board, writeFromBootloader]);
+    await installSequence(flowDeps(), { saber, model, result, info });
+  }, [result, saber, model, info, flowDeps]);
 
   /** One click: main downloads, verifies and launches the official installer elevated, then the install resumes. */
   const [driverBusy, setDriverBusy] = useState(false);
@@ -196,30 +157,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     if (!saberId) return;
     setWithBackup(false);
     setRestoreArmed(null); setNote(null); setElapsed(0);
-    try {
-      setStep('bootloader');
-      if (!(await api().flash.usb()).bootloaderPresent) {
-        const touched = await board.rebootToBootloader();
-        if (!touched) { setStep('failed'); setNote({ tone: 'red', text: 'Could not reboot the saber into bootloader mode. Hold BOOT, tap RESET, release BOOT, then try again.' }); return; }
-      }
-      // The restored firmware reports the config it had when this backup was taken; expect the saber back with it.
-      if (b.configName) board.expectAfterInstall(saberId, b.configName);
-      const boot = await api().flash.waitForBootloader(20000);
-      if (!boot.ok) { setStep('failed'); setNote({ tone: 'red', text: boot.text }); return; }
-      setXfer(0); setStep('writing');
-      const w = await api().flash.restore(saberId, b.file);
-      if (!w.ok) { setStep('failed'); setNote({ tone: 'red', text: `The backup was not written. ${w.detail}` }); return; }
-      setStep('verifying');
-      const back = await api().flash.waitForRuntime(25000);
-      if (!back) { setStep('failed'); setNote({ tone: 'amber', text: 'The backup was written but the saber has not reappeared yet. Unplug and replug it, then press Connect.' }); return; }
-      await new Promise((r) => setTimeout(r, 1500));
-      // The restored firmware is not the one Hiltwright built: forget the manifest so looks and colours are not mislabelled.
-      await board.updateSaber({ firmware: null }, saberId);
-      await board.connect(false);
-      setStep('done');
-      setNote({ tone: 'green', text: `Restored the backup from ${new Date(b.at).toLocaleString()}.` });
-    } catch (err) { setStep('failed'); setNote({ tone: 'red', text: String(err) }); }
-  }, [saberId, board]);
+    await restoreSequence(flowDeps(), saberId, b);
+  }, [saberId, flowDeps]);
   const checkDriver = useCallback(async () => {
     setDriverCheck('Checking…');
     const boot = await api().flash.waitForBootloader(5000);
@@ -256,7 +195,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const phasePct = xfer ?? 0;
   const overall = step === 'bootloader' ? 3 : step === 'backup' ? 5 + phasePct * 0.4 : step === 'writing' ? (withBackup ? 45 + phasePct * 0.47 : 5 + phasePct * 0.87) : step === 'verifying' ? 94 : step === 'done' ? 100 : 0;
   const phaseText = step === 'bootloader' ? 'Rebooting into the bootloader' : step === 'backup' ? 'Reading the backup' : step === 'writing' ? 'Writing firmware' : step === 'verifying' ? 'Waiting for the saber to restart' : '';
-  const lowSpace = !!tool && tool.freeBytes != null && tool.freeBytes < 2.5 * 1073741824;
+  const blockers = tool ? toolchainBlockers(tool) : { pathTooLong: null, lowSpace: null };
 
   const toolStep = (now: boolean) => (
     <div className={`stepc ${tool?.ready ? 'done' : now ? 'now' : ''}`}>
@@ -270,10 +209,10 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
             <div className="kv"><span>Free space</span><span>{tool.freeBytes != null ? fmtGB(tool.freeBytes) : 'unknown'}</span></div>
             <div className="kv"><span>Folder</span><span title={tool.root}>{tool.root}</span></div>
           </div>
-          {lowSpace && <div className="note red"><Icon name="x" /><span>Not enough free space. Free up at least 2.5 GB, then try again.</span></div>}
-          {tool.pathTooLong && <div className="note red"><Icon name="x" /><span>This folder path is too long for the compiler on Windows. Set HILTWRIGHT_TOOLCHAIN_DIR to a short path, or unset it to use the default.</span></div>}
+          {blockers.lowSpace && <div className="note red"><Icon name="x" /><span>{blockers.lowSpace.panel}</span></div>}
+          {blockers.pathTooLong && <div className="note red"><Icon name="x" /><span>{blockers.pathTooLong.panel}</span></div>}
           {installError && <div className="note red"><Icon name="x" /><span className="col" style={{ gap: 8 }}><span>{installError}</span><SaveDiagnostics small /></span></div>}
-          <button type="button" className={`btn full ${now ? 'pri' : ''}`} disabled={installing || tool.pathTooLong || lowSpace} onClick={() => void install()}><span className="b"><span className="i"><Icon name="import" />{installError ? 'Try again' : 'Download and install'}</span></span></button>
+          <button type="button" className={`btn full ${now ? 'pri' : ''}`} disabled={installing || !!blockers.pathTooLong || !!blockers.lowSpace} onClick={() => void install()}><span className="b"><span className="i"><Icon name="import" />{installError ? 'Try again' : 'Download and install'}</span></span></button>
         </>
       )}
       {installing && <div className="console" style={{ maxHeight: 120, minHeight: 48, fontSize: 11 }}>{log.filter((e) => e.job === 'toolchain').slice(-6).map((e, i) => <div key={i}>{e.line}</div>)}</div>}
@@ -408,7 +347,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span className="col" style={{ gap: 8 }}><span>{note.text}</span>{(note.tone === 'red' || step === 'failed') && <SaveDiagnostics small />}</span></div>}
         {verdict && <div className={`note ${verdict.tone}`}><Icon name={verdict.ok ? 'check' : 'warn'} /><span>{verdict.text}</span></div>}
         {preview?.warnings.map((w) => <div key={w} className="note"><Icon name="info" /><span>{w}</span></div>)}
-        {step === 'failed' && <span className="hint">If the saber does not show up after a reboot: hold BOOT, tap RESET, release BOOT, then press Install again. A backup can always be put back from the Backups tab.</span>}
+        {step === 'failed' && <span className="hint">{STOPPED_HINT}</span>}
       </aside>
     </div>
   );

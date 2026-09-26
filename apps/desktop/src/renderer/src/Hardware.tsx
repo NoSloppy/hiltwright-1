@@ -2,11 +2,11 @@
 // Produces core ModelBlades directly, so what the owner confirms is exactly what generateConfig compiles.
 
 import { useState, type CSSProperties } from 'react';
-import { chainRanges, type BladeRole, type BladeVariant, type BoardModel, type ModelBlade } from '@hiltwright/core';
+import { chainRanges, type BladeVariant, type BoardModel, type ModelBlade } from '@hiltwright/core';
 import { Icon } from './Icon';
 import { BladeBar, Crystal, Hilt } from './Saber';
 
-import { KIND_LABEL, ROLES, ROLE_META, bladeSummary, dataPins, kindOf, newBlade, pinLabel, pinTable, powerOptions, powerPinsOf, withKind, type Kind } from './hardwareModel';
+import { KIND_LABEL, ROLES, ROLE_META, bladeSummary, dataPins, kindOf, pinLabel, pinTable, powerOptions, withBladeCount, withKind, type Kind } from './hardwareModel';
 import { Select } from './Select';
 
 export interface SwapProps {
@@ -26,16 +26,11 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
   const crystal = blades.find((b) => b.role === 'crystal');
   const set = (id: string, patch: Partial<ModelBlade>) => onChange(blades.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   const setCount = (n: number) => {
-    if (n < 1 || n > 8 || locked) return;
-    if (n < blades.length) { onChange(blades.slice(0, n)); return; }
-    const next = [...blades];
-    while (next.length < n) {
-      const taken = { data: next.flatMap((b) => (b.wiring.kind === 'own' ? [b.wiring.dataPin] : [])), power: next.flatMap(powerPinsOf) };
-      const role: BladeRole = next.some((b) => b.role === 'main') ? (next.some((b) => b.role === 'crystal') ? 'accent' : 'crystal') : 'main';
-      next.push(newBlade(`b${next.length + 1}`, role, board, taken));
-    }
+    if (locked) return;
+    const next = withBladeCount(blades, n, board);
+    if (!next) return;
     onChange(next);
-    setOpen(next[next.length - 1].id);
+    if (next.length > blades.length) setOpen(next[next.length - 1].id);
   };
 
   return (

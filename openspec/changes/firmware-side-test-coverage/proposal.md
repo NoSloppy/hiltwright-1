@@ -43,7 +43,7 @@
 - **Findings,** where the code does not do what the spec says. Each is pinned by an expected-failure test and filed in the change that owns the fix:
   - **FST-1** (to `install-safety-nets`, beside FW7): the Backups tab marks a backup of the wrong size as usable, because only its first bytes are checked. The spec says a wrong-size file is listed as not usable. Putting it back is refused, but only after the owner has pressed Restore.
   - **FST-2** (to `toolchain-integrity`, beside FW36): when the toolchain path is too long, the panel does not give the path's length, as the spec requires. It also tells the owner to set `HILTWRIGHT_TOOLCHAIN_DIR`, a development switch that packaged builds strip.
-  - Any further findings from writing the tests are filed the same way.
+  - **FST-3** (to `wiring-validation`, beside FW6; found while writing the FW20 compile model): switching a blade to a star LED keeps its one pin and fills the other two channels with the first FET, so a new star LED gets the same pin twice, possibly another blade's.
 
 ## Non-goals
 

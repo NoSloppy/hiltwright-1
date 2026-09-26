@@ -18,6 +18,7 @@ Every tester will run the toolchain setup. It downloads and runs executables wit
 - **FW36:** Flag a toolchain that is already installed at a path that is too long.
 - **FW28:** Correct the docs (path limit, disk footprint, driver helper, toolchain location).
 - **HW-2026-09-25a** (seen on hote2 during `library-integrity` 6.3): files in the machine-wide folder that were written by a Hiltwright run with administrator rights (here `C:\ProgramData\Hiltwright\builds\b53c5735a826\`, from the 2026-09-24 install, owned by Administrators; the owner had started Hiltwright from an administrator terminal, so the installer is not implicated) cannot be overwritten by a normal run. The next build fails with `EPERM: operation not permitted, open '…\hiltwright_hote2.h'`. The build output must stay writable by the owner whatever rights an earlier run had. For example: a per-user build folder, or repairing or replacing a build folder the app cannot write. Related to FW32.
+- **FST-2** (from `firmware-side-test-coverage`, beside FW36): when the toolchain path is too long, the Build page's panel does not give the path's length, as the spec requires. It also tells the owner to set `HILTWRIGHT_TOOLCHAIN_DIR`, a development switch that packaged builds strip. The panel's words are `toolchainBlockers(...).pathTooLong.panel` in `apps/desktop/src/shared/toolchainChecks.ts`. Pinned by the expected failure "2.3 the panel says the path is too long in plain words with its length" in `apps/desktop/test/toolchainSetup.test.ts`.
 
 ## Non-goals
 

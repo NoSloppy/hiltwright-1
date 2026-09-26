@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeStyleCode, type LookDef, type SaberConfigModel } from '@hiltwright/core';
+import { analyzeStyleCode, validateModel, type LookDef, type ModelBlade, type SaberConfigModel } from '@hiltwright/core';
+import { newBlade, withKind } from '../src/renderer/src/hardwareModel';
 import { buildFirmware, translateErrors } from '../src/main/build';
 import { toolchainStatus } from '../src/main/toolchain';
 
@@ -89,4 +90,56 @@ describe('usbState', () => {
     expect(typeof s.runtimePresent).toBe('boolean');
     expect(s.bootloaderPresent).toBe(false);
   });
+});
+
+// Baseline finding FW20 (baseline-firmware): blade kinds and options the app offers but had never compiled. Two builds
+// cover them all; if one fails, split it to find the part before filing anything.
+const pixel = (id: string, role: ModelBlade['role'], pixels: number, order: string, wiring: ModelBlade['wiring']): ModelBlade => ({ id, role, type: 'pixel', pixels, order, extra: [], leds: [], parallel: 1, wiring });
+const fw20V2: SaberConfigModel = {
+  name: 'hiltwright_fw20_v2', board: 'V2', buttons: 3, prop: 'fett263', generator: 'test',
+  extraDefines: ['FETT263_TWIST_OFF', 'FETT263_TWIST_ON'],
+  blades: [
+    pixel('b1', 'main', 132, 'GRBW', { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] }),
+    pixel('b2', 'crystal', 2, '', { kind: 'chain', after: 'b1' }),
+    newBlade('b3', 'accent', 'V2', { data: ['bladePin'], power: ['bladePowerPin2', 'bladePowerPin3'] }),
+    // The star's three channels on pins of their own (the app's default repeats one pin: FST-3, wiring-validation).
+    { ...withKind(newBlade('b4', 'accent', 'V2', { data: ['bladePin'], power: [] }), 'star', 'V2'), wiring: { kind: 'power', pins: ['bladePowerPin4', 'bladePowerPin5', 'bladePowerPin6'] } },
+  ],
+  presets: [{ font: 'TeensySF;common', track: '', name: 'One' }, { font: 'SmthJedi;common', track: '', name: 'Two' }],
+};
+const fw20V3: SaberConfigModel = {
+  name: 'hiltwright_fw20_v3', board: 'V3', buttons: 2, prop: 'sa22c', generator: 'test',
+  blades: [
+    pixel('b1', 'main', 144, 'RGBW', { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] }),
+    pixel('b2', 'side', 10, '', { kind: 'chain', after: 'b1' }),
+    withKind({ ...newBlade('b3', 'motor', 'V3', { data: ['bladePin'], power: ['bladePowerPin2', 'bladePowerPin3'] }), role: 'motor' }, 'motor', 'V3'),
+  ],
+  presets: [{ font: 'TeensySF;common', track: '', name: 'One' }],
+};
+
+describe('FW20 models', () => {
+  it('are valid, so a compile failure is the firmware and not the model', () => {
+    expect(validateModel(fw20V2)).toEqual([]);
+    expect(validateModel(fw20V3)).toEqual([]);
+    expect(fw20V2.blades.map((b) => b.type)).toEqual(['pixel', 'pixel', 'simple', 'simple']);
+    // Each simple blade has pins of its own: three for the star, one for the single LED and the motor.
+    const pinsOf = (b: ModelBlade) => (b.wiring.kind === 'power' ? b.wiring.pins : b.wiring.kind === 'own' ? b.wiring.powerPins : []);
+    expect(pinsOf(fw20V2.blades[3])).toHaveLength(3);
+    const all = fw20V2.blades.flatMap(pinsOf);
+    expect(new Set(all).size).toBe(all.length);
+    expect(fw20V3.blades[2]).toMatchObject({ role: 'motor', type: 'simple', wiring: { kind: 'power' } });
+    expect(pinsOf(fw20V3.blades[2]).some((p) => ['bladePowerPin2', 'bladePowerPin3'].includes(p))).toBe(false);
+  });
+});
+
+describe.skipIf(!root)('FW20: never-compiled blade kinds, with a real toolchain', () => {
+  for (const [label, model] of [['a V2 with a GRBW main blade, a chained crystal, a single LED, a star LED, 3 buttons and extra defines', fw20V2], ['a V3 with an RGBW main blade, a chained sub-blade and a motor', fw20V3]] as const) {
+    it(`compiles ${label}`, async () => {
+      const r = await buildFirmware({ toolchainRoot: root!, saberId: `test-${model.name}`, model, onLine: () => undefined, force: true });
+      if (!r.ok) console.log(r.problems, r.output.slice(0, 4000));
+      expect(r.ok).toBe(true);
+      expect(r.dfuPath).toMatch(/\.dfu$/);
+      console.log(`${model.name}: build ${r.ms} ms, .text ${r.textBytes} bytes, ${r.flashPct}% of ${r.flashBytes}`);
+    }, 10 * 60 * 1000);
+  }
 });

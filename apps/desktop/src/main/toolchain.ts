@@ -8,6 +8,7 @@ import { access, mkdir, readdir, rename, rm, stat, statfs } from 'node:fs/promis
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable, Transform } from 'node:stream';
+import { MAX_ROOT_LENGTH, toolchainBlockers } from '../shared/toolchainChecks';
 
 export const PROFFIE_INDEX = 'https://profezzorn.github.io/arduino-proffieboard/package_proffieboard_index.json';
 export const PROFFIEOS_TAG = 'v8.10';
@@ -39,12 +40,7 @@ export interface ToolchainStatus {
   pathTooLong: boolean;
 }
 
-/**
- * GCC opens its own headers through an un-normalised path (bin/../lib/gcc/arm-none-eabi/14.2.1/../../../../
- * arm-none-eabi/include/c++/...), which puts `bits/error_constants.h` 213 characters below the toolchain root.
- * Windows stops at 259, so the root gets 46 at the very most; 40 leaves a margin for other multilib variants.
- */
-export const MAX_ROOT_LENGTH = 40;
+export { MAX_ROOT_LENGTH, INSTALL_DISK_BYTES, INSTALL_DISK_MARGIN } from '../shared/toolchainChecks';
 
 /**
  * Where the toolchain lives by default. On Windows that is %ProgramData%\Hiltwright (25 characters): per-user
@@ -65,8 +61,6 @@ export function defaultToolchainRoot(userData: string): string {
 
 /** Downloads and on-disk footprint of a full install, for the consent screen and the space check. */
 export const INSTALL_DOWNLOAD_BYTES = 360 * 1024 * 1024;
-export const INSTALL_DISK_BYTES = 1.7 * 1024 * 1024 * 1024;
-export const INSTALL_DISK_MARGIN = 2.5 * 1024 * 1024 * 1024;
 
 export type Progress = (line: string) => void;
 
@@ -182,15 +176,26 @@ async function extractZip(zip: string, into: string): Promise<void> {
   }
 }
 
+/** The system calls the setup makes, so a test can stand in for them. The default is the real thing. */
+export interface ToolchainSys {
+  run: typeof run;
+  download: typeof download;
+  extract: (zip: string, into: string) => Promise<void>;
+  status: (root: string) => Promise<ToolchainStatus>;
+}
+const realToolchainSys: ToolchainSys = { run, download, extract: (zip, into) => extractZip(zip, into), status: (root) => toolchainStatus(root) };
+
 /** Install everything that is missing. Idempotent. Roughly 360 MB of downloads, 1.6 GB on disk. */
-export async function installToolchain(root: string, onLine: Progress): Promise<ToolchainStatus> {
+export async function installToolchain(root: string, onLine: Progress, sys: ToolchainSys = realToolchainSys): Promise<ToolchainStatus> {
+  const { run, download } = sys;
+  const extractZip = sys.extract;
+  const toolchainStatus = sys.status;
   const p = toolchainPaths(root);
   await mkdir(root, { recursive: true });
   let status = await toolchainStatus(root);
-  if (status.pathTooLong) throw new Error(`The toolchain folder path is too long for the compiler on Windows (${root.length} characters, at most ${MAX_ROOT_LENGTH}): ${root}`);
-  if (!status.ready && status.freeBytes != null && status.freeBytes < INSTALL_DISK_MARGIN) {
-    throw new Error(`Not enough free space: ${(status.freeBytes / 1073741824).toFixed(1)} GB free, the toolchain needs about ${(INSTALL_DISK_BYTES / 1073741824).toFixed(1)} GB plus room to build.`);
-  }
+  const blocked = toolchainBlockers(status);
+  if (blocked.pathTooLong) throw new Error(blocked.pathTooLong.error);
+  if (blocked.lowSpace) throw new Error(blocked.lowSpace.error);
 
   if (!status.cli) {
     const asset = isWin ? `arduino-cli_${CLI_VERSION}_Windows_64bit.zip`

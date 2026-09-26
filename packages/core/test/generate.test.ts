@@ -147,3 +147,12 @@ describe('Blade ID variants', () => {
     expect(validateModel(m)[0]).toMatch(/too close together/);
   });
 });
+
+// Baseline audit (baseline-firmware config-generation 3.3).
+describe('config-generation audit', () => {
+  it('3.3 a V3 saber: the config includes the Proffieboard V3 board file and not the V2 one', () => {
+    const { text } = generateConfig({ ...hote2, board: 'V3' });
+    expect(text).toContain('#include "proffieboard_v3_config.h"');
+    expect(text).not.toContain('proffieboard_v2_config.h');
+  });
+});

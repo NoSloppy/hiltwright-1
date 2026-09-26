@@ -50,6 +50,22 @@ export function newBlade(id: string, role: BladeRole, board: BoardModel, taken: 
   return withKind({ id, role, type: 'pixel', pixels: role === 'main' ? 132 : role === 'side' ? 40 : 1, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: freeData, powerPins: [freePower] } }, kind, board);
 }
 
+/**
+ * The blades after the owner sets the count to `n` (1 to 8), or null when `n` is out of range. Fewer drops blades from
+ * the end; more adds each with the next role (main, then crystal, then accents) on the first free data and power pins.
+ */
+export function withBladeCount(blades: ModelBlade[], n: number, board: BoardModel): ModelBlade[] | null {
+  if (n < 1 || n > 8) return null;
+  if (n < blades.length) return blades.slice(0, n);
+  const next = [...blades];
+  while (next.length < n) {
+    const taken = { data: next.flatMap((b) => (b.wiring.kind === 'own' ? [b.wiring.dataPin] : [])), power: next.flatMap(powerPinsOf) };
+    const role: BladeRole = next.some((b) => b.role === 'main') ? (next.some((b) => b.role === 'crystal') ? 'accent' : 'crystal') : 'main';
+    next.push(newBlade(`b${next.length + 1}`, role, board, taken));
+  }
+  return next;
+}
+
 /** Change what a blade is built from, keeping whatever wiring still makes sense. */
 export function withKind(b: ModelBlade, kind: Kind, board: BoardModel): ModelBlade {
   const power = powerPinsOf(b);

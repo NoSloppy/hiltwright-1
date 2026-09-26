@@ -17,6 +17,7 @@ The pin table shows problems that the build then accepts. Some of them (a motor 
 - **FW27:** Each preset's styles are checked against the blade kinds they land on (no blade style on a motor), and missing entries are reported rather than silently filled.
 - **FW22:** A wiring change is never lost by leaving the page quickly, and a stale draft never overwrites a model changed elsewhere.
 - **FW23:** On a V3, only the V3-only data pins are labelled free.
+- **FST-3** (from `firmware-side-test-coverage`, beside FW6): switching a blade to a star LED keeps its one pin and fills the other two channels with the first FET (`withKind` in `hardwareModel.ts`). A new star LED therefore gets the same pin twice, and that pin may already belong to another blade. Each channel should get a free pin of its own while any remain. Pinned by the expected failure "a new star LED gets three pins of its own" in `apps/desktop/test/hardware.test.ts`.
 
 ## Non-goals
 

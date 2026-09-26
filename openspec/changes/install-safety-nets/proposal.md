@@ -16,6 +16,7 @@ The install's normal path works on hote2, but its safety nets are thin. A useles
 - **FW29:** A board that ignores the reboot is reported as such. After a failed backup, the owner is told how to get the board out of its bootloader.
 - **HW-2026-09-24b** (hote2): rebooting into the bootloader takes anything from an instant to 30 s or more. The install waits 20 s, plus 5 s for the driver. Measure the spread on V2.2 and V3, and set the wait (and what the owner is told while waiting) from the measurements.
 - **HW-2026-09-24c** (hote2): when saving the saber record fails after a successful install, the page shows "Stopped" with a red error, although the firmware is installed. The long error text is also clipped instead of wrapping. Say the install succeeded, and report the record problem separately, in words that fit.
+- **FST-1** (from `firmware-side-test-coverage`, beside FW7): the Backups tab marks a backup of the wrong size as usable, because `listBackups` checks only the image's first bytes. The spec lists a wrong-size file as not usable. Putting it back is refused, but only after the owner has pressed Restore. Pinned by the expected failure "5.15 a wrong-size read is listed as not a usable image" in `apps/desktop/test/backups.test.ts`.
 
 ## Non-goals
 
