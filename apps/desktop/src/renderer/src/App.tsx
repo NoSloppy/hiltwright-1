@@ -22,6 +22,7 @@ import { StyleEditor } from './StyleEditor';
 import { FontLibrary } from './FontLibrary';
 import { Contributors } from './Contributors';
 import { flowStatus, nextStep, useWorkspace, type Workspace } from './workspace';
+import type { SaberRecord } from '../../shared/api';
 // three.js is only needed in the demo room, so it loads when that page is first opened.
 const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
 
@@ -167,12 +168,21 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
   const [draft, setDraft] = useState('');
   const [planning, setPlanning] = useState(false);
   const [planName, setPlanName] = useState('');
+  // A plan made while a saber is plugged in: the plugged-in saber stays the working one, and this says so.
+  const [plannedAside, setPlannedAside] = useState<string | null>(null);
   const plan = async () => {
     const name = planName.trim() || `Saber ${board.library.length + 1}`;
     const rec = await board.planSaber(name, { name: `hiltwright_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'saber'}`, board: 'V2', buttons: 2, prop: 'fett263', blades: guessBlades([132]), presets: [], looks: [], generator: `hiltwright ${window.hiltwright.appVersion}` });
     setPlanning(false); setPlanName('');
+    if (ws.live) { setPlannedAside(rec.name); return; }
     ws.choose(rec.id); go('wiring');
   };
+  // Stores that could not be read at start were kept aside (jsonStore.ts); say so until dismissed.
+  const [problems, setProblems] = useState<Awaited<ReturnType<typeof window.hiltwright.app.storeProblems>>>([]);
+  useEffect(() => { void window.hiltwright.app.storeProblems().then(setProblems, () => setProblems([])); }, []);
+  const openDataFolder = async () => { try { await window.hiltwright.app.openPath(await window.hiltwright.app.userDataPath()); } catch { /* nothing to open */ } };
+  // Adoption asks first: which plan the owner said this saber is.
+  const [adopting, setAdopting] = useState<SaberRecord | null>(null);
   const steps = flowStatus(ws);
   const next = nextStep(ws);
   const stepPage: Record<string, Page> = { wiring: 'wiring', presets: 'presets', fonts: 'fonts', build: 'build' };
@@ -184,6 +194,12 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
   return (
     <div className="work" style={{ gridTemplateColumns: 'minmax(0,1fr) 420px' }}>
       <div className="col" style={{ gap: 16, minHeight: 0 }}>
+        {problems.map((p) => (
+          <div key={p.keptAs} className="note amber" role="alert"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+            <span>Your {p.store} could not be read. It was kept as <b className="mono">{p.keptAs}</b> in Hiltwright's data folder, and Hiltwright started {p.startedFrom === 'backup' ? 'from its backup copy' : p.startedFrom === 'readable records' ? 'with the entries it could read' : 'with an empty one'}.</span>
+            <span className="row" style={{ gap: 8 }}><button type="button" className="btn sm" onClick={() => void openDataFolder()}><span className="b"><span className="i">Open folder</span></span></button><button type="button" className="btn sm ghost" onClick={() => setProblems((ps) => ps.filter((x) => x !== p))}><span className="b"><span className="i">Dismiss</span></span></button></span>
+          </span></div>
+        ))}
         <section className="panel" aria-label="Connection">
           <div className="row" style={{ padding: '16px 18px', gap: 18 }}>
             <span style={{ color: ws.live ? 'var(--holo)' : 'var(--mute)', display: 'flex', width: 28, height: 28 }}><Icon name="usb" /></span>
@@ -195,8 +211,18 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
             {ws.live && <button type="button" className="btn sm ghost" onClick={() => void board.identify()}><span className="b"><span className="i"><Icon name="undo" />Read again</span></span></button>}
           </div>
           {ws.live && board.info && board.info.rejected.length > 0 && <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="warn" /><span>This firmware does not know {board.info.rejected.join(', ')}. Hiltwright adapts to what the board supports.</span></div>}
-          {adoptable && (
-            <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="info" /><span>Is this a saber you set up ahead? {plans.map((p) => <button key={p.id} type="button" className="holo" style={{ marginRight: 10 }} onClick={() => void board.adoptPlan(p.id)}>It is "{p.name}"</button>)}Its wiring, presets and styles move onto this saber, ready to install.</span></div>
+          {adoptable && !adopting && (
+            <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="info" /><span>Is this a saber you set up ahead? {plans.map((p) => <button key={p.id} type="button" className="holo" style={{ marginRight: 10 }} onClick={() => setAdopting(p)}>It is "{p.name}"</button>)}Its wiring, presets and styles move onto this saber, ready to install.</span></div>
+          )}
+          {adoptable && adopting && cur && (
+            <div className="note amber" role="alertdialog" aria-label="Adopt a planned saber" style={{ margin: '0 18px 16px' }}><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+              <span>Adopting "{adopting.name}" moves its wiring, prop, presets and styles onto {cur.name}. The next install replaces the styles compiled into {cur.name}'s current firmware, and the presets on its card will then be the plan's.</span>
+              {cur.model && <span>{cur.name} already has wiring and presets set up in Hiltwright. They will be replaced by the plan's.</span>}
+              <span className="row" style={{ gap: 8 }}>
+                <button type="button" className="btn sm pri" onClick={() => { const id = adopting.id; setAdopting(null); void board.adoptPlan(id); }}><span className="b"><span className="i">Adopt</span></span></button>
+                <button type="button" className="btn sm ghost" onClick={() => setAdopting(null)}><span className="b"><span className="i">Not now</span></span></button>
+              </span>
+            </span></div>
           )}
         </section>
 
@@ -206,6 +232,12 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
               ? <form className="row" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); void plan(); }}><span className="input sans" style={{ height: 30, width: 200 }}><input type="text" value={planName} autoFocus placeholder="Name the saber" aria-label="Name for the new saber" onChange={(e) => setPlanName(e.target.value)} /></span><button type="submit" className="btn sm pri"><span className="b"><span className="i">Start</span></span></button><button type="button" className="chip" onClick={() => setPlanning(false)}><Icon name="x" /></button></form>
               : <button type="button" className="btn sm pri" title="Set a saber up before it is plugged in: wiring, presets and styles, ready to install when it arrives" onClick={() => setPlanning(true)}><span className="b"><span className="i"><Icon name="plus" />New saber</span></span></button>}
           </div>
+          {plannedAside && cur && (
+            <div className="note" role="status" style={{ margin: '12px 18px 0' }}><Icon name="info" /><span className="col" style={{ gap: 8 }}>
+              <span>{plannedAside} is set up. {cur.name} is plugged in, so it stays the saber you are working on. Unplug it to work on {plannedAside}.</span>
+              <span><button type="button" className="btn sm ghost" onClick={() => setPlannedAside(null)}><span className="b"><span className="i">OK</span></span></button></span>
+            </span></div>
+          )}
           <div className="list" style={{ overflow: 'auto' }}>
             {board.library.length === 0 && <div className="li hint" style={{ minHeight: 44 }}>No sabers yet. Plug one in and it is remembered, or start a new one to set up ahead.</div>}
             {board.library.map((s) => {

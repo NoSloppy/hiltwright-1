@@ -2,16 +2,17 @@
 // store on a temporary folder. A new Library on the same file stands for a restart of the app.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { SaberConfigModel } from '@hiltwright/core';
 import { Library, defaultName } from '../src/main/library';
+import { resetStoreProblems, storeProblems } from '../src/main/jsonStore';
 import type { SaberIdentity } from '../src/shared/api';
 
 let dir = '';
 let file = '';
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'hw-library-')); file = join(dir, 'library.json'); });
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'hw-library-')); file = join(dir, 'library.json'); resetStoreProblems(); });
 afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
 const hote2: SaberIdentity = {
@@ -35,22 +36,51 @@ describe('saber library', () => {
     expect(Date.parse(s.lastSeen)).not.toBeNaN();
   });
 
-  it('1.2 an unreadable store starts with no sabers instead of failing', async () => {
+  it('1.2 an unreadable store starts with no sabers instead of failing, and is kept aside, never overwritten', async () => {
     writeFileSync(file, '{ this is not json');
-    expect(await new Library(file).list()).toEqual([]);
-    writeFileSync(file, JSON.stringify({ version: 7, sabers: [{ id: 'x' }] }));
-    expect(await new Library(file).list()).toEqual([]);
-    writeFileSync(file, JSON.stringify({ version: 1, sabers: 'nope' }));
-    expect(await new Library(file).list()).toEqual([]);
+    const lib = new Library(file);
+    expect(await lib.list()).toEqual([]);
+    const [p] = storeProblems();
+    expect(p).toMatchObject({ store: 'saber list', startedFrom: 'nothing' });
+    await connect(lib, hote2);
+    expect(readFileSync(join(dir, p.keptAs), 'utf8')).toBe('{ this is not json');
+    expect((await new Library(file).list()).map((s) => s.name)).toEqual(['hote2']);
+    for (const bad of [JSON.stringify({ version: 7, sabers: [{ id: 'x' }] }), JSON.stringify({ version: 1, sabers: 'nope' })]) {
+      writeFileSync(file, bad);
+      expect(await new Library(file).list()).toEqual([]);
+    }
   });
 
-  // Owner: library-integrity (BST-1). Records of the wrong shape make list() and upsert() throw today.
-  it.fails('1.2 a store whose records have the wrong shape reads as no sabers', async () => {
-    writeFileSync(file, JSON.stringify({ version: 1, sabers: [{ id: 'a' }, { id: 'b' }] }));
+  it('1.2 an unreadable store starts from the backup copy when there is one', async () => {
+    const lib = new Library(file);
+    await connect(lib, hote2);
+    await connect(lib, noSerial({ configName: 'config/other.h' }));
+    writeFileSync(file, 'garbage');
+    expect((await new Library(file).list()).map((s) => s.name)).toEqual(['hote2']);
+    expect(storeProblems()[0].startedFrom).toBe('backup');
+  });
+
+  // BST-1: fixed by library-integrity.
+  it('1.2 a store whose records have the wrong shape reads as no sabers, and the original is kept', async () => {
+    const original = JSON.stringify({ version: 1, sabers: [{ id: 'a' }, { id: 'b' }] });
+    writeFileSync(file, original);
     const lib = new Library(file);
     expect(await lib.list()).toEqual([]);
     await connect(lib, hote2);
     expect((await lib.list()).map((s) => s.name)).toEqual(['hote2']);
+    expect(readFileSync(join(dir, storeProblems()[0].keptAs), 'utf8')).toBe(original);
+  });
+
+  it('two changes at the same moment both land (HW-2026-09-24a)', async () => {
+    const lib = new Library(file);
+    const s = await connect(lib, hote2);
+    const firmware = { hash: 'h', os: 'v8.10', at: '2026-09-25T00:00:00Z', looks: [], presets: [] };
+    await Promise.all([lib.update(s.id, { firmware }), lib.update(s.id, { model }), lib.rename(s.id, 'Ahsoka')]);
+    const [back] = await new Library(file).list();
+    expect(back.firmware).toEqual(firmware);
+    expect(back.model).toEqual(model);
+    expect(back.name).toBe('Ahsoka');
+    expect(readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toEqual([]);
   });
 
   it('1.4 with no serial, a board is matched only when config, install stamp and blade layout all agree', async () => {
@@ -106,5 +136,42 @@ describe('saber library', () => {
     expect((await lib.rename(s.id, '   ')).name).toBe('Ahsoka');
     expect((await connect(new Library(file), hote2)).name).toBe('Ahsoka');
     await expect(lib.rename('nope', 'x')).rejects.toThrow('Unknown saber');
+  });
+});
+
+describe('a saber expected back after its install (F15)', () => {
+  const reflashed = noSerial({ installed: 'Sep 25 2026 16:30:00', configName: 'config/hiltwright_hote2.h' });
+
+  it('matches the saber installed when the board reports the config that install wrote, with no serial', async () => {
+    const lib = new Library(file);
+    const s = await connect(lib, hote2);
+    const back = await lib.upsert({ identity: reflashed, presets: [], fonts: [], tracks: [] }, { id: s.id, configName: 'config/hiltwright_hote2.h' });
+    expect(back.id).toBe(s.id);
+    expect(back.identity.installed).toBe('Sep 25 2026 16:30:00');
+    expect(back.identity.usbSerial).toBe(hote2.usbSerial);
+    expect(await lib.list()).toHaveLength(1);
+  });
+
+  it('does not match when the board reports another config', async () => {
+    const lib = new Library(file);
+    const s = await connect(lib, hote2);
+    const other = await lib.upsert({ identity: reflashed, presets: [], fonts: [], tracks: [] }, { id: s.id, configName: 'config/hiltwright_kylo.h' });
+    expect(other.id).not.toBe(s.id);
+  });
+
+  it('never matches a plan through an expectation', async () => {
+    const lib = new Library(file);
+    const plan = await lib.plan('hote2', model);
+    const board = await lib.upsert({ identity: reflashed, presets: [], fonts: [], tracks: [] }, { id: plan.id, configName: 'config/hiltwright_hote2.h' });
+    expect(board.id).not.toBe(plan.id);
+    expect((await lib.list()).find((x) => x.id === plan.id)?.planned).toBe(true);
+  });
+
+  it('lets a serial match win over the expectation', async () => {
+    const lib = new Library(file);
+    const a = await connect(lib, hote2);
+    const b = await connect(lib, { ...hote2, usbSerial: 'OTHER', configName: 'config/hiltwright_kylo.h' });
+    const back = await lib.upsert({ identity: { ...hote2, installed: 'new' }, presets: [], fonts: [], tracks: [] }, { id: b.id, configName: 'config/hiltwright_hote2.h' });
+    expect(back.id).toBe(a.id);
   });
 });

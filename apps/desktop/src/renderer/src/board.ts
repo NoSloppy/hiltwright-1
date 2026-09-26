@@ -50,6 +50,9 @@ export function useBoard() {
   // One connection attempt at a time (boardOps.ts): a second one while connecting, or while a port is open, is skipped.
   const [gate] = useState(() => connectGate(() => !!transport.current));
   const infoRef = useRef<BoardInfo | null>(null);
+  // The saber just installed and the config its new firmware reports: the next identify matches it even without a USB
+  // serial (two boards plugged in). Used once, and forgotten after 5 minutes.
+  const expected = useRef<{ id: string; configName: string; until: number } | null>(null);
   const saberRef = useRef<SaberRecord | null>(null);
   infoRef.current = info;
   saberRef.current = saber;
@@ -180,7 +183,10 @@ export function useBoard() {
       buttons: next.version?.buttons ?? null, installed: next.version?.installed ?? null, pixelBlades: next.pixelBlades, bladeConfig: next.bladeConfig,
     };
     try {
-      const rec = await api().library.upsert({ identity, presets: next.presets, fonts: next.fonts, tracks: next.tracks });
+      const ex = expected.current && expected.current.until > Date.now() ? { id: expected.current.id, configName: expected.current.configName } : null;
+      expected.current = null;
+      const rec = await api().library.upsert({ identity, presets: next.presets, fonts: next.fonts, tracks: next.tracks, expect: ex });
+      if (ex) console.log(`[library] expected ${ex.id} (${ex.configName}) after the install; matched ${rec.id}${rec.id === ex.id ? '' : ' instead'}`);
       setSaber(rec);
       console.log(`[library] saber ${rec.id} "${rec.name}" serial=${rec.identity.usbSerial ?? 'none'} firstSeen=${rec.firstSeen}`);
       await api().snapshots.save(rec.id, 'Connected', next.presets);
@@ -409,6 +415,10 @@ export function useBoard() {
     await refreshLibrary();
     return rec;
   }, [refreshLibrary]);
+  /** Say which saber is being installed and the config its new firmware will report (see `expected`). */
+  const expectAfterInstall = useCallback((id: string, configName: string) => {
+    expected.current = { id, configName, until: Date.now() + 5 * 60_000 };
+  }, []);
   const updateSaber = useCallback(async (patch: SaberPatch, id?: string) => {
     const target = id ?? saberRef.current?.id;
     if (!target) return;
@@ -487,7 +497,7 @@ export function useBoard() {
     };
   }, []);
 
-  return { status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
+  return { status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
 }
 
 export type Board = ReturnType<typeof useBoard>;

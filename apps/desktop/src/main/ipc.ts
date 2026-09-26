@@ -23,6 +23,7 @@ import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { backupFlash, describeBootloader, listBackups, restoreBackup, usbState, waitFor, writeFirmware } from './flash';
 import { logged } from './ipcLog';
+import { storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
 import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
 import type { FontLibraryStatus, JobEvent } from '../shared/api';
@@ -70,12 +71,13 @@ export function registerIpc(): void {
   handle('library:list', () => library.list());
   handle('library:upsert', (_e, input: unknown) => {
     const o = (input ?? {}) as Record<string, unknown>;
+    const ex = (o.expect ?? null) as { id?: unknown; configName?: unknown } | null;
     return library.upsert({
       identity: identity(o.identity), presets: presets(o.presets ?? []),
       fonts: Array.isArray(o.fonts) ? o.fonts.map((f) => str(f, 200)) : [],
       tracks: Array.isArray(o.tracks) ? o.tracks.map((t) => str(t, 500)) : [],
       ...(typeof o.name === 'string' ? { name: str(o.name) } : {}),
-    });
+    }, ex && typeof ex === 'object' ? { id: str(ex.id, 40), configName: str(ex.configName, 200) } : null);
   });
   handle('library:rename', (_e, id: unknown, name: unknown) => library.rename(str(id, 40), str(name, 80)));
   handle('library:plan', (_e, name: unknown, model: unknown) => { const errors = validateModel(model as SaberConfigModel).filter((e) => !/preset/i.test(e)); if (errors.length) throw new Error(errors[0]); return library.plan(str(name, 80), model as SaberConfigModel); });
@@ -350,6 +352,8 @@ export function registerIpc(): void {
     return { file: basename(file) };
   });
 
+  // Stores set aside at start (jsonStore.ts). Reading them first makes sure the library and sets have been loaded.
+  handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list()]); return storeProblems(); });
   handle('app:userDataPath', () => userData);
   // False in a development run started with HILTWRIGHT_NO_BOARD (packaged builds never have it).
   handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);

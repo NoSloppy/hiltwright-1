@@ -173,7 +173,8 @@ export interface HiltwrightApi {
   library: {
     list(): Promise<SaberRecord[]>;
     /** Match an identity to a known saber, or create one. Returns the stored record. */
-    upsert(input: { identity: SaberIdentity; presets: PresetRecord[]; fonts: string[]; tracks: string[]; name?: string }): Promise<SaberRecord>;
+    /** Match or create. `expect` names the saber just installed and the config it now reports (matched without a serial). */
+    upsert(input: { identity: SaberIdentity; presets: PresetRecord[]; fonts: string[]; tracks: string[]; name?: string; expect?: { id: string; configName: string } | null }): Promise<SaberRecord>;
     rename(id: string, name: string): Promise<SaberRecord>;
     remove(id: string): Promise<void>;
     /** Store the build model and/or firmware manifest for a saber. `null` clears a field. */
@@ -306,6 +307,8 @@ export interface HiltwrightApi {
     save(snapshot: ConnectionSnapshot): Promise<{ file: string }>;
   };
   app: {
+    /** Stores that could not be read at start and were set aside: what the owner calls each, and the file it was kept as. */
+    storeProblems(): Promise<{ store: string; keptAs: string; startedFrom: 'backup' | 'readable records' | 'nothing' }[]>;
     userDataPath(): Promise<string>;
     /** False when a development run was started with HILTWRIGHT_NO_BOARD: no board can be reached. */
     boardAccess(): Promise<boolean>;

@@ -116,6 +116,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const writeFromBootloader = useCallback(async () => {
     if (!result?.ok || !result.dfuPath || !saber) return;
     try {
+      // The board comes back as this saber, reporting this config, whether or not a USB serial can be read.
+      if (model) board.expectAfterInstall(saber.id, `config/${model.name}.h`);
       setXfer(0); setStep('backup');
       const bak = await api().flash.backup(saber.id, 'before-install');
       if (!bak.ok) { setStep('failed'); setNote({ tone: 'red', text: `Backup failed, so nothing was written. ${bak.detail}` }); return; }
@@ -130,7 +132,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
       setStep('done');
       setNote({ tone: 'green', text: `Installed. Backup of the previous firmware: ${bak.file}` });
       // Once installed, the bank's presets are the saber's own; the next draft reads them back from the saber.
-      if (model && result.manifest) { const { presetsFrom: _loaded, ...settled } = model; await board.updateSaber({ model: settled, firmware: { ...result.manifest, os: result.os, at: new Date().toISOString() } }); }
+      if (model && result.manifest) { const { presetsFrom: _loaded, ...settled } = model; await board.updateSaber({ model: settled, firmware: { ...result.manifest, os: result.os, at: new Date().toISOString() } }, saber.id); }
     } catch (err) {
       setStep('failed');
       setNote({ tone: 'red', text: String(err) });

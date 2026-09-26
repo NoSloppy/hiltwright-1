@@ -109,6 +109,7 @@ const api: HiltwrightApi = {
     save: (snapshot) => ipcRenderer.invoke('support:save', snapshot),
   },
   app: {
+    storeProblems: () => ipcRenderer.invoke('app:storeProblems'),
     userDataPath: () => ipcRenderer.invoke('app:userDataPath'),
     boardAccess: () => ipcRenderer.invoke('app:boardAccess'),
     openHelp: (url) => ipcRenderer.invoke('app:openHelp', url),
