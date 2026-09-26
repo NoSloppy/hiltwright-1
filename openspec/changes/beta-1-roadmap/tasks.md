@@ -119,7 +119,7 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 - [x] 3.7 Deliver `font-library-integrity`; verify it is archived
 - [x] 3.8 Deliver `style-save-integrity`; verify it is archived
 - [x] 3.9 Deliver `contributors-integrity`; verify it is archived
-- [ ] 3.10 Deliver `demo-hilt-safety`; verify it is archived
+- [x] 3.10 Deliver `demo-hilt-safety`; verify it is archived
 
 ### Wave C: the right firmware on the right board
 

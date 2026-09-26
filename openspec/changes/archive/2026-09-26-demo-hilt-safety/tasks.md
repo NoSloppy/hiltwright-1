@@ -93,4 +93,5 @@
   - a hilt the owner loads in a development run on their own data appears in the installed app with its fit
   - Export hilts, removing that hilt, then Import hilts brings it back with its fit and credit
   - **Result, 2026-09-26.** Owner check passed. A hilt loaded, fitted (seat) and credited in a development run on the owner's own data appeared in the installed build under Your hilts with that seat and credit. Export hilts, Remove (confirmed), then Import hilts brought it back with its seat and credit.
-- [ ] 4.4 After archive, tick roadmap task 3.10 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 4.4 After archive, tick roadmap task 3.10 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-26.** Archived to `openspec/changes/archive/2026-09-26-demo-hilt-safety`, with the demo-room spec synced (18 requirements, 27 scenarios). Roadmap 3.10 is ticked.
