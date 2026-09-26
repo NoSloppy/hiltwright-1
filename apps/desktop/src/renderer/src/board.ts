@@ -50,8 +50,8 @@ export function useBoard() {
   // One connection attempt at a time (boardOps.ts): a second one while connecting, or while a port is open, is skipped.
   const [gate] = useState(() => connectGate(() => !!transport.current));
   const infoRef = useRef<BoardInfo | null>(null);
-  // The saber just installed and the config its new firmware reports: the next identify matches it even without a USB
-  // serial (two boards plugged in). Used once, and forgotten after 5 minutes.
+  // The saber just installed and the config its new firmware reports: an identify matches it even without a USB serial
+  // (two boards plugged in). Forgotten once it has matched, or after 5 minutes.
   const expected = useRef<{ id: string; configName: string; until: number } | null>(null);
   const saberRef = useRef<SaberRecord | null>(null);
   infoRef.current = info;
@@ -183,10 +183,12 @@ export function useBoard() {
       buttons: next.version?.buttons ?? null, installed: next.version?.installed ?? null, pixelBlades: next.pixelBlades, bladeConfig: next.bladeConfig,
     };
     try {
-      const ex = expected.current && expected.current.until > Date.now() ? { id: expected.current.id, configName: expected.current.configName } : null;
-      expected.current = null;
+      if (expected.current && expected.current.until <= Date.now()) expected.current = null;
+      const ex = expected.current ? { id: expected.current.id, configName: expected.current.configName } : null;
       const rec = await api().library.upsert({ identity, presets: next.presets, fonts: next.fonts, tracks: next.tracks, expect: ex });
-      if (ex) console.log(`[library] expected ${ex.id} (${ex.configName}) after the install; matched ${rec.id}${rec.id === ex.id ? '' : ' instead'}`);
+      // Kept until the saber installed comes back: with two boards plugged in, the other one may reconnect first.
+      if (ex && rec.id === ex.id) expected.current = null;
+      if (ex) console.log(`[library] expected ${ex.id} (${ex.configName}) after the install; matched ${rec.id}${rec.id === ex.id ? '' : ' instead, still expecting it'}`);
       setSaber(rec);
       console.log(`[library] saber ${rec.id} "${rec.name}" serial=${rec.identity.usbSerial ?? 'none'} firstSeen=${rec.firstSeen}`);
       await api().snapshots.save(rec.id, 'Connected', next.presets);

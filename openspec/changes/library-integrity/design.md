@@ -73,7 +73,7 @@ The IPC call `app:storeProblems` returns the list. The Armory reads it once on m
 - *A modal at start-up.* The app still works, so a note is enough and does not block.
 
 ### D4. The saber being installed is expected back (F15)
-`board.ts` gains `expectAfterInstall(saberId, configName)`, which `Build.tsx` calls just before rebooting to the bootloader, with `config/${model.name}.h`. The next `identify` passes `{ id, configName }` to `library:upsert` as `expect`, then clears it. The hint also expires after 5 minutes.
+`board.ts` gains `expectAfterInstall(saberId, configName)`, which `Build.tsx` calls just before rebooting to the bootloader, with `config/${model.name}.h`. Each `identify` passes `{ id, configName }` to `library:upsert` as `expect`. The expectation is cleared once it has matched, and it expires after 5 minutes. It is not cleared when another board reconnects first: in task 6.3 the V3 reconnected after hote2's install and used it up (amended 2026-09-25).
 
 `Library.upsert` resolves in this order:
 1. A serial match.

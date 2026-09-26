@@ -18,6 +18,9 @@ Beta 1 promises Proffieboard V3 support, and nothing has ever been compiled for,
 - **From `baseline-firmware`, every board-marked scenario on the V3:** version after install (4.4), backup (5.4), reboot (5.6), driver (5.8), install (5.10) and restore (5.14). Also a V3 build from the app with its flash budget (3.3, FW13), and an install started from the V3's bootloader (5.7).
 - **From `baseline-sd-fonts`, on the V3:** sharing its card over USB (2.11) and giving it back (2.13).
 - **From `baseline-styles`:** the same side-by-side blade sample on the V3 (2.2), since the V3's LEDs and power path differ.
+- **From `library-integrity` 6.3 (deferred by the owner, 2026-09-25)**, run once the app can reach the right board after an install (HW-2026-09-25c in `install-target-safety`), with V2.2 hote2 and the V3.9 plugged in together:
+  - After a reflash, hote2 reconnects with no USB serial and is matched to its record through the install's expectation (the log shows "expected … matched" with the same id), with no second record.
+  - Putting back a backup Hiltwright took (the backup now records its config) brings hote2 back to the same record, with its firmware record cleared.
 
 ## Non-goals
 

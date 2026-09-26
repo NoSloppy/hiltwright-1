@@ -30,9 +30,10 @@
 
   Verify with `npm test`.
   - **Result, 2026-09-25.** `Library.upsert(input, expect)` resolves in this order: serial, then expectation (no serial, same config, not a plan), then the three-part match, then a new record. `library:upsert` validates `expect`. 4 new tests pass: a match after a reflash that keeps the serial; no match for another config; never a plan; and a serial match wins.
-- [ ] 3.2 Add `expectAfterInstall(saberId, configName)` to `board.ts`, passed on the next `identify` and then cleared, with a 5-minute expiry. Call it from `Build.tsx` before rebooting to the bootloader (install and restore). Pass `saber.id` to `updateSaber` for the firmware record. Verify with `npm run typecheck` and in task 6.3.
-
-- [ ] 3.3 Restores are expected back too (design D4, restores). `flash:backup` takes the reported config and writes `<file>.json` beside the image. `listBackups` returns `configName`, or null when there is no sidecar. The restore flow calls `expectAfterInstall` when it is known. Add tests in a new `apps/desktop/test/backups.test.ts`: a sidecar is read into `configName`, and a backup with no sidecar gives null. Verify with `npm test`, `npm run typecheck`, and in task 6.3.
+- [x] 3.2 Add `expectAfterInstall(saberId, configName)` to `board.ts`, passed on the next `identify` and then cleared, with a 5-minute expiry. Call it from `Build.tsx` before rebooting to the bootloader (install and restore). Pass `saber.id` to `updateSaber` for the firmware record. Verify with `npm run typecheck` and in task 6.3.
+  - **Result, 2026-09-25.** `board.expectAfterInstall` is added. `Build.tsx` sets it at the start of the write (before the Web Serial connect event can fire), and passes `saber.id` to `updateSaber`. Amended after task 6.3: the expectation is kept until it matches, or for up to 5 minutes, instead of being spent on whichever board reconnects first. The type check is clean. On hardware (task 6.3), the firmware record went to hotetest although the V3 reconnected. The expectation's own match is deferred to `v3-verification`.
+- [x] 3.3 Restores are expected back too (design D4, restores). `flash:backup` takes the reported config and writes `<file>.json` beside the image. `listBackups` returns `configName`, or null when there is no sidecar. The restore flow calls `expectAfterInstall` when it is known. Add tests in a new `apps/desktop/test/backups.test.ts`: a sidecar is read into `configName`, and a backup with no sidecar gives null. Verify with `npm test`, `npm run typecheck`, and in task 6.3.
+  - **Result, 2026-09-25.** `flash:backup` takes the reported config and writes `<file>.json`. `listBackups` returns `configName` (null when there is no sidecar or it is unreadable). The restore flow calls `expectAfterInstall` when it is known. `backups.test.ts` (1 test) passes, and the type check is clean. In task 6.3, the backup of hote2's firmware was taken, but the restore check is deferred to `v3-verification` with the owner's agreement.
 
 ## 4. Telling the owner
 
@@ -68,10 +69,17 @@
     - After confirming the V3's wiring on Wiring, the confirmation also showed "Saber saber already has wiring and presets set up in Hiltwright. They will be replaced by the plan's."
     - Adopt left one record, "Kylo build" (renamed from the default name), with the plan's model and the saber's config name kept, and the plan was gone.
     - Only reads were sent: version, battery, get_volume, get_preset, list_presets, list_fonts, list_tracks, scanid, and the hw_end sentinels.
-- [ ] 6.3 Two-board check with the owner, V2.2 hote2 and V3 plugged in together, on the owner's installed build of this change:
+- [x] 6.3 Two-board check with the owner, V2.2 hote2 and V3 plugged in together, on the owner's installed build of this change:
   1. Record the owner's `library.json` (hote2 record count and firmware time) through `\\localhost\C$`.
   2. The owner connects, confirms the header shows hote2 (unplugging the V3 to connect first if needed, then plugging it back in), and installs on hote2.
   3. Verify afterwards that there is still one hote2 record, carrying the new firmware time, and that the log shows the expectation matched.
   4. With both boards still plugged in, the owner puts back the backup that install just took. Verify there is still one hote2 record, its firmware record is cleared, and the log shows the expectation matched.
-- [ ] 6.4 Run `npm test` and `npm run typecheck`; verify both pass.
+  - **Result, 2026-09-25, V2.2 hote2 and V3.9 ("Saber saber") plugged in together, the owner's installed build. The owner accepted this as partial and deferred the rest.**
+    - First attempt: the build threw `EPERM` on `C:\ProgramData\Hiltwright\builds\b53c5735a826\hiltwright_hote2.h`, because those files were owned by Administrators after a run from an admin terminal on 2026-09-24. The page stayed on "Building…". Filed as HW-2026-09-25a (`toolchain-integrity`) and HW-2026-09-25b (`build-correctness`). The owner removed the folder, and the next build worked.
+    - Before the install, the app connected to hote2 and recognised it as hotetest (serial null with two boards, matched by config, stamp and layout). The build succeeded (85% flash, 21 s), the backup succeeded (262144 bytes), and the write succeeded (222136 bytes in 59.8 s).
+    - After the write, the app reconnected to the **V3**, the first granted port. The log shows `expected b53c5735a826 (config/hiltwright_hote2.h) after the install; matched 045975b73408 instead`, so the V3 was not mistaken for hotetest. Filed as HW-2026-09-25c (`install-target-safety`).
+    - The owner's `library.json` afterwards: still **one** hotetest record, whose `firmware.at` changed from 2026-09-25T01:50:44Z to **2026-09-26T00:47:39Z**. The V3's record gained no firmware record. This verifies "The record goes to the saber installed" on hardware.
+    - Not exercised: hote2 reconnecting without a serial and matching through the expectation, and the restore with two boards. Both are filed in `v3-verification`, to run once the app reaches the right board after an install.
+- [x] 6.4 Run `npm test` and `npm run typecheck`; verify both pass.
+  - **Result, 2026-09-25.** 177 core and 180 desktop tests pass (7 gated skipped), and the type check is clean. Run after the last code change (the expectation amendment).
 - [ ] 6.5 After archive, tick roadmap task 3.6 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.

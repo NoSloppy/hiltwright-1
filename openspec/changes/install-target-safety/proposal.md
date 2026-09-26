@@ -13,6 +13,7 @@ Nothing makes sure the firmware being written matches the board it lands on. The
 - **FW5:** A build becomes stale as soon as the model it was built from changes. Install offers only a current build, and the record stored after an install is the model that was actually built.
 - **FW31:** With more than one board plugged in, say so and do not guess.
 - **BST-3** (from `board-side-test-coverage`, joins FW3): a new saber's first draft is always for V2, because `draftModel` guesses the board from the ProffieOS version string, which never names the board. A V3 owner's first build would target V2 unless they change it. It is pinned by the expected-failure test "a new saber whose config names a V3 board is drafted for V3" in `apps/desktop/test/draftModel.test.ts`.
+- **HW-2026-09-25c** (seen during `library-integrity` 6.3, V2.2 hote2 and V3.9 plugged in together): after installing hote2, the app reconnected to the V3, the first granted port, because the Web Serial connect event fired while hote2 was still coming back. The owner was left looking at the other saber after an install. With more than one board plugged in, reconnecting after an install must reach the board that was installed, or say which board it reached (with F4 and FW31). The firmware record itself went to the right saber (`library-integrity`).
 
 ## Non-goals
 
