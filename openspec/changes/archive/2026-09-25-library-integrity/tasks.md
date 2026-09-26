@@ -82,4 +82,5 @@
     - Not exercised: hote2 reconnecting without a serial and matching through the expectation, and the restore with two boards. Both are filed in `v3-verification`, to run once the app reaches the right board after an install.
 - [x] 6.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-25.** 177 core and 180 desktop tests pass (7 gated skipped), and the type check is clean. Run after the last code change (the expectation amendment).
-- [ ] 6.5 After archive, tick roadmap task 3.6 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 6.5 After archive, tick roadmap task 3.6 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-25.** Archived as `2026-09-25-library-integrity`. saber-library (5 modified requirements) and preset-editing (1 added) were synced, and roadmap 3.6 is ticked.
