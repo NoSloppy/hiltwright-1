@@ -59,12 +59,12 @@ When a saber answers nothing on connecting, the app SHALL stop reading it at the
 - **THEN** "Reading the saber…" ends with the saber not answering within 15 seconds, not after minutes
 
 ### Requirement: A saber that stops answering is let go
-While connected, when a command gets nothing at all back from the saber for 10 seconds, with the nudges unanswered too, the app SHALL end that command and every command waiting behind it. It SHALL then close the port and show the error "The saber stopped answering. Unplug it and plug it back in." A saber that is still printing, however slowly, SHALL NOT count as silent. A command sent to put the board into its bootloader SHALL NOT count, because the board is expected to go quiet. The app SHALL NOT check on an idle saber; silence is noticed the next time anything is sent.
+While connected, when a command gets nothing at all back from the saber for 10 seconds, with the nudges unanswered too, the app SHALL end that command and every command waiting behind it. It SHALL then close the port and show the error "The saber stopped answering. Unplug it and plug it back in." A saber that is still printing, however slowly, SHALL NOT count as silent. A command sent to put the board into its bootloader SHALL NOT count, because the board is expected to go quiet. The app SHALL NOT check on an idle saber; silence is noticed the next time anything is sent. This applies to boards that frame their answers with tags (ProffieOS 8). On ProffieOS 7 a command ends after a short quiet, just as a write that prints nothing does, so a silent ProffieOS 7 board is recognised only on connecting.
 
 #### Scenario: The saber goes silent
 - **WHEN** a connected saber stops answering, and the next command gets nothing back for 10 seconds
 - **THEN** the port is closed and the Armory says the saber stopped answering, instead of the header still saying "Connected"
-- *Needs a real board (either).*
+- *Needs a real board (either), running ProffieOS 8.*
 
 #### Scenario: A slow but talking saber
 - **WHEN** a command runs for longer than 10 seconds while the saber keeps printing, as a long font listing does

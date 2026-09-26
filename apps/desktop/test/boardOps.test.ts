@@ -1,7 +1,7 @@
 // board-connection 3.3 and 3.14 (baseline audit), on the rules useBoard uses.
 
 import { describe, expect, it } from 'vitest';
-import { connectGate, serialQueue } from '../src/renderer/src/boardOps';
+import { connectGate, runOperation, serialQueue, type OpDeps, type SaveState } from '../src/renderer/src/boardOps';
 
 const later = () => { let done!: () => void; const p = new Promise<void>((r) => { done = r; }); return { p, done }; };
 
@@ -53,5 +53,41 @@ describe('board operations queued in order', () => {
     const next = enqueue(async () => 'written');
     await expect(failed).rejects.toThrow('no answer');
     expect(await next).toBe('written');
+  });
+});
+
+// connection-robustness BST-4: an operation whose turn comes after an unplug says so.
+describe('running a board operation', () => {
+  function deps(client: { name: string } | null) {
+    const saves: SaveState[] = [];
+    const busy: boolean[] = [];
+    const d: OpDeps<{ name: string }> = { client: () => client, setBusy: (b) => busy.push(b), setSave: (s) => saves.push(s), log: () => undefined, snapshot: async () => undefined };
+    return { d, saves, busy };
+  }
+
+  it('an edit whose turn comes after the saber was unplugged is reported as not sent', async () => {
+    const { d, saves, busy } = deps(null);
+    let ran = false;
+    await runOperation(d, 'Set font', async () => { ran = true; return { ok: true }; }, true);
+    expect(ran).toBe(false);
+    expect(saves).toEqual([{ kind: 'failed', what: 'Set font', error: 'Not sent: the saber is not connected.' }]);
+    expect(busy).toEqual([]);
+  });
+
+  it('with a saber, runs the operation on its client and reports it saved', async () => {
+    const { d, saves, busy } = deps({ name: 'hote2' });
+    let on = '';
+    await runOperation(d, 'Set font', async (c) => { on = c.name; return { ok: true, ms: 12, note: 'checked' }; }, false);
+    expect(on).toBe('hote2');
+    expect(saves[0]).toEqual({ kind: 'writing', what: 'Set font' });
+    expect(saves[1]).toMatchObject({ kind: 'saved', what: 'Set font · checked', ms: 12 });
+    expect(busy).toEqual([true, false]);
+  });
+
+  it('an operation that throws is reported as failed and clears busy', async () => {
+    const { d, saves, busy } = deps({ name: 'hote2' });
+    await runOperation(d, 'Rename', async () => { throw new Error('Port closed'); }, false);
+    expect(saves.at(-1)).toEqual({ kind: 'failed', what: 'Rename', error: 'Error: Port closed' });
+    expect(busy).toEqual([true, false]);
   });
 });

@@ -10,7 +10,7 @@ import {
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
 import { PROFFIE_FILTER, WebSerialTransport, describePort, grantedProffiePorts } from './serial';
 import { setConnectionSnapshot } from './support';
-import { connectGate, serialQueue } from './boardOps';
+import { connectGate, runOperation, serialQueue, type SaveState } from './boardOps';
 
 export interface BoardInfo {
   version: VersionInfo | null;
@@ -28,7 +28,12 @@ export interface BoardInfo {
 
 export interface ConsoleLine { kind: 'in' | 'out' | 'event'; text: string; at: number }
 export type Status = 'idle' | 'no-port' | 'connecting' | 'reading' | 'connected' | 'error';
-export type SaveState = { kind: 'idle' } | { kind: 'writing'; what: string } | { kind: 'saved'; what: string; ms: number; at: number } | { kind: 'failed'; what: string; error: string };
+export type { SaveState } from './boardOps';
+
+/** A saber that answered nothing at all while it was being read (connection-robustness). */
+class NotAnswering extends Error {}
+const NOT_ANSWERING = 'The saber is not answering. Unplug it and plug it back in.';
+const STOPPED_ANSWERING = 'The saber stopped answering. Unplug it and plug it back in.';
 
 const api = () => window.hiltwright;
 
@@ -50,6 +55,12 @@ export function useBoard() {
   // One connection attempt at a time (boardOps.ts): a second one while connecting, or while a port is open, is skipped.
   const [gate] = useState(() => connectGate(() => !!transport.current));
   const infoRef = useRef<BoardInfo | null>(null);
+  // Everything that talks to the board takes its turn here: preset edits, the console, page checks and polls.
+  // Writes are serialised, never dropped: a click that lands while the board is busy waits its turn.
+  const [enqueue] = useState(serialQueue);
+  // While the saber is first read, silence ends the reading (NotAnswering) instead of letting the saber go.
+  const identifying = useRef(false);
+  const silentWhileIdentifying = useRef(false);
   // The saber just installed and the config its new firmware reports: an identify matches it even without a USB serial
   // (two boards plugged in). Forgotten once it has matched, or after 5 minutes.
   const expected = useRef<{ id: string; configName: string; until: number } | null>(null);
@@ -102,6 +113,12 @@ export function useBoard() {
     setPortName(null);
   }, []);
 
+  /** The port went away (unplugged, or the read ended): back to "Not connected", not an error. */
+  const lost = useCallback((reason: string) => {
+    console.log(`[board] port lost: ${reason}`);
+    void disconnect();
+  }, [disconnect]);
+
   /**
    * Put the board into its DFU bootloader and let go of the port so dfu-util can have the device.
    * Tries the firmware's own RebootDFU command first, then the Arduino 1200-baud touch. Either way the port
@@ -111,7 +128,7 @@ export function useBoard() {
     const t = transport.current;
     if (!t) return false;
     const port = t.port;
-    try { log('in', 'RebootDFU'); await client.current?.send('RebootDFU', { idleMs: 400 }); } catch { /* the port may vanish mid-reply; that is success */ }
+    try { log('in', 'RebootDFU'); await client.current?.send('RebootDFU', { idleMs: 400, expectSilence: true }); } catch { /* the port may vanish mid-reply; that is success */ }
     client.current?.close();
     client.current = null;
     transport.current = null;
@@ -131,13 +148,16 @@ export function useBoard() {
     return true;
   }, [log]);
 
-  const send = useCallback(async (command: string, opts?: Parameters<BoardClient['send']>[1]): Promise<Response> => {
+  /** Send now, outside the queue: only while the saber is first read, before anything else can be queued. */
+  const sendNow = useCallback(async (command: string, opts?: Parameters<BoardClient['send']>[1]): Promise<Response> => {
     if (!client.current) throw new Error('Not connected');
     log('in', command);
     const r = await client.current.send(command, opts);
     for (const l of r.lines) log('out', l);
     return r;
   }, [log]);
+  /** Send a command in its turn, after any edit already under way (the console, Try it, page checks). */
+  const send = useCallback((command: string, opts?: Parameters<BoardClient['send']>[1]): Promise<Response> => enqueue(() => sendNow(command, opts)), [enqueue, sendNow]);
 
   /** Read everything the board can tell us, then match or create the saber in the library. */
   const identify = useCallback(async () => {
@@ -145,7 +165,8 @@ export function useBoard() {
     const timings: Record<string, number> = {};
     const rejected: string[] = [];
     const time = async (cmd: string, opts?: Parameters<BoardClient['send']>[1]) => {
-      const r = await send(cmd, opts);
+      const r = await sendNow(cmd, opts);
+      if (silentWhileIdentifying.current) throw new NotAnswering(`no answer to ${cmd}`);
       timings[cmd] = r.ms;
       if (wasRejected(r.lines)) rejected.push(cmd);
       return r;
@@ -154,6 +175,7 @@ export function useBoard() {
     const t0 = Date.now();
     const tagged = await client.current!.detectTagging();
     timings.tagging = Date.now() - t0;
+    if (silentWhileIdentifying.current) throw new NotAnswering('no answer to the tag probe');
     log('event', tagged ? 'Tagged responses: yes (OS 8 framing)' : 'Tagged responses: no (untagged, idle-terminated)');
     console.log(`[board] tagged=${tagged} probe=${timings.tagging} ms`);
     const v = await time('version', { until: (l) => /^installed:/.test(l) });
@@ -205,12 +227,12 @@ export function useBoard() {
       console.log(`[library] upsert failed: ${String(err)}`);
     }
     return next;
-  }, [send, refreshLibrary, refreshSnapshots]);
+  }, [sendNow, refreshLibrary, refreshSnapshots]);
 
   const connectTo = useCallback(async (port: SerialPort) => {
     setError(null);
     setStatus('connecting');
-    const t = new WebSerialTransport(port, (reason) => { void disconnect(`Port closed: ${reason}`); });
+    const t = new WebSerialTransport(port, lost);
     try {
       await t.open();
     } catch (err) {
@@ -221,15 +243,28 @@ export function useBoard() {
     }
     transport.current = t;
     // The run log gets the whole conversation, including the probe, polls and helper commands the console leaves out.
-    client.current = new BoardClient(t, { onEvent: (l) => log('event', l), onTraffic: (d, text) => console.log(`[board] ${d === 'sent' ? '>' : '<'} ${text}`) });
+    client.current = new BoardClient(t, {
+      onEvent: (l) => log('event', l), onTraffic: (d, text) => console.log(`[board] ${d === 'sent' ? '>' : '<'} ${text}`),
+      // Nothing at all back, nudges included: while being read the reading stops; once connected, the saber is let go.
+      onSilent: (r) => {
+        console.log(`[board] silent: ${r.command} (${r.ms} ms, nothing heard)`);
+        if (identifying.current) { silentWhileIdentifying.current = true; return; }
+        void disconnect(STOPPED_ANSWERING);
+      },
+    });
     setPortName(describePort(port));
     console.log('[board] port opened', describePort(port));
+    identifying.current = true;
+    silentWhileIdentifying.current = false;
     try {
       await identify();
     } catch (err) {
-      await disconnect(`Board did not answer: ${String(err)}`);
+      console.log(`[board] reading stopped: ${String(err)}`);
+      await disconnect(err instanceof NotAnswering ? NOT_ANSWERING : `Board did not answer: ${String(err)}`);
+    } finally {
+      identifying.current = false;
     }
-  }, [disconnect, identify, log]);
+  }, [disconnect, identify, log, lost]);
 
   const connectOnce = useCallback(async (interactive: boolean) => {
     let ports = await grantedProffiePorts();
@@ -259,8 +294,13 @@ export function useBoard() {
       return 'attempted';
     };
     const onConnect = () => { if (!client.current) void connect(false); };
+    // The system says a port went away: if it is ours, the saber was unplugged.
+    const onDisconnect = (e: Event) => { const t = transport.current; if (t && e.target === t.port) t.lost('the saber was unplugged'); };
     navigator.serial?.addEventListener('connect', onConnect);
-    return () => navigator.serial?.removeEventListener('connect', onConnect);
+    navigator.serial?.addEventListener('disconnect', onDisconnect);
+    // Development aid: hiltwrightMuteBoard() makes the app hear nothing from the saber, to check the silent-saber handling.
+    if (import.meta.env.DEV) (window as unknown as { hiltwrightMuteBoard?: (on?: boolean) => string }).hiltwrightMuteBoard = (on = true) => { WebSerialTransport.muted = on; console.log(`[board] muted: ${on}`); return on ? 'muted' : 'unmuted'; };
+    return () => { navigator.serial?.removeEventListener('connect', onConnect); navigator.serial?.removeEventListener('disconnect', onDisconnect); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -285,39 +325,11 @@ export function useBoard() {
     try { await api().snapshots.save(s.id, label, i.presets); await refreshSnapshots(s.id); } catch (err) { console.log(`[snapshots] save failed: ${String(err)}`); }
   }, [refreshSnapshots]);
 
-  /** Run a board operation with busy state, snapshot and save-state bookkeeping. */
-  // Writes are serialised, never dropped: a click that lands while the board is busy waits its turn.
-  const [enqueue] = useState(serialQueue);
+  /** Run a board operation in its turn, with busy state, snapshot and save-state bookkeeping (boardOps.ts). */
   const run = useCallback((label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot = true): Promise<void> => {
-    return enqueue(() => runNow(label, op, withSnapshot));
+    return enqueue(() => runOperation({ client: () => client.current, setBusy, setSave, log, snapshot }, label, op, withSnapshot));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const runNow = async (label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot: boolean) => {
-    if (!client.current) return;
-    setBusy(true);
-    setSave({ kind: 'writing', what: label });
-    const started = Date.now();
-    try {
-      if (withSnapshot) await snapshot(`Before: ${label}`);
-      log('in', label);
-      const r = await op(client.current);
-      if (r.ok) {
-        setSave({ kind: 'saved', what: r.note ? `${label} · ${r.note}` : label, ms: r.ms ?? Date.now() - started, at: Date.now() });
-        log('out', `✓ ${label}`);
-        console.log(`[board] ok: ${label} · ${r.ms ?? Date.now() - started} ms`);
-      } else {
-        setSave({ kind: 'failed', what: label, error: r.error ?? 'unknown' });
-        log('out', `✗ ${label}: ${r.error}`);
-        console.log(`[board] FAILED: ${label} · ${r.error}`);
-      }
-    } catch (err) {
-      setSave({ kind: 'failed', what: label, error: String(err) });
-      console.log(`[board] FAILED: ${label} · ${String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const choosePreset = useCallback((index: number) => run(`Select preset ${index + 1}`, async (c) => {
     const r = await selectPreset(c, index);
@@ -333,9 +345,8 @@ export function useBoard() {
   useEffect(() => {
     if (pendingApply == null || status !== 'connected') return;
     const t = setInterval(() => {
-      const c = client.current;
-      if (!c || busyRef.current) return;
-      void c.send('get_on', { idleMs: 400, timeoutMs: 6000 }).then((r) => {
+      if (!client.current || busyRef.current) return;
+      void send('get_on', { idleMs: 400, timeoutMs: 6000 }).then((r) => {
         if (!r.lines.some((l) => l.trim() === '0')) return;
         const index = pendingApply;
         setPendingApply(null);

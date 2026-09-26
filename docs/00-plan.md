@@ -86,7 +86,7 @@ Accepted sacrifices: zero-install tryout, phone-based tweaks, instant web distri
 - Config model ⇄ `config.h` codec. Round-trip safe: structured parse of the sections we understand, opaque-text preservation for everything else, so hand-written configs survive import.
 - Style AST: parser, pretty-printer, validator per OS version, `RgbArg`/`IntArg` extraction, named-style resolution. Preview renderer forked from the GPL Style Editor lives in the UI package but consumes this AST.
 - `presets.ini` codec, including `builtin P B <args>` and argument strings.
-- Board protocol: command framing (`tag|command`), response parsing for `version`, `list_presets`, `list_named_style`, `describe_named_style`, `dir`, battery and volume.
+- Board protocol: command framing (`tag|command`), response parsing for `version`, `list_presets`, `list_named_styles`, `describe_named_style`, `dir`, battery and volume.
 - Hardware profiles: board variants, pin maps, LED chip tables, Blade ID conventions.
 - Flash-budget estimator: empirical size table per style family and feature define, calibrated against real builds.
 - Importers: CFX `config.txt`/`colors.txt`/`font_config.txt`, Xenopixel `SET/config.ini`/`fontconfig.ini`, font naming converter (CFX/GH/Xeno → Proffie).
@@ -211,7 +211,7 @@ Hilts count too: pack hilts are credited to the pack's creator, and a hilt the o
 
 1. ~~Cold and warm compile times~~ Measured on a fast desktop (see 06). Still needed on a mid-range and a low-end laptop.
 2. Binary sizes for 15 and 30 distinct curated styles on V2 and V3, to calibrate the flash meter. Points so far (see 06): OS base with edit mode ≈ 195–200 KB; four current Fett263 library styles ≈ 216 KB (82% of V2, 43% of V3); ten OS6-era instantiations ≈ 227 KB. Distinct style instantiations drive size and compile time; argument reuse is free.
-3. ~~Does the 1200-baud open/close reboot the board into DFU~~ Proven on Windows with .NET SerialPort against a V2.2 (see 06 section 7); still to confirm from Electron's Web Serial, on macOS/Linux, and on a V3.
+3. ~~Does the 1200-baud open/close reboot the board into DFU~~ Proven on Windows with .NET SerialPort against a V2.2 (see 06 section 7). The app reboots with `RebootDFU`, which has worked on every install on the V2.2 since 2026-09-09. The 1200-baud touch from Electron's Web Serial is only its fallback and has never been needed (the log says "1200-baud touch not needed, the port is already gone"), so it is still unexercised there, as are macOS/Linux and a V3.
 4. ~~`dfu-util` behaviour and timing~~ Proven on Windows: 256 KB backup in 0.9 s, 214 KB write in 58 s, `:leave` reset and `version` check work. Still to confirm on macOS/Linux.
 5. Mass-storage volume detection with `MOUNT_SD_SETTING` and the `sd` command; copy speed versus a card reader.
 6. License terms of the `arduino-proffieboard` core for bundling. Driver helper decision made: build our own from libwdi's `wdi-simple` (LGPL v3; releases ship only Zadig, no CLI binary) and launch it elevated from the first-run wizard; the spike confirmed problem code 28 as the detection signal and that binding takes effect immediately with the board in bootloader mode.

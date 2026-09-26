@@ -31,7 +31,8 @@
 - **`Response.silent`:** true when nothing at all was heard from the board after the command was written, no line and no chunk (`lastHeard < started`).
 - **`ClientOptions.silentMs`** (default 10000):
   - In tagged mode, the kick timer also checks total silence. When the board has sent nothing for `silentMs` since the command started, the command ends with `timedOut: true, silent: true`, without waiting for the 30 s ceiling.
-  - Untagged commands keep their 8 s timeout, and a timed-out one reports `silent` the same way. An idle-ended untagged command (a write with no `until`) is not a timeout and is never silent.
+  - Untagged (ProffieOS 7) commands are unchanged. A command that hears nothing ends after its short quiet (`idleMs`), exactly as a write that prints nothing does. It is not a timeout, and it is never silent. **Found during implementation:** the first test assumed an untagged `until` command would time out. It does not, because `touch()` starts the idle timer as the command is sent. Treating a short quiet as silence would cut off a healthy ProffieOS 7 board that is slow after a save (the 1.2 s save delay). So on ProffieOS 7, silence is caught only by the tag probe, which has an explicit tag and waits its full 6 s. The spec says so.
+  - An explicitly tagged command (the probe) that hears nothing times out at its own timeout with `silent`.
 - **`ClientOptions.onSilent(response)`:** called once for each command that ends `timedOut && silent`, unless the command was sent with `SendOptions.expectSilence` (used by `RebootDFU`).
 - A board that keeps printing, even without answering, refreshes `lastHeard` and never counts as silent (the "slow but talking" scenario).
 
@@ -44,7 +45,7 @@
   - An `identifying` ref is set, and `onSilent` does nothing.
   - After `detectTagging` and after each command, a response with `timedOut && silent` throws `NotAnswering`, before `setStatus('connected')` and before `library.upsert`.
   - `connectTo` catches it and calls `disconnect('The saber is not answering. Unplug it and plug it back in.')`, with status `error` and no record (F2).
-  - Worst case on OS 7: the probe (6 s) plus `version` (8 s). On OS 8: the probe (6 s). Both are under the 15 s bound (F3).
+  - A silent board fails the probe on either OS: nothing heard for its 6 s. On OS 8, a board that answers the probe and then dies stops at the next command after 10 s. Both are under the 15 s bound (F3).
 - **While connected:** `onSilent` calls `disconnect('The saber stopped answering. Unplug it and plug it back in.')`. `client.close()` ends the waiting command, and later commands end at once because the client is closed. The port is closed, so the Web Serial `connect` event reconnects on replug, as today.
 - **`rebootToBootloader`** sends `RebootDFU` with `expectSilence`.
 
@@ -81,7 +82,7 @@ In development builds only (`import.meta.env.DEV`), `window.hiltwrightMuteBoard(
   - A second queued command ends at once after `close()`.
   - A board that prints a line every 2 s for 15 s is not silent, and the command completes when its sentinel arrives.
   - `expectSilence` suppresses `onSilent`.
-  - An untagged `until` command with no reply times out `silent`, and an idle-ended write is not silent.
+  - The untagged probe to a board that prints nothing times out `silent`. An untagged command with no reply ends after its quiet and is not silent.
 - **Renderer:**
   - `serial.test.ts` (new), with a fake `SerialPort`: a read stream that ends with `done` calls `onClose` once, and `close()` then does not.
   - `boardOps.test.ts`: `runOperation` with no client reports "Not sent: the saber is not connected." (BST-4), and with a client runs the operation as before.
@@ -100,7 +101,7 @@ In development builds only (`import.meta.env.DEV`), `window.hiltwrightMuteBoard(
 ### D8. Docs (F7)
 - The `protocol.test.ts` test is renamed to "OS 8.10 has no help, id, list_named_style (singular) or get_style, and frames with a space after the pipe".
 - Doc 09 says the read-back ceiling is 10 s.
-- The plan names `list_named_styles`, and records the 1200-baud touch from Web Serial as confirmed on Windows (2026-09-09, the first install), with macOS, Linux and V3 still open.
+- The plan names `list_named_styles`. It says `RebootDFU` has done the reboot on every V2.2 install since 2026-09-09, and that the 1200-baud touch from Web Serial is a fallback never yet needed, so still unexercised, as are macOS, Linux and a V3. **Corrected during implementation:** this plan first said the touch was confirmed from Web Serial, but the logs show it was never used.
 
 ## Risks / Trade-offs
 
