@@ -173,6 +173,8 @@ tr:last-child td{border-bottom:0}
 
 .note{padding:12px 14px;background:rgba(95,211,255,.06);border:1px solid rgba(95,211,255,.25);font-size:13px;color:var(--dim);display:flex;gap:10px;align-items:flex-start}
 .note svg{width:16px;height:16px;flex:none;color:var(--holo);margin-top:2px}
+/* A note's text wraps inside the note: long paths and file names break rather than widening it past its column. */
+.note{min-width:0;max-width:100%}.note>span{min-width:0;flex:1 1 auto;overflow-wrap:anywhere}
 .note.amber{background:rgba(255,181,71,.07);border-color:rgba(255,181,71,.35)}.note.amber svg{color:var(--amber)}
 .note.red{background:rgba(255,92,92,.07);border-color:rgba(255,92,92,.35)}.note.red svg{color:var(--red)}
 .note.green{background:rgba(94,227,154,.07);border-color:rgba(94,227,154,.35)}.note.green svg{color:var(--green)}
