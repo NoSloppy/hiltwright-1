@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { DRIVER_BYTES, DRIVER_SHA256, installBootloaderDriver, type DriverSys } from '../src/main/driver';
 
-const noDriver = { runtimePresent: false, bootloaderPresent: true, bootloaderDriver: null, bootloaderProblem: 28 };
+const noDriver = { runtimePresent: false, bootloaderPresent: true, bootloaderDriver: null, bootloaderProblem: 28, bootloaders: [{ serial: '209133815232', driver: null, problem: 28 }], runtimeSerials: [] };
 
 function fakes(file: (dest: string) => Promise<void>) {
   const sys: DriverSys = {

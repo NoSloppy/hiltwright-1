@@ -10,32 +10,60 @@ import { findDfuUtil, run, toolchainPaths, type Progress } from './toolchain';
 export const RUNTIME_VIDPID = '1209:6668';
 export const DFU_VIDPID = '0483:df11';
 
+/** A board sitting in its bootloader. `serial` is null when Windows had to make up an id (the device gave none). */
+export interface BootloaderDevice { serial: string | null; driver: string | null; problem: number | null }
+
 export interface UsbState {
   runtimePresent: boolean;
   bootloaderPresent: boolean;
   /** Windows driver service bound to the bootloader, e.g. WinUSB, or null when unbound. */
   bootloaderDriver: string | null;
   bootloaderProblem: number | null;
+  /** Every board in its bootloader, and the USB serials of every board running its firmware. */
+  bootloaders: BootloaderDevice[];
+  runtimeSerials: string[];
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** The serial in a device's instance id (the part after the last `\`), or null for an id Windows generated. */
+export function serialFromInstanceId(id: string): string | null {
+  const tail = id.slice(id.lastIndexOf('\\') + 1);
+  return tail && !tail.includes('&') ? tail : null;
+}
+
+/** The USB state from the PnP devices of the two ids. Interfaces (`&MI_nn`) are left out: only whole devices count. */
+export function usbStateFrom(list: { InstanceId: string; Service: string | null; Problem: number | null }[]): UsbState {
+  const boots = list.filter((d) => /^USB\\VID_0483&PID_DF11\\/i.test(d.InstanceId));
+  const runs = list.filter((d) => /^USB\\VID_1209&PID_6668\\/i.test(d.InstanceId));
+  const bootloaders = boots.map((d) => ({ serial: serialFromInstanceId(d.InstanceId), driver: d.Service ?? null, problem: d.Problem == null ? null : Number(d.Problem) }));
+  return {
+    runtimePresent: runs.length > 0,
+    bootloaderPresent: boots.length > 0,
+    bootloaderDriver: bootloaders[0]?.driver ?? null,
+    bootloaderProblem: bootloaders[0]?.problem ?? null,
+    bootloaders,
+    runtimeSerials: runs.map((d) => serialFromInstanceId(d.InstanceId)).filter((s): s is string => !!s),
+  };
+}
+
 export async function usbState(): Promise<UsbState> {
   if (process.platform !== 'win32') {
     // TODO macOS/Linux: use dfu-util -l for the bootloader and the serial port list for runtime.
-    return { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: 'n/a', bootloaderProblem: null };
+    return { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: 'n/a', bootloaderProblem: null, bootloaders: [], runtimeSerials: [] };
   }
   const script = `Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match 'VID_1209&PID_6668|VID_0483&PID_DF11' } | Select-Object InstanceId, Service, Status, Problem | ConvertTo-Json`;
   const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 10000, windowsHide: true }, (err, stdout) => resolve(err ? '' : stdout)));
   let list: { InstanceId: string; Service: string | null; Status: string; Problem: number }[] = [];
   try { const parsed = JSON.parse(out || '[]'); list = Array.isArray(parsed) ? parsed : [parsed]; } catch { list = []; }
-  const boot = list.find((d) => /VID_0483&PID_DF11/i.test(d.InstanceId));
-  return {
-    runtimePresent: list.some((d) => /VID_1209&PID_6668/i.test(d.InstanceId)),
-    bootloaderPresent: !!boot,
-    bootloaderDriver: boot?.Service ?? null,
-    bootloaderProblem: boot ? Number(boot.Problem) : null,
-  };
+  return usbStateFrom(list);
+}
+
+/** The bootloaders present now that were not in `before` (serials noted before a reboot). */
+export function newBootloaders(s: UsbState, before: (string | null)[]): BootloaderDevice[] {
+  const was = [...before];
+  // A serial-less bootloader counts once per serial-less entry before, so a second one still shows up as new.
+  return s.bootloaders.filter((b) => { const i = was.indexOf(b.serial); if (i < 0) return true; was.splice(i, 1); return false; });
 }
 
 export async function waitFor(pred: (s: UsbState) => boolean, timeoutMs: number, onLine?: Progress): Promise<UsbState | null> {
@@ -49,51 +77,108 @@ export async function waitFor(pred: (s: UsbState) => boolean, timeoutMs: number,
   return null;
 }
 
-export interface DfuInfo { flashBytes: number | null; listing: string }
+/** One bootloader in a `dfu-util -l` listing: its serial and the size of its internal flash (null when not reported). */
+export interface DfuDevice { serial: string | null; flashBytes: number | null }
+export interface DfuInfo { devices: DfuDevice[]; listing: string }
 
-/** dfu-util -l: confirms libusb can open the bootloader and reports the DfuSe layout (128*02Kg = 256 KB). */
+/** Bytes in a DfuSe layout such as `0128*0002Kg` (256 KB) or `0256*0002Kg` (512 KB); segments are comma-separated. */
+function layoutBytes(layout: string): number {
+  return layout.split(',').reduce((sum, seg) => {
+    const m = /(\d+)\*(\d+)([KM])/i.exec(seg);
+    return m ? sum + Number(m[1]) * Number(m[2]) * (m[3].toUpperCase() === 'M' ? 1048576 : 1024) : sum;
+  }, 0);
+}
+
+/**
+ * The bootloaders in a `dfu-util -l` listing. Each board is listed once per alt setting (flash, option bytes, OTP,
+ * device feature), every line carrying its serial; only the "@Internal Flash" line gives the flash size.
+ */
+export function parseDfuList(listing: string): DfuDevice[] {
+  const byKey = new Map<string, DfuDevice>();
+  for (const line of listing.split(/\r?\n/)) {
+    if (!/^Found DFU: \[0483:df11\]/i.test(line)) continue;
+    const serial = /serial="([^"]*)"/.exec(line)?.[1] || null;
+    const key = serial ?? `path:${/path="([^"]*)"/.exec(line)?.[1] ?? ''}`;
+    const dev = byKey.get(key) ?? { serial, flashBytes: null };
+    const layout = /@Internal Flash\s*\/0x08000000\/([^"]+)"/i.exec(line)?.[1];
+    if (layout) dev.flashBytes = layoutBytes(layout);
+    byKey.set(key, dev);
+  }
+  return [...byKey.values()];
+}
+
+/** Which Proffieboard a bootloader's flash size means: the V2's STM32L433 has 256 KB, the V3's STM32L452 512 KB. */
+export function boardForFlash(bytes: number | null): 'V2' | 'V3' | null {
+  return bytes === 262144 ? 'V2' : bytes === 524288 ? 'V3' : null;
+}
+
+/**
+ * dfu-util's device selection. The running id stays in `-d`: dfu-util compares a .dfu file's id (1209:6668) with it,
+ * and refuses the file without it. `-S` limits both the running and the bootloader match to the one board with this
+ * serial (a board keeps its serial in the bootloader), so another saber plugged in is never touched.
+ */
+export function dfuDeviceArgs(serial: string | null): string[] {
+  return ['-d', `${RUNTIME_VIDPID},${DFU_VIDPID}`, ...(serial ? ['-S', serial] : [])];
+}
+
+/** dfu-util -l: confirms libusb can open the bootloaders and reports each one's serial and DfuSe layout. */
 export async function dfuInfo(dfuUtil: string): Promise<DfuInfo> {
   const r = await run(dfuUtil, ['-l'], { timeoutMs: 15000 });
   const listing = r.stdout + r.stderr;
-  const layout = /@Internal Flash\s*\/0x08000000\/([^"]+)/i.exec(listing)?.[1];
-  let flashBytes: number | null = null;
-  if (layout) {
-    flashBytes = layout.split(',').reduce((sum, seg) => {
-      const m = /(\d+)\*(\d+)([KM])/i.exec(seg);
-      return m ? sum + Number(m[1]) * Number(m[2]) * (m[3].toUpperCase() === 'M' ? 1048576 : 1024) : sum;
-    }, 0);
-  }
-  return { flashBytes, listing };
+  return { devices: parseDfuList(listing), listing };
+}
+
+/**
+ * The one bootloader an install or restore may use: the one with this serial, or, with no serial, the only one
+ * listed. Null when there is no such single board.
+ */
+export function pickDevice(devices: DfuDevice[], serial: string | null): DfuDevice | null {
+  if (serial) return devices.find((d) => d.serial === serial) ?? null;
+  return devices.length === 1 ? devices[0] : null;
+}
+
+/** What a bootloader says about the board: its flash size and so its type (null when Hiltwright does not know it). */
+export interface FlashTarget { serial: string | null; flashBytes: number | null; board: 'V2' | 'V3' | null; found: boolean }
+
+export async function flashTarget(toolchainRoot: string, serial: string | null): Promise<FlashTarget> {
+  const dfuUtil = await findDfuUtil(toolchainPaths(toolchainRoot));
+  if (!dfuUtil) return { serial, flashBytes: null, board: null, found: false };
+  const dev = pickDevice((await dfuInfo(dfuUtil)).devices, serial);
+  return { serial, flashBytes: dev?.flashBytes ?? null, board: boardForFlash(dev?.flashBytes ?? null), found: !!dev };
 }
 
 export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string }
 
 /**
- * Read the whole flash into a backup file. `configName` is the config the saber reported before its reboot; it is kept
- * beside the image (<file>.json) so that putting this backup back can expect the saber to return reporting it.
+ * Read the whole flash of the board with this serial into a backup file. `configName` is the config the saber
+ * reported before its reboot; it is kept beside the image (<file>.json) so that putting this backup back can expect
+ * the saber to return reporting it.
  */
-export async function backupFlash(toolchainRoot: string, backupDir: string, label: string, onLine: Progress, configName: string | null = null): Promise<FlashStepResult> {
+export async function backupFlash(toolchainRoot: string, backupDir: string, label: string, onLine: Progress, configName: string | null = null, serial: string | null = null): Promise<FlashStepResult> {
   const p = toolchainPaths(toolchainRoot);
   const dfuUtil = await findDfuUtil(p);
   if (!dfuUtil) return { ok: false, ms: 0, detail: 'dfu-util is not installed with the toolchain.' };
   const info = await dfuInfo(dfuUtil);
-  if (!info.flashBytes) return { ok: false, ms: 0, detail: `The bootloader did not report its flash layout.\n${info.listing.slice(-800)}` };
+  const dev = pickDevice(info.devices, serial);
+  if (!dev) return { ok: false, ms: 0, detail: serial ? `The board ${serial} is not in bootloader mode.` : 'More than one board, or none, is in bootloader mode.' };
+  if (!dev.flashBytes) return { ok: false, ms: 0, detail: `The bootloader did not report its flash layout.\n${info.listing.slice(-800)}` };
   await mkdir(backupDir, { recursive: true });
   const file = join(backupDir, `${new Date().toISOString().replace(/[:.]/g, '-')}-${label.replace(/[^A-Za-z0-9_-]/g, '_')}.bin`);
-  onLine(`reading ${info.flashBytes} bytes of flash`);
-  const r = await run(dfuUtil, ['-d', DFU_VIDPID, '-a', '0', '-s', `0x08000000:${info.flashBytes}`, '-U', file], { timeoutMs: 120000, onLine });
+  onLine(`reading ${dev.flashBytes} bytes of flash`);
+  const r = await run(dfuUtil, [...dfuDeviceArgs(dev.serial), '-a', '0', '-s', `0x08000000:${dev.flashBytes}`, '-U', file], { timeoutMs: 120000, onLine });
   const ok = r.code === 0 && (await stat(file).then((s) => s.size > 0, () => false));
   if (ok && configName) { try { await writeFile(`${file}.json`, JSON.stringify({ configName }), 'utf8'); } catch { /* the backup still restores; only the match after it is lost */ } }
-  return { ok, ms: r.ms, detail: ok ? `backup written (${info.flashBytes} bytes)` : (r.stderr || r.stdout).slice(-800), file };
+  return { ok, ms: r.ms, detail: ok ? `backup written (${dev.flashBytes} bytes)` : (r.stderr || r.stdout).slice(-800), file };
 }
 
-export async function writeFirmware(toolchainRoot: string, dfuFile: string, onLine: Progress): Promise<FlashStepResult> {
+/** Write a firmware image to the board with this serial (see dfuDeviceArgs). */
+export async function writeFirmware(toolchainRoot: string, dfuFile: string, onLine: Progress, serial: string | null = null): Promise<FlashStepResult> {
   const p = toolchainPaths(toolchainRoot);
   const dfuUtil = await findDfuUtil(p);
   if (!dfuUtil) return { ok: false, ms: 0, detail: 'dfu-util is not installed with the toolchain.' };
   const size = (await stat(dfuFile)).size;
   onLine(`writing ${size} bytes`);
-  const r = await run(dfuUtil, ['-d', `${RUNTIME_VIDPID},${DFU_VIDPID}`, '-a', '0', '-s', '0x08000000:leave', '-D', dfuFile], { timeoutMs: 300000, onLine });
+  const r = await run(dfuUtil, [...dfuDeviceArgs(serial), '-a', '0', '-s', '0x08000000:leave', '-D', dfuFile], { timeoutMs: 300000, onLine });
   const ok = r.code === 0 && /File downloaded successfully|Download done/i.test(r.stdout + r.stderr);
   return { ok, ms: r.ms, detail: ok ? `wrote ${size} bytes in ${(r.ms / 1000).toFixed(1)} s` : (r.stderr || r.stdout).slice(-800), file: dfuFile };
 }
@@ -134,13 +219,23 @@ export async function listBackups(backupDir: string): Promise<BackupInfo[]> {
   return out.sort((a, b) => b.at.localeCompare(a.at));
 }
 
-/** Write a backup image back. Refuses anything that does not look like firmware for this chip family. */
-export async function restoreBackup(toolchainRoot: string, path: string, onLine: Progress): Promise<FlashStepResult> {
+/** The words for a backup whose size is not the board's flash: both named as boards where the sizes are known. */
+export function backupSizeMismatch(backupBytes: number, flashBytes: number): string {
+  const name = (b: number) => (boardForFlash(b) ? `a Proffieboard ${boardForFlash(b)} (${b / 1024} KB)` : `${Math.round(b / 1024)} KB`);
+  return `This backup is from ${name(backupBytes)}; this saber is ${name(flashBytes)}. Nothing was written.`;
+}
+
+/**
+ * Write a backup image back to the board with this serial. Refuses anything that does not look like firmware for this
+ * chip family, and, when the board's flash size is known, a backup of another size.
+ */
+export async function restoreBackup(toolchainRoot: string, path: string, onLine: Progress, serial: string | null = null, flashBytes: number | null = null): Promise<FlashStepResult> {
   const st = await stat(path).catch(() => null);
   if (!st || (st.size !== 262144 && st.size !== 524288)) return { ok: false, ms: 0, detail: 'That file is not a full flash backup (256 KB or 512 KB).' };
   if (!(await looksLikeFirmware(path))) return { ok: false, ms: 0, detail: 'That backup does not look like firmware (it may be an erased or protected read), so it was not written.' };
+  if (flashBytes != null && st.size !== flashBytes) return { ok: false, ms: 0, detail: backupSizeMismatch(st.size, flashBytes) };
   onLine(`restoring ${st.size} bytes from ${path}`);
-  return writeFirmware(toolchainRoot, path, onLine);
+  return writeFirmware(toolchainRoot, path, onLine, serial);
 }
 
 /** Explain the Windows driver situation in the owner's terms. */

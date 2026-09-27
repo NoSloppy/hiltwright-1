@@ -5,7 +5,7 @@ import type { SaberRecord } from '../src/shared/api';
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
 const crystal: ModelBlade = { id: 'b2', role: 'crystal', type: 'pixel', pixels: 2, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'blade2Pin', powerPins: ['bladePowerPin4'] } };
-const model: SaberConfigModel = { name: 'hiltwright_test', board: 'V2', buttons: 2, prop: 'sa22c', blades: [main, crystal], presets: [{ font: 'A;common', track: '', name: 'One' }, { font: 'B;common', track: '', name: 'Two' }] };
+const model: SaberConfigModel = { name: 'hiltwright_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'sa22c', blades: [main, crystal], presets: [{ font: 'A;common', track: '', name: 'One' }, { font: 'B;common', track: '', name: 'Two' }] };
 const fire = STARTER_LOOKS.find((l) => l.id === 'hw_fire')!;
 const heart = STARTER_LOOKS.find((l) => l.id === 'hw_heartbeat')!;
 

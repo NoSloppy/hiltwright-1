@@ -5,9 +5,11 @@ import type { SaberRecord } from '../src/shared/api';
 // draftModel stamps the app version from the preload bridge; stand it in before the module loads.
 let draftModel: typeof import('../src/renderer/src/saberModel').draftModel;
 let infoFromRecord: typeof import('../src/renderer/src/saberModel').infoFromRecord;
+let boardCorrection: typeof import('../src/renderer/src/saberModel').boardCorrection;
+let boardSuggestion: typeof import('../src/renderer/src/saberModel').boardSuggestion;
 beforeAll(async () => {
   (globalThis as unknown as { window: unknown }).window = { hiltwright: { appVersion: 'test' } };
-  ({ draftModel, infoFromRecord } = await import('../src/renderer/src/saberModel'));
+  ({ draftModel, infoFromRecord, boardCorrection, boardSuggestion } = await import('../src/renderer/src/saberModel'));
 });
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
@@ -71,10 +73,56 @@ describe('drafts from what the saber reports', () => {
     expect(looksOf(draftModel(infoFromRecord(rec), rec))).toEqual(['look_b', null]);
   });
 
-  // Owner: install-target-safety, under FW3 (BST-3). The board is guessed from the ProffieOS version, never V3.
-  it.fails('a new saber whose config names a V3 board is drafted for V3', () => {
+  // BST-3, fixed by install-target-safety (design D2): the running firmware never says its board, so a name is only a hint.
+  it('a new saber whose config names a V3 board: V3 is suggested, and no board is chosen', () => {
     const rec = connected([board('A')], undefined, { configName: 'config/proffieboard_v3_config.h', version: 'v8.10' });
-    expect(draftModel(infoFromRecord(rec), rec).board).toBe('V3');
+    const m = draftModel(infoFromRecord(rec), rec);
+    expect(m.boardFrom).toBeUndefined();
+    expect(boardSuggestion(rec)).toBe('V3');
+  });
+});
+
+// install-target-safety design D2: where the board comes from.
+describe('the board of a draft', () => {
+  const manifest = (b: 'V2' | 'V3') => ({ hash: 'h', os: 'v8.10', at: '', looks: [], presets: [], wiring: { board: b, blades: [main] } });
+  const boot = (b: 'V2' | 'V3') => ({ serial: '1', flashBytes: b === 'V2' ? 262144 : 524288, board: b, at: '' });
+
+  it('a saber never installed, with nothing chosen: no board, whatever the saved wiring holds', () => {
+    const rec = connected([board('A')], { ...saved, board: 'V3', boardFrom: 'firmware' });
+    const m = draftModel(infoFromRecord(rec), rec);
+    expect([m.board, m.boardFrom]).toEqual(['V3', undefined]);
+  });
+
+  it("the owner's choice counts", () => {
+    const rec = connected([board('A')], { ...saved, board: 'V3', boardFrom: 'owner' });
+    expect(draftModel(infoFromRecord(rec), rec)).toMatchObject({ board: 'V3', boardFrom: 'owner' });
+  });
+
+  it('firmware Hiltwright installed for the same board makes it known, also with no saved wiring', () => {
+    const rec = { ...connected([board('A')], saved), firmware: manifest('V2') };
+    expect(draftModel(infoFromRecord(rec), rec)).toMatchObject({ board: 'V2', boardFrom: 'firmware' });
+    const bare = { ...connected([board('A')]), firmware: manifest('V3') };
+    expect(draftModel(infoFromRecord(bare), bare)).toMatchObject({ board: 'V3', boardFrom: 'firmware' });
+  });
+
+  it("the owner switching away from the installed firmware's board is their choice", () => {
+    const rec = { ...connected([board('A')], { ...saved, board: 'V3', boardFrom: 'owner' }), firmware: manifest('V2') };
+    expect(draftModel(infoFromRecord(rec), rec)).toMatchObject({ board: 'V3', boardFrom: 'owner' });
+  });
+
+  it("the bootloader's flash size wins, and a different saved board is reported as corrected", () => {
+    const rec = { ...connected([board('A')], { ...saved, board: 'V2', boardFrom: 'owner' }), firmware: manifest('V2'), bootloader: boot('V3') };
+    expect(draftModel(infoFromRecord(rec), rec)).toMatchObject({ board: 'V3', boardFrom: 'bootloader' });
+    expect(boardCorrection(rec)).toEqual({ saved: 'V2', actual: 'V3' });
+    expect(boardSuggestion(rec)).toBeNull();
+    const same = { ...rec, model: { ...saved, board: 'V3' as const } };
+    expect(boardCorrection(same)).toBeNull();
+  });
+
+  it('a planned saber asks, until the owner chooses', () => {
+    expect(draftModel(infoFromRecord(plan(saved)), plan(saved)).boardFrom).toBeUndefined();
+    const chosen = plan({ ...saved, boardFrom: 'owner' });
+    expect(draftModel(infoFromRecord(chosen), chosen).boardFrom).toBe('owner');
   });
 });
 

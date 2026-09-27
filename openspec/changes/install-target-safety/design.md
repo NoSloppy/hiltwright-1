@@ -146,10 +146,14 @@ The recorded serial becomes the target for backup, write and wait. When more tha
 **The target.** `backup`, `write` and `restore` take the target serial and run:
 
 ```
-dfu-util -d 0483:df11 -S <serial> …
+dfu-util -d 1209:6668,0483:df11 -S <serial> …
 ```
 
-The runtime id pair (`1209:6668,…`) is dropped, so dfu-util can never detach another running board. A bootloader with no serial is used only when it is the only bootloader present.
+`-S` limits both the running and the bootloader match to that one board, so another saber is never touched.
+
+**Changed in 2.1:** the plan dropped the running id pair (`1209:6668`). But dfu-util 0.9 compares a `.dfu` file's id (1209:6668) with the id given in `-d`, and would refuse every write without it. The serial now does the job the plan gave to dropping the id.
+
+A bootloader with no serial is used only when it is the only bootloader present.
 
 **Refusals, before anything is read:**
 - Two bootloaders appear after one reboot: "More than one board is in bootloader mode. Unplug the other Proffieboards, then press Install again."

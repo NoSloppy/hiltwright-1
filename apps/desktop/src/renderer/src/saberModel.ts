@@ -1,7 +1,7 @@
 // The build model for a saber: wiring, prop, and which look goes in each preset slot. Drafted from what the
 // board reports, refined by the owner on Build & Install, and stored on the saber record.
 
-import type { BladeVariant, LookDef, ModelBlade, Prop, SaberConfigModel } from '@hiltwright/core';
+import { boardHint, type BladeVariant, type BoardModel, type LookDef, type ModelBlade, type Prop, type SaberConfigModel } from '@hiltwright/core';
 import type { SaberRecord } from '../../shared/api';
 import type { BoardInfo } from './board';
 
@@ -32,18 +32,47 @@ export function configNameFor(saber: SaberRecord): string {
 }
 
 /**
+ * Which board the saber has, and how that is known (install-target-safety D2). The running firmware never says, so:
+ * the flash size its bootloader showed at an install; else the firmware Hiltwright installed, when the saved wiring
+ * names the same board; else the owner's own choice. Otherwise nobody knows, and the board is only a placeholder.
+ */
+export function knownBoard(saber: SaberRecord): { board: BoardModel; from: NonNullable<SaberConfigModel['boardFrom']> } | null {
+  const saved = saber.model;
+  if (saber.bootloader) return { board: saber.bootloader.board, from: 'bootloader' };
+  const built = saber.firmware?.wiring?.board;
+  if (built && (!saved || saved.board === built)) return { board: built, from: 'firmware' };
+  if (saved?.boardFrom === 'owner') return { board: saved.board, from: 'owner' };
+  return null;
+}
+
+/** The saved wiring names a different board from the one the saber's bootloader showed: the page says it was corrected. */
+export function boardCorrection(saber: SaberRecord): { saved: BoardModel; actual: BoardModel } | null {
+  const saved = saber.model?.board;
+  const actual = saber.bootloader?.board;
+  return saved && actual && saved !== actual ? { saved, actual } : null;
+}
+
+/** A board the saber's config name mentions, offered while the board is not known; never chosen by itself. */
+export function boardSuggestion(saber: SaberRecord): BoardModel | null {
+  return knownBoard(saber) ? null : boardHint(saber.identity.configName);
+}
+
+/**
  * The model to build now: the saved one where it exists (wiring, prop, looks), always with the presets the board
  * currently has. Slot looks are carried over by preset name, so reordering or renaming on the saber does not lose
  * a chosen look.
  */
 export function draftModel(info: BoardInfo, saber: SaberRecord, overrides: { blades?: ModelBlade[]; prop?: Prop; variants?: BladeVariant[] } = {}): SaberConfigModel {
   const saved = saber.model;
+  const known = knownBoard(saber);
   const blades = overrides.blades ?? saved?.blades ?? guessBlades(info.pixelBlades.length ? info.pixelBlades : [132]);
   const byName = new Map((saved?.presets ?? []).map((p) => [p.name, p.looks ?? []]));
   const argsByName = new Map((saved?.presets ?? []).map((p) => [p.name, p.lookArgs ?? []]));
   return {
     name: saved?.name ?? configNameFor(saber),
-    board: saved?.board ?? (/v3/i.test(saber.identity.version ?? '') ? 'V3' : 'V2'),
+    // Not known: V2 only keeps the pin lists showing; without `boardFrom` nothing is built until the owner chooses.
+    board: known?.board ?? saved?.board ?? 'V2',
+    ...(known ? { boardFrom: known.from } : {}),
     buttons: saved?.buttons ?? ((info.version?.buttons === 1 || info.version?.buttons === 3 ? info.version.buttons : 2) as 1 | 2 | 3),
     prop: overrides.prop ?? saved?.prop ?? 'fett263',
     blades,

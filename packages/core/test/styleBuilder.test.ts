@@ -28,7 +28,7 @@ describe('style editor model', () => {
     expect(look.preview2).toBe('#ffc800');
     expect(isStyleDoc(look.style)).toBe(true);
     const main = { id: 'b1', role: 'main' as const, type: 'pixel' as const, pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own' as const, dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } };
-    const model: SaberConfigModel = { name: 'hiltwright_t', board: 'V2', buttons: 2, prop: 'sa22c', blades: [main], presets: [{ font: 'A;common', track: '', name: 'One', looks: ['look_ember'] }], looks: [look] };
+    const model: SaberConfigModel = { name: 'hiltwright_t', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'sa22c', blades: [main], presets: [{ font: 'A;common', track: '', name: 'One', looks: ['look_ember'] }], looks: [look] };
     const g = generateConfig(model);
     expect(g.text).toContain('using Hw_look_ember = Layers<');
     expect(g.text).toContain('StyleFire<RgbArg<BASE_COLOR_ARG, Rgb<255,32,0>>');

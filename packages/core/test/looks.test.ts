@@ -59,7 +59,7 @@ describe('style argument words', () => {
 describe('generateConfig with chosen looks', () => {
   const ember: LookDef = { ...analyzeStyleCode(FETT263), id: 'ember', name: 'Ember', source: 'pasted', by: 'Hiltwright', code: analyzeStyleCode(FETT263).expression, roles: ['main'], description: '' };
   const model: SaberConfigModel = {
-    name: 'hw_test', board: 'V2', buttons: 2, prop: 'fett263',
+    name: 'hw_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'fett263',
     blades: [
       { id: 'main', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } },
       { id: 'crystal', role: 'crystal', type: 'pixel', pixels: 1, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'blade2Pin', powerPins: ['bladePowerPin4'] } },
@@ -141,13 +141,13 @@ describe('the Hiltwright look library', () => {
 
   it('a build only carries the looks it uses, and the shared wrapper only when a blade look needs it', () => {
     const blade = { id: 'b1', role: 'main' as const, type: 'pixel' as const, pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own' as const, dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } };
-    const g = generateConfig({ name: 'lib', board: 'V2', buttons: 2, prop: 'sa22c', blades: [blade], presets: [{ font: 'A', track: '', name: 'One', looks: ['hw_fire'] }, { font: 'B', track: '', name: 'Two' }] });
+    const g = generateConfig({ name: 'lib', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'sa22c', blades: [blade], presets: [{ font: 'A', track: '', name: 'One', looks: ['hw_fire'] }, { font: 'B', track: '', name: 'Two' }] });
     expect(g.text).toContain('using HwFire = ');
     expect(g.text).toContain('using HwBlade = ');
     expect(g.text).toContain('template<class BASE> using HwFx');
     expect(g.text).not.toContain('using HwRainbow');
     expect(g.text).toContain('StylePtr<HwFire>()');
-    const accentOnly = generateConfig({ name: 'lib2', board: 'V2', buttons: 2, prop: 'sa22c', blades: [{ ...blade, role: 'main' }], presets: [{ font: 'A', track: '', name: 'One', looks: ['hw_spark'] }] });
+    const accentOnly = generateConfig({ name: 'lib2', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'sa22c', blades: [{ ...blade, role: 'main' }], presets: [{ font: 'A', track: '', name: 'One', looks: ['hw_spark'] }] });
     expect(accentOnly.text).not.toContain('HwFx');
   });
 
@@ -162,7 +162,7 @@ describe('special abilities and the prop', () => {
   const code = 'StylePtr<Layers<Blue, TransitionEffectL<TrDoEffectX<TrInstant,EFFECT_TRANSITION_SOUND,Int<0>>,EFFECT_USER1>, InOutTrL<TrWipe<300>,TrWipeIn<500>>>>()';
   const cortosis: LookDef = { ...analyzeStyleCode(code), id: 'cortosis', name: 'Cortosis', source: 'pasted', by: 'Fett263', code, roles: ['main'], description: '' };
   const model = (prop: SaberConfigModel['prop']): SaberConfigModel => ({
-    name: 'hw_test', board: 'V2', buttons: 2, prop,
+    name: 'hw_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop,
     blades: [{ id: 'main', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } }],
     presets: [{ font: 'A', track: '', name: 'One', looks: ['cortosis'] }],
     looks: [cortosis],

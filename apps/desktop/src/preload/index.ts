@@ -16,6 +16,7 @@ const api: HiltwrightApi = {
     update: (id, patch) => ipcRenderer.invoke('library:update', id, patch),
     plan: (name, model) => ipcRenderer.invoke('library:plan', name, model),
     adopt: (plannedId, targetId) => ipcRenderer.invoke('library:adopt', plannedId, targetId),
+    noteBootloader: (id, seen) => ipcRenderer.invoke('library:noteBootloader', id, seen),
   },
   banks: {
     list: () => ipcRenderer.invoke('banks:list'),
@@ -111,13 +112,14 @@ const api: HiltwrightApi = {
   },
   flash: {
     usb: () => ipcRenderer.invoke('flash:usb'),
-    waitForBootloader: (timeoutMs) => ipcRenderer.invoke('flash:waitForBootloader', timeoutMs),
-    backup: (saberId, label, configName) => ipcRenderer.invoke('flash:backup', saberId, label, configName ?? null),
-    write: (dfuPath) => ipcRenderer.invoke('flash:write', dfuPath),
+    waitForBootloader: (timeoutMs, before) => ipcRenderer.invoke('flash:waitForBootloader', timeoutMs, before ?? null),
+    target: (serial) => ipcRenderer.invoke('flash:target', serial),
+    backup: (saberId, label, configName, serial) => ipcRenderer.invoke('flash:backup', saberId, label, configName ?? null, serial ?? null),
+    write: (dfuPath, serial) => ipcRenderer.invoke('flash:write', dfuPath, serial ?? null),
     installDriver: () => ipcRenderer.invoke('flash:installDriver'),
     listBackups: (saberId) => ipcRenderer.invoke('flash:listBackups', saberId),
-    restore: (saberId, file) => ipcRenderer.invoke('flash:restore', saberId, file),
-    waitForRuntime: (timeoutMs) => ipcRenderer.invoke('flash:waitForRuntime', timeoutMs),
+    restore: (saberId, file, serial) => ipcRenderer.invoke('flash:restore', saberId, file, serial ?? null),
+    waitForRuntime: (timeoutMs, serial) => ipcRenderer.invoke('flash:waitForRuntime', timeoutMs, serial ?? null),
   },
   onJobEvent: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, ev: JobEvent) => cb(ev);

@@ -18,7 +18,7 @@ function model(name: string, lookId: string | null): SaberConfigModel {
   const look = LIBRARY_LOOKS.find((l) => l.id === lookId);
   const onMain = look ? look.roles.includes('main') : false;
   return {
-    name, board: 'V2', buttons: 2, prop: 'sa22c', blades: [main, crystal],
+    name, board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'sa22c', blades: [main, crystal],
     presets: [{ font: 'A;common', track: '', name: 'One' }, { font: 'B;common', track: '', name: 'Two', ...(look ? { looks: onMain ? [look.id, null] : [null, look.id] } : {}) }],
   };
 }

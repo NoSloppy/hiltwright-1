@@ -120,6 +120,23 @@ export class Library {
   }
 
   /**
+   * What the saber's bootloader showed at an install: its serial and flash size, and so the board type. A serial is one
+   * board, so any other record holding it loses it. Refuses what no Proffieboard bootloader reports.
+   */
+  noteBootloader(id: string, seen: { serial: string | null; flashBytes: number }): Promise<SaberRecord> {
+    const board = seen.flashBytes === 262144 ? 'V2' : seen.flashBytes === 524288 ? 'V3' : null;
+    if (!board) return Promise.reject(new Error(`Not a Proffieboard flash size: ${seen.flashBytes}`));
+    if (seen.serial !== null && !/^[A-Za-z0-9]{1,40}$/.test(seen.serial)) return Promise.reject(new Error('Not a USB serial'));
+    return this.store.update((lib) => {
+      const rec = lib.sabers.find((s) => s.id === id);
+      if (!rec) throw new Error(`Unknown saber ${id}`);
+      if (seen.serial) for (const s of lib.sabers) if (s !== rec && s.bootloader?.serial === seen.serial) delete s.bootloader;
+      rec.bootloader = { serial: seen.serial, flashBytes: seen.flashBytes, board, at: new Date().toISOString() };
+      return rec;
+    });
+  }
+
+  /**
    * A style was saved again: every saber whose plan holds a copy of it (planned or not) gets the new version for its
    * next build. Returns how many records changed.
    */

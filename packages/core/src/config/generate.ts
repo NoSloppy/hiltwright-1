@@ -31,6 +31,11 @@ export interface SaberConfigModel {
   /** Config file stem, e.g. `hiltwright_hote2`. Letters, digits and underscores. */
   name: string;
   board: BoardModel;
+  /**
+   * How the board is known: from the saber's bootloader (its flash size), from the firmware Hiltwright installed on it,
+   * or chosen by the owner. Absent: nobody knows yet, `board` only keeps the pin lists showing, and nothing is built.
+   */
+  boardFrom?: 'bootloader' | 'firmware' | 'owner';
   buttons: 1 | 2 | 3;
   prop: Prop;
   blades: ModelBlade[];
@@ -147,9 +152,22 @@ export function contentHash(text: string): string {
   return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).slice(0, 12);
 }
 
+/** Said when nobody has told Hiltwright which board a saber has (the running firmware never says). */
+export const BOARD_NOT_CHOSEN = 'Choose the board (Proffieboard V2 or V3) on the Wiring page.';
+
+/**
+ * The board a config file name mentions (`proffieboard_v3_config.h`, `my_v2_saber.h`), as a suggestion only: a name is
+ * whatever the installer called the file. Null when it names neither, or both.
+ */
+export function boardHint(configName: string | null | undefined): BoardModel | null {
+  const found = new Set([...(configName ?? '').matchAll(/(?:^|[^a-z0-9])v([23])(?![0-9])/gi)].map((m) => `V${m[1]}` as BoardModel));
+  return found.size === 1 ? [...found][0] : null;
+}
+
 export function validateModel(m: SaberConfigModel): string[] {
   const errors: string[] = [];
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(m.name)) errors.push('Config name must be letters, digits and underscores.');
+  if (!m.boardFrom) errors.push(BOARD_NOT_CHOSEN);
   if (!m.blades.length) errors.push('At least one blade is needed.');
   if (!m.presets.length) errors.push('At least one preset is needed.');
   // The same wiring rules, and words, as the Wiring page (pinRules.ts).

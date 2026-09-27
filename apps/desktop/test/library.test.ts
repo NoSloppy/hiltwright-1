@@ -201,3 +201,42 @@ describe('a style saved again reaches every plan that holds it (style-save-integ
     expect(await lib.replaceLook(red as never)).toBe(0);
   });
 });
+
+// install-target-safety design D1: what a saber's bootloader showed at an install.
+describe('the bootloader a saber showed', () => {
+  it('is kept with the board its flash size means, and survives the next normal connect and a restart', async () => {
+    const lib = new Library(file);
+    const s = await connect(lib, hote2);
+    const rec = await lib.noteBootloader(s.id, { serial: '209133815232', flashBytes: 262144 });
+    expect(rec.bootloader).toMatchObject({ serial: '209133815232', flashBytes: 262144, board: 'V2' });
+    await connect(lib, hote2);
+    const [again] = await new Library(file).list();
+    expect(again.bootloader).toMatchObject({ serial: '209133815232', board: 'V2' });
+  });
+
+  it('a 512 KB bootloader is a V3; a serial-less one is kept without a serial', async () => {
+    const lib = new Library(file);
+    const s = await connect(lib, noSerial());
+    expect((await lib.noteBootloader(s.id, { serial: null, flashBytes: 524288 })).bootloader).toMatchObject({ serial: null, board: 'V3' });
+  });
+
+  it('refuses a flash size no Proffieboard has, and a serial that is not plain text', async () => {
+    const lib = new Library(file);
+    const s = await connect(lib, hote2);
+    await expect(lib.noteBootloader(s.id, { serial: '209133815232', flashBytes: 131072 })).rejects.toThrow(/flash size/);
+    await expect(lib.noteBootloader(s.id, { serial: 'x'.repeat(41), flashBytes: 262144 })).rejects.toThrow(/serial/);
+    await expect(lib.noteBootloader(s.id, { serial: '..\evil', flashBytes: 262144 })).rejects.toThrow(/serial/);
+    expect((await lib.list())[0].bootloader).toBeUndefined();
+  });
+
+  it('a serial is one board: recording it on one saber takes it off another', async () => {
+    const lib = new Library(file);
+    const a = await connect(lib, hote2);
+    const b = await connect(lib, { ...hote2, usbSerial: '207A349A5430', configName: 'config/default_proffieboard_config.h' });
+    await lib.noteBootloader(a.id, { serial: '207A349A5430', flashBytes: 524288 });
+    await lib.noteBootloader(b.id, { serial: '207A349A5430', flashBytes: 524288 });
+    const byId = new Map((await lib.list()).map((s) => [s.id, s]));
+    expect(byId.get(a.id)!.bootloader).toBeUndefined();
+    expect(byId.get(b.id)!.bootloader?.serial).toBe('207A349A5430');
+  });
+});

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { STARTER_LOOKS, bankFromSaber, bankProblems, bankToModel, generateConfig, isBank, newBank, newBankPreset, type FirmwareManifest, type LookDef, type PresetRecord, type SaberConfigModel } from '../src';
 
 const model: SaberConfigModel = {
-  name: 'hw_test', board: 'V2', buttons: 2, prop: 'fett263',
+  name: 'hw_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'fett263',
   blades: [
     { id: 'main', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } },
     { id: 'crystal', role: 'crystal', type: 'pixel', pixels: 1, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'blade2Pin', powerPins: ['bladePowerPin4'] } },

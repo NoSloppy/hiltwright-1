@@ -3,7 +3,7 @@ import { generateConfig, validateModel, type ModelBlade, type SaberConfigModel }
 import { bladeSummary, freeDataPins, kindOf, newBlade, pinTable, withBladeCount, withKind } from '../src/renderer/src/hardwareModel';
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
-const model = (blades: ModelBlade[], board: 'V2' | 'V3' = 'V2'): SaberConfigModel => ({ name: 'hw_editor', board, buttons: 2, prop: 'sa22c', blades, presets: [{ font: 'A', track: '', name: 'One' }] });
+const model = (blades: ModelBlade[], board: 'V2' | 'V3' = 'V2'): SaberConfigModel => ({ name: 'hw_editor', board, boardFrom: 'owner', buttons: 2, prop: 'sa22c', blades, presets: [{ font: 'A', track: '', name: 'One' }] });
 
 describe('hardware editor model', () => {
   it('a new blade takes the first free data pin and power pin', () => {

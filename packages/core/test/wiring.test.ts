@@ -3,7 +3,7 @@ import { BOARD_PINS, bladeKind, wiringConfirmed, wiringFingerprint, wiringProble
 
 const main: ModelBlade = { id: 'main', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
 const crystal: ModelBlade = { id: 'crystal', role: 'crystal', type: 'pixel', pixels: 2, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'blade2Pin', powerPins: ['bladePowerPin4'] } };
-const saber: SaberConfigModel = { name: 'hiltwright_test', board: 'V2', buttons: 2, prop: 'fett263', blades: [main, crystal], presets: [{ font: 'common', track: '', name: 'Preset 1' }] };
+const saber: SaberConfigModel = { name: 'hiltwright_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'fett263', blades: [main, crystal], presets: [{ font: 'common', track: '', name: 'Preset 1' }] };
 const confirmed = withWiringConfirmation(saber, true, '2026-09-24T10:00:00.000Z');
 
 describe('wiring confirmation', () => {

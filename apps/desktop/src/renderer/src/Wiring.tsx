@@ -10,6 +10,7 @@ import type { Board } from './board';
 import { Icon } from './Icon';
 import type { Workspace } from './workspace';
 import { Select } from './Select';
+import { boardCorrection, boardSuggestion } from './saberModel';
 
 export const PROPS: { value: Prop; label: string }[] = [
   { value: 'fett263', label: 'Fett263 · edit mode, gestures' }, { value: 'sa22c', label: 'SA22C' }, { value: 'bc', label: 'BC' }, { value: 'default', label: 'ProffieOS default' },
@@ -22,7 +23,7 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
   const [draft, setDraft] = useState<SaberConfigModel | null>(model);
   const pending = useRef<{ t: ReturnType<typeof setTimeout>; next: SaberConfigModel } | null>(null);
   // What this page edits, as last loaded or saved here: a model that differs from it was changed elsewhere.
-  const wiringOf = (m: SaberConfigModel) => JSON.stringify({ board: m.board, buttons: m.buttons, prop: m.prop, blades: m.blades, bladeId: m.bladeId ?? null });
+  const wiringOf = (m: SaberConfigModel) => JSON.stringify({ board: m.board, boardFrom: m.boardFrom ?? null, buttons: m.buttons, prop: m.prop, blades: m.blades, bladeId: m.bladeId ?? null });
   const known = useRef<string | null>(model ? wiringOf(model) : null);
   const [outside, setOutside] = useState<string | null>(null);
   useEffect(() => { setDraft(model); known.current = model ? wiringOf(model) : null; setOutside(null); }, [saber?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -63,6 +64,11 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
   // Confirmed or installed before confirmations recorded what they checked: ask once, and say why.
   const confirmOnce = !confirmed && !draft.wiringConfirmation && (!!saber.model?.wiringConfirmedAt || !!saber.firmware);
   const detected = info.pixelBlades;
+  // The board is known from the saber, chosen here, or not known at all (install-target-safety D2).
+  const boardChosen = !!draft.boardFrom;
+  const fromBootloader = draft.boardFrom === 'bootloader';
+  const suggestion = boardSuggestion(saber);
+  const corrected = boardCorrection(saber);
   const measureBlocked = !live ? 'Connect the saber to measure a blade.' : !saber.firmware?.bladeId ? 'Turn this on, then build and install once; readings only count from firmware that scans with the blade powered.' : null;
 
   return (
@@ -76,8 +82,9 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
           <div className="row wrap" style={{ gap: 14 }}>
             <label className="field"><span className="label">Board</span>
               <div className="seg" role="radiogroup" aria-label="Proffieboard model" style={{ height: 32 }}>
-                {(['V2', 'V3'] as BoardModel[]).map((b) => <button key={b} type="button" role="radio" aria-checked={draft.board === b} className={draft.board === b ? 'on' : ''} style={{ height: 30 }} onClick={() => change({ board: b })}>Proffieboard {b}</button>)}
+                {(['V2', 'V3'] as BoardModel[]).map((b) => <button key={b} type="button" role="radio" aria-checked={boardChosen && draft.board === b} className={boardChosen && draft.board === b ? 'on' : ''} style={{ height: 30 }} disabled={fromBootloader && draft.board !== b} title={fromBootloader && draft.board !== b ? `The saber's bootloader showed a Proffieboard ${draft.board}` : undefined} onClick={() => { if (!fromBootloader) change({ board: b, boardFrom: 'owner' }); }}>Proffieboard {b}</button>)}
               </div>
+              {fromBootloader && <span className="hint">Read from the saber at its last install.</span>}
             </label>
             <label className="field"><span className="label">Buttons</span>
               <div className="seg" role="radiogroup" aria-label="How many buttons" style={{ height: 32 }}>
@@ -89,6 +96,8 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
                 <Select value={draft.prop} aria-label="Prop file" onChange={(e) => change({ prop: e.target.value as Prop })}>{PROPS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select></span>
             </label>
           </div>
+          {!boardChosen && <div className="note amber"><Icon name="warn" /><span>Which Proffieboard is this? Check the label on the board (V2.2 or V3.x) and choose it above. Nothing is built until you do.{suggestion ? ` Its config name suggests a ${suggestion}.` : ''}</span></div>}
+          {corrected && fromBootloader && <div className="note amber"><Icon name="warn" /><span>The saber's bootloader showed a Proffieboard {corrected.actual} at its last install, so the board was corrected from {corrected.saved}. Check the pins and confirm the wiring again.</span></div>}
           {outside && <div className="note amber"><Icon name="warn" /><span>{outside}</span></div>}
           <HardwareEditor blades={draft.blades} board={draft.board} detected={detected} locked={board.busy} onChange={(b: ModelBlade[]) => change({ blades: b })}
             swap={FEATURES.bladeId ? {

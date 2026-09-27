@@ -15,7 +15,7 @@ const saber = {
   identity: { usbSerial: '209133815232', configName: 'config/hiltwright_hote2.h', version: 'v8.10 hiltwright ce12a06', prop: 'SaberFett263Buttons', buttons: 2, installed: 'Sep 13 2026', pixelBlades: [132, 1, 2], bladeConfig: 0 },
   presets: [], fonts: ['GeneralPrincess'], tracks: [],
   model: {
-    name: 'hiltwright_hote2', board: 'V2', buttons: 2, prop: 'fett263',
+    name: 'hiltwright_hote2', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'fett263',
     blades: [{ id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { data: 2, power: [2, 3] } }],
     presets: [{ name: 'Kylo', font: 'Kylo;common', track: 'tracks/kylo.wav', looks: { main: 'SECRET_LOOK_ID' }, lookArgs: { main: 'SECRET_ARGS 255,0,0' } }],
     looks: [{ id: 'SECRET_LOOK_ID', code: 'StylePtr<SECRET_STYLE_CODE>()' }],
@@ -28,7 +28,7 @@ const base = (over: Partial<BundleInput> = {}): BundleInput => ({
   now,
   about: { app: '0.1.0', packaged: true, os: 'Windows 11 Pro 10.0.26200', arch: 'x64', electron: '37.2.0', chrome: '138.0' },
   toolchain: { root: 'C:\\Users\\Al\\AppData\\Local\\Hiltwright\\tc', cli: true, cliVersion: '1.3.1', core: true, gcc: true, dfuUtil: 'x', proffieOS: true, proffieOSVersion: 'v8.10', ready: true, freeBytes: 50 * 1048576, pathTooLong: false, versions: { cli: '1.3.1', core: '4.6', proffieOS: 'v8.10' }, open: false },
-  usb: { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: null, bootloaderProblem: null },
+  usb: { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: null, bootloaderProblem: null, bootloaders: [], runtimeSerials: ['209133815232'] },
   connection: { status: 'connected', error: null, port: '1209:6668', board: { version: 'v8.10', config: 'hote2.h', prop: 'Fett263', buttons: 2, battery: 3.9, volume: 1800, presets: 13, fonts: 18, tracks: 22, blades: [132, 1, 2] }, saberId: 'ea8dbea42e78' },
   saber,
   lastBuild: { at: '2026-09-25T15:59:00Z', saberId: 'ea8dbea42e78', ok: false, cached: false, ms: 61000, textBytes: 225000, flashBytes: 262144, flashPct: 86, warnings: ['Blade 2 has no style'], problems: ['The firmware is too big for this board.'] },

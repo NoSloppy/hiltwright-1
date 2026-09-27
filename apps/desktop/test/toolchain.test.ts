@@ -12,7 +12,7 @@ import { buildFirmware } from '../src/main/build';
 const enabled = !!process.env.HILTWRIGHT_INSTALL_TEST;
 
 const model: SaberConfigModel = {
-  name: 'hiltwright_fresh', board: 'V2', buttons: 2, prop: 'sa22c',
+  name: 'hiltwright_fresh', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'sa22c',
   blades: [{ id: 'main', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } }],
   presets: [{ font: 'TeensySF;common', track: '', name: 'Fresh' }],
 };

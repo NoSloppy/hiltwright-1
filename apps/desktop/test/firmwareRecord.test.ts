@@ -3,7 +3,7 @@ import { generateConfig, type ModelBlade, type SaberConfigModel } from '@hiltwri
 import { cleanFirmware } from '../src/main/firmwareRecord';
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
-const model: SaberConfigModel = { name: 'hiltwright_test', board: 'V2', buttons: 2, prop: 'fett263', blades: [main], presets: [{ font: 'common', track: '', name: 'Preset 1' }] };
+const model: SaberConfigModel = { name: 'hiltwright_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'fett263', blades: [main], presets: [{ font: 'common', track: '', name: 'Preset 1' }] };
 const record = () => ({ ...generateConfig(model).manifest, os: 'v8.10', at: '2026-09-24T10:00:00.000Z' });
 
 describe('the firmware record a saber keeps', () => {

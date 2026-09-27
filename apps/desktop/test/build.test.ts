@@ -10,7 +10,7 @@ import { toolchainStatus } from '../src/main/toolchain';
 const root = process.env.HILTWRIGHT_TOOLCHAIN_DIR;
 
 const hote2: SaberConfigModel = {
-  name: 'hiltwright_hote2', board: 'V2', buttons: 2, prop: 'fett263', generator: 'test',
+  name: 'hiltwright_hote2', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'fett263', generator: 'test',
   blades: [
     { id: 'main', role: 'main', type: 'pixel', pixels: 140, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } },
     { id: 'crystal', role: 'crystal', type: 'pixel', pixels: 2, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'blade2Pin', powerPins: ['bladePowerPin4'] } },
@@ -99,7 +99,7 @@ describe('usbState', () => {
 // cover them all; if one fails, split it to find the part before filing anything.
 const pixel = (id: string, role: ModelBlade['role'], pixels: number, order: string, wiring: ModelBlade['wiring']): ModelBlade => ({ id, role, type: 'pixel', pixels, order, extra: [], leds: [], parallel: 1, wiring });
 const fw20V2: SaberConfigModel = {
-  name: 'hiltwright_fw20_v2', board: 'V2', buttons: 3, prop: 'fett263', generator: 'test',
+  name: 'hiltwright_fw20_v2', board: 'V2', boardFrom: 'owner', buttons: 3, prop: 'fett263', generator: 'test',
   extraDefines: ['FETT263_TWIST_OFF', 'FETT263_TWIST_ON'],
   blades: [
     pixel('b1', 'main', 132, 'GRBW', { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] }),
@@ -111,7 +111,7 @@ const fw20V2: SaberConfigModel = {
   presets: [{ font: 'TeensySF;common', track: '', name: 'One' }, { font: 'SmthJedi;common', track: '', name: 'Two' }],
 };
 const fw20V3: SaberConfigModel = {
-  name: 'hiltwright_fw20_v3', board: 'V3', buttons: 2, prop: 'sa22c', generator: 'test',
+  name: 'hiltwright_fw20_v3', board: 'V3', boardFrom: 'owner', buttons: 2, prop: 'sa22c', generator: 'test',
   blades: [
     pixel('b1', 'main', 144, 'RGBW', { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] }),
     pixel('b2', 'side', 10, '', { kind: 'chain', after: 'b1' }),

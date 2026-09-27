@@ -51,6 +51,8 @@ export interface SaberRecord {
   firmware?: FirmwareManifest;
   /** Set up before the hilt was ever connected: wiring, presets and looks chosen ahead. Adopted by the real saber when it appears. */
   planned?: boolean;
+  /** What its bootloader showed at the last install or restore: the serial it had there, and its flash size and so its board. */
+  bootloader?: { serial: string | null; flashBytes: number; board: 'V2' | 'V3'; at: string };
 }
 
 export interface SaberPatch { model?: SaberConfigModel | null; firmware?: FirmwareManifest | null }
@@ -167,7 +169,13 @@ export interface UsbState {
   bootloaderPresent: boolean;
   bootloaderDriver: string | null;
   bootloaderProblem: number | null;
+  /** Every board in its bootloader (serial null when the device gave none), and the serials of every running board. */
+  bootloaders: { serial: string | null; driver: string | null; problem: number | null }[];
+  runtimeSerials: string[];
 }
+
+/** What one bootloader says about its board: the flash size, and the board type it means (null when unknown). */
+export interface FlashTarget { serial: string | null; flashBytes: number | null; board: 'V2' | 'V3' | null; found: boolean }
 
 export interface BackupInfo { file: string; at: string; label: string; bytes: number; /** Starts like real firmware; anything else is refused. */ valid: boolean; /** The config the saber reported when this was taken, if known. */ configName: string | null }
 
@@ -206,6 +214,8 @@ export interface HiltwrightApi {
     plan(name: string, model: SaberConfigModel): Promise<SaberRecord>;
     /** The connected saber takes over a plan's model, and the plan is dropped. */
     adopt(plannedId: string, targetId: string): Promise<SaberRecord>;
+    /** Remember what this saber's bootloader showed at an install: its serial and flash size (256 KB or 512 KB only). */
+    noteBootloader(id: string, seen: { serial: string | null; flashBytes: number }): Promise<SaberRecord>;
   };
   /** Preset banks built without a saber, in userData/banks.json. */
   banks: {
@@ -340,19 +350,24 @@ export interface HiltwrightApi {
   };
   flash: {
     usb(): Promise<UsbState>;
-    /** Wait up to timeoutMs for the bootloader to enumerate with a usable driver. */
-    waitForBootloader(timeoutMs: number): Promise<{ ok: boolean; text: string }>;
-    /** `configName`: what the saber reported before its reboot, kept beside the backup so a restore can expect it back. */
-    backup(saberId: string, label: string, configName?: string | null): Promise<FlashStepResult>;
-    write(dfuPath: string): Promise<FlashStepResult>;
+    /**
+     * Wait up to timeoutMs for a bootloader to enumerate with a usable driver. With `before` (the bootloader serials
+     * present before a reboot), only a new one counts. `serials` are the new bootloaders found.
+     */
+    waitForBootloader(timeoutMs: number, before?: (string | null)[]): Promise<{ ok: boolean; text: string; serials: (string | null)[] }>;
+    /** The flash size and board type of the bootloader with this serial (or the only one, for null). */
+    target(serial: string | null): Promise<FlashTarget>;
+    /** `configName`: what the saber reported before its reboot, kept beside the backup so a restore can expect it back. `serial`: the board to read. */
+    backup(saberId: string, label: string, configName?: string | null, serial?: string | null): Promise<FlashStepResult>;
+    write(dfuPath: string, serial?: string | null): Promise<FlashStepResult>;
     /** Windows: download the official bootloader driver installer, run it elevated, wait for WinUSB to bind. */
     installDriver(): Promise<{ ok: boolean; text: string }>;
     /** Flash backups taken before installs for this saber, newest first. */
     listBackups(saberId: string): Promise<BackupInfo[]>;
-    /** Write one of this saber's backups back. The board must be in bootloader mode. */
-    restore(saberId: string, file: string): Promise<FlashStepResult>;
-    /** Wait for the running firmware's serial device to be back. */
-    waitForRuntime(timeoutMs: number): Promise<boolean>;
+    /** Write one of this saber's backups back to the board with this serial. The board must be in bootloader mode. */
+    restore(saberId: string, file: string, serial?: string | null): Promise<FlashStepResult>;
+    /** Wait for the running firmware's serial device to be back; with a serial, that board's. */
+    waitForRuntime(timeoutMs: number, serial?: string | null): Promise<boolean>;
   };
   onJobEvent(cb: (e: JobEvent) => void): () => void;
   support: {

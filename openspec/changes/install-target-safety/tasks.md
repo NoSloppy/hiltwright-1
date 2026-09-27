@@ -24,7 +24,7 @@
 
 ## 2. Knowing the board
 
-- [ ] 2.1 In `apps/desktop/src/main/flash.ts`:
+- [x] 2.1 In `apps/desktop/src/main/flash.ts`:
   - `usbState` lists bootloaders with serials, and the running serials
   - `dfuInfo` returns one entry per device, with its serial and flash size
   - add `boardForFlash`
@@ -32,19 +32,71 @@
   - add `flash.target(serial)` through `ipc.ts`, `preload` and `shared/api.ts`
 
   Verify with a new `apps/desktop/test/flash.test.ts`: parsing the 1.1 listings, `boardForFlash` for 262144, 524288 and others, the serial read from an instance id (and none from a generated `&` id), and the dfu-util arguments for each call. Then `npm test`.
-- [ ] 2.2 Add `SaberRecord.bootloader` and `library.noteBootloader(id, …)` in main, which refuses a serial over 40 characters or an unknown flash size (design D1). Verify in `apps/desktop/test/library.test.ts`: the record is stored, bad input is refused, and a normal connect's identity merge keeps it.
-- [ ] 2.3 In `packages/core/src/config/generate.ts`:
+  - **Result, 2026-09-27.**
+    - **`usbState`** (through `usbStateFrom`) lists `bootloaders` with serials, and `runtimeSerials`, from whole devices only. `serialFromInstanceId` returns null for a Windows-made id.
+    - **Parsing:** `parseDfuList` gives one device per board, with its serial and "@Internal Flash" size. `boardForFlash` maps 262144 to V2 and 524288 to V3.
+    - **Targeting:** `pickDevice` takes the serial's board, or with none, only a single bootloader. `flashTarget` backs the new `flash.target(serial)`.
+    - **Backup, write and restore** take the serial, with `dfuDeviceArgs` = `-d 1209:6668,0483:df11 -S <serial>`.
+      - **Changed from design D6:** the running id stays, because dfu-util checks a `.dfu` file's id against it. The serial limits the match instead, and design D6 is updated.
+    - **IPC:**
+      - `flash:restore` looks up the board's flash itself and refuses another size.
+      - `flash:waitForBootloader` takes the serials present before a reboot, and returns the new ones.
+      - `flash:waitForRuntime` takes the saber's serial.
+
+    `apps/desktop/test/flash.test.ts` has 13 tests, all passing: the 1.1 listing with both boards, serial-less devices, the board sizes, instance ids, the USB state, new bootloaders, picking a device, the arguments for backup, write and target, and a 256 KB backup refused on a 512 KB board. The whole desktop suite passes: 281 tests, 13 gated skipped. The live `usbState` check listed both boards' serials.
+- [x] 2.2 Add `SaberRecord.bootloader` and `library.noteBootloader(id, …)` in main, which refuses a serial over 40 characters or an unknown flash size (design D1). Verify in `apps/desktop/test/library.test.ts`: the record is stored, bad input is refused, and a normal connect's identity merge keeps it.
+  - **Result, 2026-09-27.**
+    - **The record:** `SaberRecord.bootloader` holds `{ serial, flashBytes, board, at }`.
+    - **Storing it:** `Library.noteBootloader` refuses:
+      - any flash size except 262144 or 524288
+      - a serial that is not 1–40 letters and digits
+
+      A recorded serial is taken off any other record. It is wired as `library.noteBootloader` through IPC and the preload.
+    - **Normal connects:** `upsert` leaves the field alone, so it is kept.
+
+    Four new tests in `apps/desktop/test/library.test.ts` pass (21 in the file):
+    - kept through a connect and a restart
+    - V3 without a serial
+    - refusals
+    - one board per serial
+- [x] 2.3 In `packages/core/src/config/generate.ts`:
   - `SaberConfigModel.boardFrom`
   - `validateModel` refuses a model without it: "Choose the board (Proffieboard V2 or V3) on the Wiring page."
   - `boardHint(configName)`
 
   Update the test models and fixtures that build to carry `boardFrom`. Verify in `packages/core/test/generate.test.ts`: the refusal, and the hint for a V3 name, a V2 name and a neutral name. Then `npm test` in `packages/core`.
-- [ ] 2.4 `draftModel` decides the board as in design D2 (bootloader record, then firmware record, then the owner's choice, else not chosen), and sets `boardCorrected`. The Wiring page:
+  - **Result, 2026-09-27.**
+    - **The model:** `SaberConfigModel.boardFrom` (`'bootloader' | 'firmware' | 'owner'`).
+    - **The refusal:** `validateModel` refuses a model without it with `BOARD_NOT_CHOSEN`, "Choose the board (Proffieboard V2 or V3) on the Wiring page."
+    - **The hint:** `boardHint(configName)` returns V2 or V3 only when the name mentions exactly one of them as a word part. `saber_v31` and `v2_to_v3` give none.
+    - **Test models:** every model that is validated or built got `boardFrom: 'owner'`:
+      - core: banks, generate, looks, styleBuilder, wiring
+      - desktop: build, hardware, styleCompile, toolchain, saberModel, lookSizes, firmwareRecord, supportBundle
+
+    Two new tests in `packages/core/test/generate.test.ts` pass: the refusal from each missing source, and the hints. Core: 204 tests pass, and the type check is clean. Desktop: 285 tests pass.
+- [x] 2.4 `draftModel` decides the board as in design D2 (bootloader record, then firmware record, then the owner's choice, else not chosen), and sets `boardCorrected`. The Wiring page:
   - shows neither board pressed when not chosen, with the label note and the hint
   - saves `boardFrom: 'owner'` on a press
   - shows the corrected-board note
 
   Turn the BST-3 test in `apps/desktop/test/draftModel.test.ts` into a normal test: a config naming a V3 suggests V3 and chooses neither. Add one test per source and the corrected case. Verify with `npm test` and `npm run typecheck`, and in 5.2.
+  - **Result, 2026-09-27.**
+    - **Where the board comes from:** `knownBoard(saber)` in `saberModel.ts` tries, in order:
+      - the bootloader record
+      - the firmware record's board, when the saved wiring names the same board or there is none
+      - the saved model's `boardFrom: 'owner'`
+
+      A saved `boardFrom` of anything but `'owner'` does not count by itself.
+    - **The draft:** `draftModel` takes that board and `boardFrom`. When nothing is known, it keeps the saved board, or V2, only for the pin lists, with no `boardFrom`.
+    - **The design's `boardCorrected` flag became `boardCorrection(saber)`**, computed from the record. The note then stays until the corrected wiring is saved, which the lapsed confirmation forces anyway.
+    - **`boardSuggestion(saber)`** gives the name hint only while the board is not known.
+    - **The Wiring page:**
+      - **Not known:** neither board is pressed, and a note asks for the label (with the hint). A press saves `boardFrom: 'owner'`.
+      - **From the bootloader:** the board is fixed. The other button is disabled, with "Read from the saber at its last install."
+      - **Corrected:** a note says the board was corrected.
+      - **Outside changes:** `boardFrom` is part of the wiring the page compares.
+
+    BST-3 is a normal test ("V3 is suggested, and no board is chosen"). Six new tests in `apps/desktop/test/draftModel.test.ts` pass (14 in the file): nothing chosen, the owner's choice, firmware with and without saved wiring, the owner switching away, the bootloader winning with the correction, and a planned saber. Desktop: 291 tests pass. The type check is clean, except for installFlow's fakes, which 3.1 rewrites. The page itself is checked in 5.2.
 
 ## 3. Installing to the right board
 
