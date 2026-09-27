@@ -69,6 +69,8 @@ In `generate.ts`, `slotChecks(m)` returns `{ errors, warnings }`:
 
 `validateModel` adds the errors. `generateConfig` adds the warnings to its `warnings`, which the Build page already shows.
 
+**Changed during implementation:** unchosen slots are grouped into one warning per blade, naming up to four presets and a count. For example: "3 presets (Mara Jade Skywalker, Valkyrie, Battery Level), crystal (blade 2): no style chosen, using "Follow the blade"." Presets read back from a saber often choose nothing for the crystal or accent, and one warning per slot would give hote2 26 lines. Mismatch warnings and motor errors stay per slot.
+
 **Rejected:**
 - *Refusing a missing slot.* The owner chose to fill it and say so. The spec's crystal scenario keeps the fill.
 - *Refusing every mismatch.* The owner chose to refuse only on a motor, where it is a hardware risk.
