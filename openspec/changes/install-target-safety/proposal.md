@@ -15,6 +15,7 @@ Nothing checks that the firmware being written matches the board it lands on. Th
 - **FW3: Know the board.**
   - The board is known from the saber's bootloader (its flash size: 256 KB is a V2, 512 KB a V3) or from the firmware Hiltwright installed on it. Otherwise the owner is asked.
   - **Owner's decision, 2026-09-27:** when the board is not known, the Wiring page selects neither board, and building is refused until the owner chooses. Running firmware never reports its board (`version` has no board line, and the USB product name is "Proffieboard" on both), so there is nothing better to go on.
+  - **Owner's decision, 2026-09-27 (during 5.3):** the Wiring page also offers "Check the board" for a connected saber whose board is not known. Hiltwright reboots the saber into its bootloader, reads the flash size, and returns it to its firmware, in about 5 seconds, with nothing written. The step was proven in 1.1. The owner can still choose instead.
   - An image is never written to a bootloader whose flash size does not match the build's board, or whose flash size is not one Hiltwright knows.
   - Putting a backup back is checked in the same way.
 - **FW4: Know the saber.**

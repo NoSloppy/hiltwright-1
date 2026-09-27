@@ -361,6 +361,8 @@ export interface HiltwrightApi {
     waitForBootloader(timeoutMs: number, before?: (string | null)[]): Promise<{ ok: boolean; text: string; serials: (string | null)[] }>;
     /** The flash size and board type of the bootloader with this serial (or the only one, for null). */
     target(serial: string | null): Promise<FlashTarget>;
+    /** Send the board with this serial from its bootloader back to its firmware, writing nothing. */
+    leave(serial: string | null): Promise<FlashStepResult>;
     /** `configName`: what the saber reported before its reboot, kept beside the backup so a restore can expect it back. `serial`: the board to read. */
     backup(saberId: string, label: string, configName?: string | null, serial?: string | null): Promise<FlashStepResult>;
     write(dfuPath: string, serial?: string | null): Promise<FlashStepResult>;

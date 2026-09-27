@@ -187,6 +187,41 @@
 
     35 tests pass across the two files. Desktop has 320 tests passing and core 204, and the type check is clean.
 
+- [x] 4.2 Checking the board without installing (design D8, added during 5.3 at the owner's request):
+  - `leaveBootloader` in main's `flash.ts`, wired as `flash.leave(serial)`
+  - `checkBoard(deps, saber)` in `installFlow.ts`
+  - the "Check the board" button and its result on the Wiring page
+
+  Verify:
+  - `apps/desktop/test/flash.test.ts`: the leave arguments, and the temporary file removed
+  - `installFlow.test.ts`, one test each:
+    - a V3 found, recorded, left and reconnected, with nothing backed up or written
+    - no driver: the words, and no leave
+    - two new bootloaders
+    - an unknown size: left, and said so
+    - the leave failing: the RESET words
+  - `npm run typecheck`, and see 5.3
+  - **Result, 2026-09-27.**
+    - **Main:** `leaveBootloader` in `flash.ts` runs `dfu-util -d 1209:6668,0483:df11 -S <serial> -a 0 -s 0x08000000:4:leave -U <temp file>`, then removes the file. It is wired as `flash.leave(serial)`.
+    - **`checkBoard(deps, saber)` in `installFlow.ts`:**
+      1. Reboots the saber, and takes the one new bootloader.
+      2. Reads its size, and records the board when known.
+      3. Leaves the bootloader, holds other boards back, waits for this saber and reconnects.
+
+      It returns a `BoardCheck` in the page's words. The no-driver words are in `shared/boards.ts`.
+    - **The Wiring page:** while the board is not known and the saber is connected, the note asking for the label offers "Or let Hiltwright check… Nothing is written." with a "Check the board" button ("Checking the board…" while it runs). The result shows as a note.
+
+    Verified:
+    - `flash.test.ts`: the leave arguments, with no file left behind.
+    - Five new `checkBoard` tests in `installFlow.test.ts`:
+      - the V3 found, remembered, left and reconnected, with nothing backed up or written
+      - no driver
+      - two bootloaders
+      - an unknown size, left and not remembered
+      - leave failing
+    - 48 tests pass across the two files, and the type check is clean.
+    - **Development run, no board:** Fresh V3's Wiring note showed the check sentence and the button.
+
 ## 5. Checks
 
 - [x] 5.1 Run `npm test` and `npm run typecheck`; verify both pass.
@@ -223,4 +258,5 @@
       - blade 1 changed from 132 to 131 on the Wiring page: back on Build it read "out of date", with the note, and Install disabled
       - back to 132: "unchanged, reused", with Install enabled
     - Step 2 to be rechecked by the owner.
+  - **Check the board (4.2):** with the V3 plugged in alone, on a data folder where its board is not known, "Check the board" brings it back on its firmware within seconds, and the Wiring page shows V3, fixed. Needs the owner's go-ahead to reboot it, or the owner runs it.
 - [ ] 5.4 After archive, tick roadmap task 3.16 in `openspec/changes/beta-1-roadmap/tasks.md`. Also note in `v3-verification`'s proposal that its deferred two-boards step is unblocked. Verify both edits.

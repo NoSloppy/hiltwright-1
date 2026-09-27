@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 import type { Workspace } from './workspace';
 import { Select } from './Select';
 import { boardCorrection, boardSuggestion } from './saberModel';
+import { checkBoard, type BoardCheck } from './installFlow';
 
 export const PROPS: { value: Prop; label: string }[] = [
   { value: 'fett263', label: 'Fett263 · edit mode, gestures' }, { value: 'sa22c', label: 'SA22C' }, { value: 'bc', label: 'BC' }, { value: 'default', label: 'ProffieOS default' },
@@ -26,7 +27,21 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
   const wiringOf = (m: SaberConfigModel) => JSON.stringify({ board: m.board, boardFrom: m.boardFrom ?? null, buttons: m.buttons, prop: m.prop, blades: m.blades, bladeId: m.bladeId ?? null });
   const known = useRef<string | null>(model ? wiringOf(model) : null);
   const [outside, setOutside] = useState<string | null>(null);
-  useEffect(() => { setDraft(model); known.current = model ? wiringOf(model) : null; setOutside(null); }, [saber?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Checking the board: the saber visits its bootloader for its flash size and comes straight back (design D8).
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState<BoardCheck | null>(null);
+  const runCheck = async () => {
+    if (!saber) return;
+    setChecking(true); setChecked(null);
+    try {
+      setChecked(await checkBoard({
+        flash: window.hiltwright.flash, board,
+        noteBootloader: async (id, seen) => { const r = await window.hiltwright.library.noteBootloader(id, seen); await board.refreshLibrary(); return r; },
+        sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
+      }, saber));
+    } finally { setChecking(false); }
+  };
+  useEffect(() => { setDraft(model); known.current = model ? wiringOf(model) : null; setOutside(null); setChecked(null); }, [saber?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (model && !draft) setDraft(model); }, [model, draft]);
   // The saber's model changed elsewhere (an adoption, a restore): show it, and never save the older copy over it.
   useEffect(() => {
@@ -96,7 +111,16 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
                 <Select value={draft.prop} aria-label="Prop file" onChange={(e) => change({ prop: e.target.value as Prop })}>{PROPS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select></span>
             </label>
           </div>
-          {!boardChosen && <div className="note amber"><Icon name="warn" /><span>Which Proffieboard is this? Check the label on the board (V2.2 or V3.x) and choose it above. Nothing is built until you do.{suggestion ? ` Its config name suggests a ${suggestion}.` : ''}</span></div>}
+          {!boardChosen && (
+            <div className="note amber"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+              <span>Which Proffieboard is this? Check the label on the board (V2.2 or V3.x) and choose it above. Nothing is built until you do.{suggestion ? ` Its config name suggests a ${suggestion}.` : ''}</span>
+              {live && !saber.planned && <>
+                <span>Or let Hiltwright check: the saber restarts into bootloader mode for a few seconds, its flash size is read, and it comes straight back. Nothing is written.</span>
+                <span className="row"><button type="button" className="btn sm" disabled={checking || board.busy} onClick={() => void runCheck()}><span className="b"><span className="i"><Icon name="usb" />{checking ? 'Checking the board…' : 'Check the board'}</span></span></button></span>
+              </>}
+            </span></div>
+          )}
+          {checked && <div className={`note ${checked.tone}`}><Icon name={checked.tone === 'green' ? 'check' : checked.tone === 'red' ? 'x' : 'warn'} /><span>{checked.text}</span></div>}
           {corrected && fromBootloader && <div className="note amber"><Icon name="warn" /><span>The saber's bootloader showed a Proffieboard {corrected.actual} at its last install, so the board was corrected from {corrected.saved}. Check the pins and confirm the wiring again.</span></div>}
           {outside && <div className="note amber"><Icon name="warn" /><span>{outside}</span></div>}
           <HardwareEditor blades={draft.blades} board={draft.board} detected={detected} locked={board.busy} onChange={(b: ModelBlade[]) => change({ blades: b })}

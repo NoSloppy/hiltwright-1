@@ -1,7 +1,7 @@
 // Which board a bootloader is, and which one dfu-util talks to (install-target-safety, design D3 and D6). The listings
 // are the ones taken from the owner's V2.2 hote2 and V3.9, both in their bootloaders together (task 1.1).
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,7 +20,7 @@ vi.mock('../src/main/toolchain', () => ({
   },
 }));
 
-const { backupFlash, backupSizeMismatch, boardForFlash, dfuDeviceArgs, flashTarget, newBootloaders, parseDfuList, pickDevice, restoreBackup, serialFromInstanceId, usbStateFrom, writeFirmware } = await import('../src/main/flash');
+const { backupFlash, backupSizeMismatch, boardForFlash, dfuDeviceArgs, flashTarget, leaveBootloader, newBootloaders, parseDfuList, pickDevice, restoreBackup, serialFromInstanceId, usbStateFrom, writeFirmware } = await import('../src/main/flash');
 
 const HOTE2 = '209133815232';
 const V3 = '207A349A5430';
@@ -115,6 +115,15 @@ describe('talking to one board', () => {
     const f = join(dir, 'fw.dfu'); writeFileSync(f, Buffer.alloc(100));
     await writeFirmware(dir, f, () => undefined, V3);
     expect(calls.at(-1)!.slice(0, 4)).toEqual(['-d', '1209:6668,0483:df11', '-S', V3]);
+  });
+
+  it('leaving the bootloader reads 4 bytes of the board named, ending with leave, and keeps no file', async () => {
+    const r = await leaveBootloader(dir, V3, () => undefined);
+    expect(r.ok).toBe(true);
+    const args = calls.at(-1)!;
+    expect(args.slice(0, 4)).toEqual(['-d', '1209:6668,0483:df11', '-S', V3]);
+    expect(args).toContain('0x08000000:4:leave');
+    expect(existsSync(args[args.indexOf('-U') + 1])).toBe(false);
   });
 
   it('a 256 KB backup is not put back on a board with 512 KB of flash', async () => {

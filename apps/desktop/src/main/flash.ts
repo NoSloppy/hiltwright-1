@@ -3,7 +3,8 @@
 // writes with dfu-util, and waits for the board to come back. Commands are exactly the ones the spike proved.
 
 import { execFile } from 'node:child_process';
-import { mkdir, open, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { findDfuUtil, run, toolchainPaths, type Progress } from './toolchain';
 import { backupSizeMismatch, boardForFlash } from '../shared/boards';
@@ -180,6 +181,24 @@ export async function writeFirmware(toolchainRoot: string, dfuFile: string, onLi
   const r = await run(dfuUtil, [...dfuDeviceArgs(serial), '-a', '0', '-s', '0x08000000:leave', '-D', dfuFile], { timeoutMs: 300000, onLine });
   const ok = r.code === 0 && /File downloaded successfully|Download done/i.test(r.stdout + r.stderr);
   return { ok, ms: r.ms, detail: ok ? `wrote ${size} bytes in ${(r.ms / 1000).toFixed(1)} s` : (r.stderr || r.stdout).slice(-800), file: dfuFile };
+}
+
+/**
+ * Send the board with this serial from its bootloader back to its firmware, writing nothing: dfu-util reads 4 bytes
+ * and ends with DfuSe "leave" (measured on hote2 and the V3.9, install-target-safety 1.1). The bytes go to a
+ * temporary file, removed afterwards.
+ */
+export async function leaveBootloader(toolchainRoot: string, serial: string | null, onLine: Progress): Promise<FlashStepResult> {
+  const dfuUtil = await findDfuUtil(toolchainPaths(toolchainRoot));
+  if (!dfuUtil) return { ok: false, ms: 0, detail: 'dfu-util is not installed with the toolchain.' };
+  const file = join(tmpdir(), `hiltwright-leave-${serial ?? 'board'}-${Date.now()}.bin`);
+  try {
+    const r = await run(dfuUtil, [...dfuDeviceArgs(serial), '-a', '0', '-s', '0x08000000:4:leave', '-U', file], { timeoutMs: 15000, onLine });
+    const ok = r.code === 0;
+    return { ok, ms: r.ms, detail: ok ? 'left the bootloader' : (r.stderr || r.stdout).slice(-800) };
+  } finally {
+    await rm(file, { force: true });
+  }
 }
 
 export interface BackupInfo { file: string; at: string; label: string; bytes: number; valid: boolean; configName: string | null }

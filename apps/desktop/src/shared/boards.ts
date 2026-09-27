@@ -23,6 +23,9 @@ export function otherSaber(other: string, wanted: string): string {
   return `The board in bootloader mode is ${other}, not ${wanted}. Nothing was written.`;
 }
 
+/** Checking the board met a bootloader Windows has no driver for: dfu-util cannot read it, nor send it back. */
+export const NO_DRIVER_FOR_CHECK = 'Windows has no driver for the bootloader yet. It is installed with the first install on Build & Install; choose the board yourself for now.';
+
 export const SEVERAL_BOOTLOADERS = 'More than one board is in bootloader mode. Unplug the other Proffieboards, then press Install again.';
 export const NO_BOOTLOADER = 'No board is in bootloader mode. Hold BOOT, tap RESET, release BOOT, then press Install again.';
 

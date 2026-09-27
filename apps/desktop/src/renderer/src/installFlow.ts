@@ -8,7 +8,7 @@
 
 import type { PresetRecord, SaberConfigModel, VersionInfo } from '@hiltwright/core';
 import type { BackupInfo, BuildResult, FlashTarget, HiltwrightApi, SaberPatch, SaberRecord } from '../../shared/api';
-import { LEAVE_BOOTLOADER, NO_BOOTLOADER, SEVERAL_BOOTLOADERS, backupSizeMismatch, otherSaber, unknownBoard, wrongBoard } from '../../shared/boards';
+import { LEAVE_BOOTLOADER, NO_BOOTLOADER, NO_DRIVER_FOR_CHECK, SEVERAL_BOOTLOADERS, backupSizeMismatch, otherSaber, unknownBoard, wrongBoard, type BoardType } from '../../shared/boards';
 
 export type InstallStep = 'backup' | 'bootloader' | 'driver' | 'writing' | 'verifying' | 'done' | 'failed' | 'built';
 export interface InstallNote { tone: 'green' | 'amber' | 'red'; text: string }
@@ -16,7 +16,7 @@ export interface InstallNote { tone: 'green' | 'amber' | 'red'; text: string }
 export interface InstallReport { step?: InstallStep; note?: InstallNote | null; xfer?: number }
 
 export interface InstallDeps {
-  flash: Pick<HiltwrightApi['flash'], 'usb' | 'waitForBootloader' | 'target' | 'backup' | 'write' | 'restore' | 'waitForRuntime'>;
+  flash: Pick<HiltwrightApi['flash'], 'usb' | 'waitForBootloader' | 'target' | 'leave' | 'backup' | 'write' | 'restore' | 'waitForRuntime'>;
   snapshots: Pick<HiltwrightApi['snapshots'], 'save'>;
   /** Remember what this saber's bootloader showed (its serial and flash size). */
   noteBootloader: HiltwrightApi['library']['noteBootloader'];
@@ -181,6 +181,46 @@ export async function installSequence(deps: InstallDeps, job: InstallJob): Promi
     await writeFromBootloader(deps, job, target);
   } catch (err) {
     report({ step: 'failed', note: { tone: 'red', text: String(err) } });
+  }
+}
+
+/** What checking the board found, in the words the Wiring page shows. */
+export interface BoardCheck { tone: InstallNote['tone']; text: string; board: BoardType | null }
+
+/**
+ * Find out which board a connected saber has without installing anything (design D8): reboot it into its bootloader,
+ * read the flash size, remember it, send the saber back to its firmware and reconnect. Nothing is read beyond four
+ * bytes, and nothing is written.
+ */
+export async function checkBoard(deps: Pick<InstallDeps, 'flash' | 'noteBootloader' | 'board' | 'sleep'>, saber: SaberRecord): Promise<BoardCheck> {
+  const { flash, board } = deps;
+  try {
+    const was = (await flash.usb()).bootloaders.map((b) => b.serial);
+    if (!(await board.rebootToBootloader())) return { tone: 'red', text: 'Could not reboot the saber into bootloader mode, so the board was not checked. Nothing was changed.', board: null };
+    const boot = await flash.waitForBootloader(20000, was);
+    if (boot.serials.length > 1) return { tone: 'red', text: `${SEVERAL_BOOTLOADERS} ${LEAVE_BOOTLOADER}`, board: null };
+    if (!boot.ok) {
+      if (boot.serials.length === 1) return { tone: 'amber', text: `${NO_DRIVER_FOR_CHECK} ${LEAVE_BOOTLOADER}`, board: null };
+      return { tone: 'red', text: `The saber did not appear in bootloader mode, so the board was not checked. ${LEAVE_BOOTLOADER}`, board: null };
+    }
+    const serial = boot.serials[0] ?? null;
+    const t = await flash.target(serial);
+    // Seen appearing after this saber's own reboot: certain, so remembered.
+    if (t.board && t.flashBytes) { try { await deps.noteBootloader(saber.id, { serial, flashBytes: t.flashBytes }); } catch { /* shown below all the same */ } }
+    const found = t.board ? `This saber is a Proffieboard ${t.board}.` : unknownBoard(t.flashBytes);
+    const left = await flash.leave(serial);
+    if (!left.ok) return { tone: 'amber', text: `${found} Hiltwright could not send it back to its firmware. ${LEAVE_BOOTLOADER}`, board: t.board };
+    const running = saber.identity.usbSerial ?? serial;
+    if (running) await board.reachNext(running);
+    const back = await flash.waitForRuntime(25000, running);
+    if (!back) return { tone: 'amber', text: `${found} The saber has not reappeared yet. Unplug and replug it, then press Connect.`, board: t.board };
+    await deps.sleep(1500);
+    await board.connect(false, { serial: running });
+    return t.board
+      ? { tone: 'green', text: `${found} Nothing was written.`, board: t.board }
+      : { tone: 'amber', text: `${found} Choose the board yourself.`, board: null };
+  } catch (err) {
+    return { tone: 'red', text: `${String(err)} ${LEAVE_BOOTLOADER}`, board: null };
   }
 }
 

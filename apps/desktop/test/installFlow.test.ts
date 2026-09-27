@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SaberConfigModel } from '@hiltwright/core';
 import type { BackupInfo, BuildResult, SaberRecord, UsbState } from '../src/shared/api';
-import { STOPPED_HINT, installSequence, restoreSequence, writeFromBootloader, type InstallDeps, type InstallJob, type InstallReport } from '../src/renderer/src/installFlow';
+import { STOPPED_HINT, checkBoard, installSequence, restoreSequence, writeFromBootloader, type InstallDeps, type InstallJob, type InstallReport } from '../src/renderer/src/installFlow';
 
 const HOTE2 = '209133815232';
 const V3 = '207A349A5430';
@@ -20,7 +20,7 @@ const jobFor = (over: Partial<InstallJob> = {}): InstallJob => ({
 
 /** The boards plugged in: serial → flash size, and whether each is running or in its bootloader. */
 type Board = { serial: string | null; flash: number; mode: 'run' | 'boot' };
-type Over = { backup?: { ok: boolean; detail?: string }; write?: () => Promise<{ ok: boolean; detail: string }>; runtime?: boolean; confirm?: boolean; connectedSerial?: string; noDriver?: boolean; reached?: SaberRecord };
+type Over = { backup?: { ok: boolean; detail?: string }; write?: () => Promise<{ ok: boolean; detail: string }>; runtime?: boolean; confirm?: boolean; connectedSerial?: string; noDriver?: boolean; reached?: SaberRecord; leaveFails?: boolean };
 function world(boards: Board[], over: Over = {}) {
   const calls: string[] = [];
   const reports: InstallReport[] = [];
@@ -47,6 +47,12 @@ function world(boards: Board[], over: Over = {}) {
         const b = serial ? boots.find((x) => x.serial === serial) : boots.length === 1 ? boots[0] : undefined;
         const board = b?.flash === 262144 ? 'V2' as const : b?.flash === 524288 ? 'V3' as const : null;
         return { serial, flashBytes: b?.flash ?? null, board, found: !!b };
+      }),
+      leave: vi.fn(async (serial: string | null) => {
+        calls.push(`leave ${serial}`);
+        if (over.leaveFails) return { ok: false, ms: 1, detail: 'dfu-util: error' };
+        for (const b of boards) if (b.mode === 'boot' && b.serial === serial) b.mode = 'run';
+        return { ok: true, ms: 1, detail: 'left the bootloader' };
       }),
       backup: vi.fn(async (_id: string, _l: string, _c?: string | null, serial?: string | null) => { calls.push(`backup ${serial}`); return { ok: true, ms: 1, detail: 'backup written', file: 'C:\\backups\\before-install.bin', ...over.backup }; }),
       write: vi.fn(async (_p: string, serial?: string | null) => {
@@ -314,5 +320,48 @@ describe('putting a backup back', () => {
     await restoreSequence(f.deps, saberRec(), backup(262144), false);
     expect(f.touched()).toEqual([]);
     expect(f.shown().note?.text).toMatch(/^The board in bootloader mode is The V3, not hote2\./);
+  });
+});
+
+// Design D8: checking the board without installing anything.
+describe('checking the board', () => {
+  it('the V3: rebooted, 512 KB read and remembered, sent back, reconnected; nothing backed up or written', async () => {
+    const f = world([theV3()], { connectedSerial: V3 });
+    const r = await checkBoard(f.deps, v3Rec);
+    expect(r).toEqual({ tone: 'green', text: 'This saber is a Proffieboard V3. Nothing was written.', board: 'V3' });
+    expect(f.calls).toEqual(['usb', 'reboot', 'waitForBootloader', `target ${V3}`, `note s3 ${V3} 524288`, `leave ${V3}`, `reach ${V3}`, `waitForRuntime ${V3}`, `connect ${V3}`]);
+    expect(f.touched()).toEqual([]);
+    expect(f.boards[0].mode).toBe('run');
+  });
+
+  it('no bootloader driver yet: the words, how to get back, and nothing more is tried', async () => {
+    const f = world([theV3()], { connectedSerial: V3, noDriver: true });
+    const r = await checkBoard(f.deps, v3Rec);
+    expect(r.tone).toBe('amber');
+    expect(r.text).toBe('Windows has no driver for the bootloader yet. It is installed with the first install on Build & Install; choose the board yourself for now. To bring the saber back to its firmware, press RESET on the board, or unplug it and plug it back in.');
+    expect(f.calls.some((c) => /^(target|leave|note)/.test(c))).toBe(false);
+  });
+
+  it('two bootloaders appear: nothing is read, and the owner is told how to get back', async () => {
+    const f = world([theV3(), { serial: 'OTHER1', flash: 262144, mode: 'run' }], { connectedSerial: V3 });
+    (f.deps.board.rebootToBootloader as ReturnType<typeof vi.fn>).mockImplementation(async () => { for (const b of f.boards) b.mode = 'boot'; return true; });
+    const r = await checkBoard(f.deps, v3Rec);
+    expect(r.text).toMatch(/^More than one board is in bootloader mode\./);
+    expect(f.calls.some((c) => /^(target|leave|note)/.test(c))).toBe(false);
+  });
+
+  it('a flash size Hiltwright does not know: sent back all the same, not remembered, and said', async () => {
+    const f = world([{ serial: V3, flash: 131072, mode: 'run' }], { connectedSerial: V3 });
+    const r = await checkBoard(f.deps, v3Rec);
+    expect(r).toEqual({ tone: 'amber', text: 'Hiltwright does not recognise this board (its bootloader reports 128 KB of flash). Nothing was written. Choose the board yourself.', board: null });
+    expect(f.calls).toContain(`leave ${V3}`);
+    expect(f.calls.some((c) => c.startsWith('note'))).toBe(false);
+  });
+
+  it('the saber cannot be sent back: the board found, and the RESET words', async () => {
+    const f = world([theV3()], { connectedSerial: V3, leaveFails: true });
+    const r = await checkBoard(f.deps, v3Rec);
+    expect(r).toEqual({ tone: 'amber', text: 'This saber is a Proffieboard V3. Hiltwright could not send it back to its firmware. To bring the saber back to its firmware, press RESET on the board, or unplug it and plug it back in.', board: 'V3' });
+    expect(f.calls.some((c) => c.startsWith('connect'))).toBe(false);
   });
 });

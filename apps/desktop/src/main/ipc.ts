@@ -24,7 +24,7 @@ import { cleanFirmware, hexMap } from './firmwareRecord';
 import { insideFolder } from './paths';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
-import { backupFlash, describeBootloader, flashTarget, listBackups, newBootloaders, restoreBackup, usbState, waitFor, writeFirmware, type UsbState } from './flash';
+import { backupFlash, describeBootloader, flashTarget, leaveBootloader, listBackups, newBootloaders, restoreBackup, usbState, waitFor, writeFirmware, type UsbState } from './flash';
 import { logged } from './ipcLog';
 import { JsonStore, storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
@@ -408,6 +408,7 @@ export function registerIpc(): void {
     return { ...describeBootloader({ ...bound, bootloaderDriver: found[0]?.driver ?? null, bootloaderProblem: found[0]?.problem ?? null }), serials: found.map((b) => b.serial) };
   })()));
   handle('flash:target', (_e, serial: unknown) => flashTarget(toolchainRoot, serialArg(serial)).then(result('target')));
+  handle('flash:leave', (_e, serial: unknown) => leaveBootloader(toolchainRoot, serialArg(serial), (l) => emit('flash', l)).then(result('leave')));
   handle('flash:backup', (_e, saberId: unknown, label: unknown, configName: unknown, serial: unknown) => backupFlash(toolchainRoot, join(userData, 'sabers', str(saberId, 40), 'backups'), str(label, 60), (l) => emit('flash', l), typeof configName === 'string' ? str(configName, 200) : null, serialArg(serial)).then(result('backup')));
   handle('flash:write', (_e, dfuPath: unknown, serial: unknown) => {
     const p = str(dfuPath, 1000);

@@ -179,6 +179,37 @@ A bootloader with no serial is used only when it is the only bootloader present.
 - *Choosing the port in the renderer.* Web Serial gives the page only the vendor and product id.
 - *`select-serial-port` with `requestPort()`.* It needs a user gesture (1.1).
 
+### D8. Checking the board without installing (added during 5.3)
+The owner asked whether the running board could tell V2 from V3. It cannot:
+- `version` has no board line
+- the USB product is "Proffieboard" on both
+- the USB revision is `0xffff` on both (`build.did` in `boards.txt`)
+- `stm32info` gives voltages and temperature only, and is a developer command
+- `malloc` gives the heap used so far, not the chip's RAM
+
+The bootloader's flash size is the only proof. 1.1 showed a board can visit its bootloader and return with nothing written.
+
+**The sequence:** `checkBoard(deps, saber)` in `installFlow.ts`, with the same dependencies as an install, plus `flash.leave`:
+1. Note the bootloaders present, reboot, and take the one new bootloader.
+2. Read `flash.target(serial)`. Record it with `noteBootloader` when its board is known; the reboot was observed, so it is certain.
+3. Leave the bootloader with `flash.leave(serial)`, the 4-byte read ending in `:leave` from 1.1.
+4. Wait for this saber to run again (`waitForRuntime(serial)`), hold other boards back (`reachNext`), and reconnect.
+
+The Wiring page then drafts the board `'bootloader'`.
+
+**The words it reports:**
+- **No driver:** "Windows has no driver for the bootloader yet. It is installed with the first install on Build & Install; choose the board yourself for now.", plus how to leave the bootloader, since without WinUSB dfu-util cannot send it back.
+- **Several new bootloaders:** the D6 words, then leave nothing (Hiltwright does not know which is this saber).
+- **An unknown flash size:** leave, then say so.
+
+**Main:** `leaveBootloader(root, serial)` in `flash.ts` runs dfu-util on a temporary file, which it deletes. Wired as `flash.leave(serial)`.
+
+**The page:** the button shows on the Wiring page while the board is not known and the saber is connected, next to the note asking for the label. While the check runs, the page says "Checking the board…". The result replaces the note.
+
+**Rejected:**
+- *Checking automatically at the first connect.* It reboots the saber without the owner asking, and on a new computer it would stop at the driver.
+- *Checking on the Build page as part of the build.* The board has to be known before the build, and the Wiring page is where it is chosen.
+
 ### D7. Checks
 **Hardware facts first (1.1).** They set the parsing and the port mapping:
 - both boards' bootloader serials next to their running serials
