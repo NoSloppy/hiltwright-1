@@ -52,11 +52,15 @@ The config SHALL have one blade row per blade, in the model's order. A pixel str
 - **THEN** the config is generated, and the owner sees a note that the power pin is shared
 
 ### Requirement: Presets carry their fonts, tracks, names and styles
-Each preset in the model SHALL appear in the config with its font, track and name (line breaks in names kept) and one style per blade. A blade with no style chosen SHALL get the default style for its role.
+Each preset in the model SHALL appear in the config with its font, track and name (line breaks in names kept) and one style per blade. A blade with no style chosen SHALL get the default style for its role, and the build SHALL list each such slot as a warning naming the preset, the blade and the style used. A slot whose style does not list the blade's role SHALL be listed as a warning naming the preset, the blade and the style, unless the blade is a motor, which is refused (see "Invalid models are refused before building").
 
 #### Scenario: A preset with no style chosen for the crystal
 - **WHEN** a preset has a style for the main blade but none for the crystal
-- **THEN** the crystal's slot gets the default crystal style
+- **THEN** the crystal's slot gets the default crystal style, and the build warns "Preset <name>, crystal: no style chosen, using <style>"
+
+#### Scenario: A main-blade style on a crystal
+- **WHEN** a preset puts a style made for main blades on the crystal
+- **THEN** the build goes ahead, and warns which preset and blade have a style not made for that blade
 
 ### Requirement: Only the styles used are compiled in
 The config SHALL contain definitions only for the styles its presets use, plus the shared effects wrapper when a used style needs it. A pasted or editor-built style SHALL be labelled with its name. The copyright header of a pasted library style SHALL be kept once, credited with the style's name and author.
@@ -83,14 +87,21 @@ Generating a config SHALL also return a record of which style is in each preset 
 Generating SHALL refuse a model, with a reason the owner can read, when any of the following holds:
 - the config name is invalid
 - there are no blades, no main blade, or no presets
-- a pixel strip has no power pin or fewer than one pixel
-- a power-wired blade has no pin
-- two separate strips share a data pin
+- any wiring problem the Wiring page shows (see `hardware-wiring`: "Wiring problems are shown while describing it"), in the same words
 - a style is unknown or has empty code
+- a motor's slot holds a style that is not made for motors
 
 #### Scenario: Two strips on one data pin
 - **WHEN** two blades each have their own strip on the same data pin
 - **THEN** the model is refused with a message naming the pin conflict, and nothing is compiled
+
+#### Scenario: A motor on a PWM pin
+- **WHEN** a V3 motor is wired to a low-current PWM pin (Free 1–3)
+- **THEN** the model is refused with the same message the Wiring page shows, and nothing is compiled
+
+#### Scenario: A blade style on a motor
+- **WHEN** a preset puts a blade style on the motor's slot
+- **THEN** the model is refused, naming the preset and saying the motor needs a motor style
 
 ### Requirement: Names never break the config
 Style names, style authors and swappable-blade names SHALL appear in the config only in a form that cannot end or extend the comment they sit in: no comment end inside a block comment, and no line break or trailing backslash in a line comment. Any name the owner can type SHALL therefore give a config that parses and compiles, with the name still readable.

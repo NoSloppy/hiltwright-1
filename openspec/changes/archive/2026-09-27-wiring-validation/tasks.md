@@ -66,4 +66,5 @@
     - On the V3.9, the Wiring page's data-pin list labels only `blade5Pin`–`blade7Pin` as "(Free)".
 - [x] 3.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 202 core and 268 desktop tests pass (13 gated skipped), and the type check is clean in both workspaces.
-- [ ] 3.5 After archive, tick roadmap task 3.15 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 3.5 After archive, tick roadmap task 3.15 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-27.** Archived to `openspec/changes/archive/2026-09-27-wiring-validation`, with the specs synced (4 requirements in `hardware-wiring` and 2 in `config-generation` replaced). Roadmap task 3.15 is ticked.
