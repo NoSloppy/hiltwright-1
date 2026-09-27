@@ -22,6 +22,12 @@ type Step = 'idle' | 'building' | 'built' | 'backup' | 'bootloader' | 'driver' |
 const DRIVER_HELP = 'https://pod.hubbe.net/proffieboard-setup.html';
 const fmtGB = (b: number) => `${(b / 1073741824).toFixed(1)} GB`;
 
+/**
+ * Each saber's last build this session, with the model it was made from. The page is left to change a style or the
+ * wiring and comes back to it: kept here, the build is shown again, as current or out of date (FW5).
+ */
+const lastBuilds = new Map<string, { result: BuildResult; model: SaberConfigModel | null }>();
+
 export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (page: 'presets' | 'looks' | 'armory' | 'wiring' | 'fonts') => void }) {
   const { status } = board;
   // Frozen at connect time: the install deliberately drops the port, and the page must keep working through that.
@@ -123,7 +129,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
 
   const build = useCallback(async (force = false) => {
     if (!model || !saber) return;
-    setStep('building'); setElapsed(0); setNote(null); setResult(null); setBuiltModel(null);
+    setStep('building'); setElapsed(0); setNote(null); setResult(null); setBuiltModel(null); lastBuilds.delete(saber.id);
     const from = model;
     let r: BuildResult;
     try { r = await api().build.run(saber.id, from, force); } catch (err) {
@@ -133,7 +139,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
       console.log(`[build] threw: ${reason}`);
       return;
     }
-    setResult(r); setBuiltModel(from);
+    setResult(r); setBuiltModel(from); lastBuilds.set(saber.id, { result: r, model: from });
     setStep(r.ok ? 'built' : 'failed');
     if (!r.ok) setNote({ tone: 'red', text: r.problems[0] ?? 'The build failed.' });
     console.log(`[build] ok=${r.ok} cached=${r.cached} ms=${r.ms} text=${r.textBytes} pct=${r.flashPct} problems=${JSON.stringify(r.problems)}`);
@@ -180,6 +186,14 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [restoreArmed, setRestoreArmed] = useState<string | null>(null);
   const saberId = saber?.id ?? null;
+  const saberIdRef = useRef(saberId);
+  saberIdRef.current = saberId;
+  // Coming back to the page, or to another saber: its last build this session, if any, as it was left.
+  useEffect(() => {
+    const kept = saberId ? lastBuilds.get(saberId) : undefined;
+    setResult(kept?.result ?? null); setBuiltModel(kept?.model ?? null);
+    setStep((s) => (s === 'idle' || s === 'built' || s === 'failed' || s === 'done' ? (kept?.result.ok ? 'built' : 'idle') : s));
+  }, [saberId]);
   const loadBackups = useCallback(() => { if (saberId) void api().flash.listBackups(saberId).then(setBackups); }, [saberId]);
   useEffect(() => { loadBackups(); }, [loadBackups, step]);
   const restore = useCallback(async (b: BackupInfo) => {
@@ -201,8 +215,10 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     if (!import.meta.env.DEV) return;
     (window as unknown as { hiltwrightPretendBuilt?: (confirmed: boolean) => void }).hiltwrightPretendBuilt = (confirmed) => {
       // Built from the setup as it is now, so it counts as current until the setup changes.
-      setResult({ ok: true, cached: true, ms: 0, textBytes: 184400, flashBytes: 262144, flashPct: 70, problems: [], output: '', dfuPath: null, configHash: previewRef.current?.hash ?? '', board: modelRef.current?.board ?? 'V2' } as unknown as BuildResult);
+      const pretend = { ok: true, cached: true, ms: 0, textBytes: 184400, flashBytes: 262144, flashPct: 70, problems: [], output: '', dfuPath: null, configHash: previewRef.current?.hash ?? '', board: modelRef.current?.board ?? 'V2' } as unknown as BuildResult;
+      setResult(pretend);
       setBuiltModel(modelRef.current);
+      if (saberIdRef.current) lastBuilds.set(saberIdRef.current, { result: pretend, model: modelRef.current });
       setStep('built'); setConfirmedWiring(confirmed);
     };
     (window as unknown as { hiltwrightPretendWriting?: (pct: number) => void }).hiltwrightPretendWriting = (pct) => { setConfirmedWiring(true); setStep('writing'); setXfer(pct); };

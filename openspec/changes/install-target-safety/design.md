@@ -132,6 +132,7 @@ The recorded serial becomes the target for backup, write and wait. When more tha
 **The page:**
 - `Build.tsx` keeps `built: { model, result }` from the model passed to `build.run`.
 - The build is current while `preview.hash === built.result.configHash`. The preview is regenerated from the current model on every change, and both use `contentHash` of the same generated text. Changing something back makes it current again.
+- **Changed after 5.3:** the page kept its build only while it stayed open, and changing a style means leaving it. So the owner came back to "Build firmware" instead of "out of date". Each saber's last build is now kept for the session (`lastBuilds` in `Build.tsx`), and shown again, current or out of date, on return.
 - When it is stale, the Build step shows "Out of date" and "The setup changed after this build. Build again to install it.", and Install is locked. Building again usually reuses the cache, so it is quick.
 
 **The install:**

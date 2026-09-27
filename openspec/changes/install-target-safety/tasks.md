@@ -215,4 +215,12 @@
   - **V2.2 hote2, alone or with the V3:** build, change a preset's style, and see Install locked as out of date. Build again and install; it finishes "Installed", and the Wiring page shows V2 chosen from the saber.
   - **Both plugged in:** install hote2. Only hote2 reboots and is written, and the app reconnects to hote2, not the V3.
   - **hote2 already in its bootloader** (BOOT+RESET), no saber connected: Install on hote2 goes on without asking. Install on the V3's record is refused, naming hote2.
+  - **Result, 2026-09-27 (owner), first pass:** steps 1, 3 and 4 passed.
+    - **Step 2 failed:** after changing a style, the Build page showed "Build firmware" instead of "The setup changed after this build". The page forgot its build when left.
+    - **Fixed:** each saber's last build is kept for the session (design D5).
+    - **Development run, no board:**
+      - a pretend build of hote2 was still there after leaving and returning
+      - blade 1 changed from 132 to 131 on the Wiring page: back on Build it read "out of date", with the note, and Install disabled
+      - back to 132: "unchanged, reused", with Install enabled
+    - Step 2 to be rechecked by the owner.
 - [ ] 5.4 After archive, tick roadmap task 3.16 in `openspec/changes/beta-1-roadmap/tasks.md`. Also note in `v3-verification`'s proposal that its deferred two-boards step is unblocked. Verify both edits.
