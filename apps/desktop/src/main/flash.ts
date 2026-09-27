@@ -6,6 +6,9 @@ import { execFile } from 'node:child_process';
 import { mkdir, open, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { findDfuUtil, run, toolchainPaths, type Progress } from './toolchain';
+import { backupSizeMismatch, boardForFlash } from '../shared/boards';
+
+export { backupSizeMismatch, boardForFlash };
 
 export const RUNTIME_VIDPID = '1209:6668';
 export const DFU_VIDPID = '0483:df11';
@@ -107,10 +110,6 @@ export function parseDfuList(listing: string): DfuDevice[] {
   return [...byKey.values()];
 }
 
-/** Which Proffieboard a bootloader's flash size means: the V2's STM32L433 has 256 KB, the V3's STM32L452 512 KB. */
-export function boardForFlash(bytes: number | null): 'V2' | 'V3' | null {
-  return bytes === 262144 ? 'V2' : bytes === 524288 ? 'V3' : null;
-}
 
 /**
  * dfu-util's device selection. The running id stays in `-d`: dfu-util compares a .dfu file's id (1209:6668) with it,
@@ -217,12 +216,6 @@ export async function listBackups(backupDir: string): Promise<BackupInfo[]> {
     out.push({ file, at: m ? `${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z` : st.mtime.toISOString(), label: m ? m[6].replace(/_/g, ' ') : file, bytes: st.size, valid: await looksLikeFirmware(path), configName: await backupConfig(path) });
   }
   return out.sort((a, b) => b.at.localeCompare(a.at));
-}
-
-/** The words for a backup whose size is not the board's flash: both named as boards where the sizes are known. */
-export function backupSizeMismatch(backupBytes: number, flashBytes: number): string {
-  const name = (b: number) => (boardForFlash(b) ? `a Proffieboard ${boardForFlash(b)} (${b / 1024} KB)` : `${Math.round(b / 1024)} KB`);
-  return `This backup is from ${name(backupBytes)}; this saber is ${name(flashBytes)}. Nothing was written.`;
 }
 
 /**

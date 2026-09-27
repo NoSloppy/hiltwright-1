@@ -7,6 +7,7 @@ import { queuedLookIds } from './saberModel';
 import { PROPS } from './Wiring';
 import type { Workspace } from './workspace';
 import type { BackupInfo, BuildResult, JobEvent, ToolchainStatus } from '../../shared/api';
+import type { SaberConfigModel } from '@hiltwright/core';
 import type { Board } from './board';
 import { Icon } from './Icon';
 import { SaveDiagnostics } from './SaveDiagnostics';
@@ -35,6 +36,10 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const [preview, setPreview] = useState<{ text: string; hash: string; warnings: string[]; errors: string[] } | null>(null);
   const [log, setLog] = useState<JobEvent[]>([]);
   const [result, setResult] = useState<BuildResult | null>(null);
+  // The model the build was made from: installed and recorded as built, whatever the setup has become since (FW5).
+  const [builtModel, setBuiltModel] = useState<SaberConfigModel | null>(null);
+  // A board in its bootloader that Hiltwright cannot place: the owner says whether it is this saber (FW4).
+  const [askTarget, setAskTarget] = useState<{ name: string; answer: (yes: boolean) => void } | null>(null);
   const [step, setStep] = useState<Step>('idle');
   const [note, setNote] = useState<{ tone: 'green' | 'amber' | 'red'; text: string } | null>(null);
   const [armed, setArmed] = useState(false);
@@ -92,6 +97,11 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
 
   const queuedLooks = queuedLookIds(model ?? undefined, saber?.firmware);
   useEffect(() => { if (model) void api().build.preview(model).then(setPreview); }, [model]);
+  // For the development aids, which are set up once: the preview and model as they are now.
+  const previewRef = useRef(preview);
+  previewRef.current = preview;
+  const modelRef = useRef(model);
+  modelRef.current = model;
   const prop = model?.prop ?? 'fett263';
   // One rule for every page: confirmed only while the board and blades are the layout the owner checked.
   const confirmedWiring = wiringConfirmed(model);
@@ -113,16 +123,17 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
 
   const build = useCallback(async (force = false) => {
     if (!model || !saber) return;
-    setStep('building'); setElapsed(0); setNote(null); setResult(null);
+    setStep('building'); setElapsed(0); setNote(null); setResult(null); setBuiltModel(null);
+    const from = model;
     let r: BuildResult;
-    try { r = await api().build.run(saber.id, model, force); } catch (err) {
+    try { r = await api().build.run(saber.id, from, force); } catch (err) {
       // A build that stops unexpectedly (a file it cannot write, say) ends the step as failed, never left running.
       const reason = String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '');
       setStep('failed'); setNote({ tone: 'red', text: `Could not build: ${reason}` });
       console.log(`[build] threw: ${reason}`);
       return;
     }
-    setResult(r);
+    setResult(r); setBuiltModel(from);
     setStep(r.ok ? 'built' : 'failed');
     if (!r.ok) setNote({ tone: 'red', text: r.problems[0] ?? 'The build failed.' });
     console.log(`[build] ok=${r.ok} cached=${r.cached} ms=${r.ms} text=${r.textBytes} pct=${r.flashPct} problems=${JSON.stringify(r.problems)}`);
@@ -131,22 +142,26 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   // The install and restore sequences live in installFlow.ts; these wrap them with the real calls and this page's state.
   const flowDeps = useCallback((): InstallDeps => ({
     flash: api().flash, snapshots: api().snapshots, board,
+    noteBootloader: async (id, seen) => { const r = await api().library.noteBootloader(id, seen); await board.refreshLibrary(); return r; },
+    sabers: board.library,
+    confirmTarget: (name) => new Promise<boolean>((resolve) => setAskTarget({ name, answer: (yes) => { setAskTarget(null); resolve(yes); } })),
     report: (r) => { if (r.xfer !== undefined) setXfer(r.xfer); if (r.step) setStep(r.step); if (r.note !== undefined) setNote(r.note); },
     sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
   }), [board]);
-  /** From a board sitting in its bootloader with a usable driver: backup, write, wait, reconnect, record. */
+  const connectedNow = status === 'connected';
+  /** From a board sitting in its bootloader with a usable driver: which board, check, backup, write, wait, reconnect, record. */
   const writeFromBootloader = useCallback(async () => {
     if (!result || !saber) return;
-    await writeFromBootloaderFlow(flowDeps(), { saber, model, result, info });
-  }, [result, saber, model, info, flowDeps]);
+    await writeFromBootloaderFlow(flowDeps(), { saber, model: builtModel, result, info, connected: false });
+  }, [result, saber, builtModel, info, flowDeps]);
 
   /** The install sequence. The renderer does the reboot because it owns the serial port. */
   const install2 = useCallback(async () => {
     if (!result?.ok || !result.dfuPath || !saber) return;
     setWithBackup(true);
     setNote(null); setElapsed(0);
-    await installSequence(flowDeps(), { saber, model, result, info });
-  }, [result, saber, model, info, flowDeps]);
+    await installSequence(flowDeps(), { saber, model: builtModel, result, info, connected: connectedNow });
+  }, [result, saber, builtModel, info, flowDeps, connectedNow]);
 
   /** One click: main downloads, verifies and launches the official installer elevated, then the install resumes. */
   const [driverBusy, setDriverBusy] = useState(false);
@@ -168,11 +183,11 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const loadBackups = useCallback(() => { if (saberId) void api().flash.listBackups(saberId).then(setBackups); }, [saberId]);
   useEffect(() => { loadBackups(); }, [loadBackups, step]);
   const restore = useCallback(async (b: BackupInfo) => {
-    if (!saberId) return;
+    if (!saber) return;
     setWithBackup(false);
     setRestoreArmed(null); setNote(null); setElapsed(0);
-    await restoreSequence(flowDeps(), saberId, b);
-  }, [saberId, flowDeps]);
+    await restoreSequence(flowDeps(), saber, b, connectedNow);
+  }, [saber, flowDeps, connectedNow]);
   const checkDriver = useCallback(async () => {
     setDriverCheck('Checking…');
     const boot = await api().flash.waitForBootloader(5000);
@@ -185,7 +200,9 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { hiltwrightPretendBuilt?: (confirmed: boolean) => void }).hiltwrightPretendBuilt = (confirmed) => {
-      setResult({ ok: true, cached: true, ms: 0, textBytes: 184400, flashBytes: 262144, flashPct: 70, problems: [], output: '', dfuPath: null } as unknown as BuildResult);
+      // Built from the setup as it is now, so it counts as current until the setup changes.
+      setResult({ ok: true, cached: true, ms: 0, textBytes: 184400, flashBytes: 262144, flashPct: 70, problems: [], output: '', dfuPath: null, configHash: previewRef.current?.hash ?? '', board: modelRef.current?.board ?? 'V2' } as unknown as BuildResult);
+      setBuiltModel(modelRef.current);
       setStep('built'); setConfirmedWiring(confirmed);
     };
     (window as unknown as { hiltwrightPretendWriting?: (pct: number) => void }).hiltwrightPretendWriting = (pct) => { setConfirmedWiring(true); setStep('writing'); setXfer(pct); };
@@ -252,8 +269,12 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   }
 
   const wiringOk = confirmedWiring && !preview?.errors.length;
-  const built = !!result?.ok && step !== 'building';
+  // A build is current only while the setup would still make the same config (FW5); changing it back makes it current again.
+  const stale = !!result?.ok && !!preview && preview.hash !== result.configHash;
+  const built = !!result?.ok && step !== 'building' && !stale;
   const nowStep = !wiringOk ? 1 : !tool?.ready ? 2 : !built ? 3 : step === 'done' ? 0 : 4;
+  // An install armed for a build that has since gone out of date is disarmed.
+  if (stale && armed) setArmed(false);
   const verdict = voicePackVerdict(prop, voice);
   const canBuild = !busy && !!tool?.ready && !!model && !preview?.errors.length;
 
@@ -313,7 +334,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         {toolStep(nowStep === 2)}
 
         <div className={`stepc ${built ? 'done' : nowStep === 3 ? 'now' : ''} ${result && !result.ok ? 'bad' : ''}`}>
-          <div className="head"><span className="nbox">{built ? <Icon name="check" /> : 3}</span><b>Build</b><span className="what">{step === 'building' ? `compiling, ${elapsed} s` : result?.ok ? (result.cached ? 'unchanged, reused' : `built in ${(result.ms / 1000).toFixed(0)} s`) : 'about a minute'}</span></div>
+          <div className="head"><span className="nbox">{built ? <Icon name="check" /> : 3}</span><b>Build</b><span className="what">{step === 'building' ? `compiling, ${elapsed} s` : stale ? 'out of date' : result?.ok ? (result.cached ? 'unchanged, reused' : `built in ${(result.ms / 1000).toFixed(0)} s`) : 'about a minute'}</span></div>
+          {stale && step !== 'building' && <div className="note amber" style={{ padding: '8px 10px' }}><Icon name="warn" /><span>The setup changed after this build. Build again to install it.</span></div>}
           {result?.ok && (
             <div className="col" style={{ gap: 5 }}>
               <div className="row between" style={{ alignItems: 'baseline' }}><span className="mono" style={{ fontSize: 18 }}>{pct ?? '?'}%<span className="mute small"> of flash</span></span><span className="mono mute small">{result.textBytes != null ? (result.textBytes / 1024).toFixed(1) : '?'} of {result.flashBytes / 1024} KB</span></div>
@@ -333,7 +355,15 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
               <span className="hint">Leave the saber plugged in until this finishes.</span>
             </div>
           )}
-          {step === 'driver' ? (
+          {askTarget ? (
+            <div className="col" style={{ gap: 10, padding: 12, border: '1px solid var(--amber)', background: 'rgba(255,181,71,.08)' }}>
+              <span className="small"><b style={{ fontWeight: 600 }}>Hiltwright cannot tell which saber this board is.</b> A board is in bootloader mode, but its serial number belongs to no saber Hiltwright knows. Is it {askTarget.name}? Nothing has been read or written yet.</span>
+              <div className="row" style={{ gap: 8 }}>
+                <button type="button" className="btn danger grow" onClick={() => askTarget.answer(true)}><span className="b"><span className="i">Yes, it is {askTarget.name}</span></span></button>
+                <button type="button" className="btn ghost" onClick={() => askTarget.answer(false)}><span className="b"><span className="i">Cancel</span></span></button>
+              </div>
+            </div>
+          ) : step === 'driver' ? (
             <div className="col" style={{ gap: 8 }}>
               <span className="small"><b style={{ fontWeight: 600 }}>Windows has no driver for the bootloader yet.</b> This happens once per computer. Nothing has been changed on the saber.</span>
               <span className="hint">Hiltwright downloads the driver installer published by the ProffieOS author (3 MB, fredrik.hubbe.net), checks the file and starts it. Windows asks for administrator approval. Leave the saber plugged in; the install carries on by itself.</span>
@@ -357,14 +387,14 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
               <button type="button" className="btn sm full" onClick={() => go('wiring')}><span className="b"><span className="i"><Icon name="blade" />Look at the wiring</span></span></button>
             </div>
           ) : step === 'bootloader' || step === 'backup' || step === 'writing' || step === 'verifying' ? null : !armed ? (
-            <button type="button" className={`btn full ${nowStep === 4 ? 'warn' : ''}`} disabled={busy || step !== 'built' || !confirmedWiring || !canInstall} onClick={() => setArmed(true)}><span className="b"><span className="i"><Icon name="bolt" />Install on {saber.name}</span></span></button>
+            <button type="button" className={`btn full ${nowStep === 4 ? 'warn' : ''}`} disabled={busy || step !== 'built' || stale || !confirmedWiring || !canInstall} onClick={() => setArmed(true)}><span className="b"><span className="i"><Icon name="bolt" />Install on {saber.name}</span></span></button>
           ) : (
             <div className="row" style={{ gap: 8 }}>
-              <button type="button" className="btn danger grow" disabled={busy} onClick={() => { setArmed(false); void install2(); }}><span className="b"><span className="i"><Icon name="bolt" />Yes, write the firmware</span></span></button>
+              <button type="button" className="btn danger grow" disabled={busy || stale} onClick={() => { setArmed(false); void install2(); }}><span className="b"><span className="i"><Icon name="bolt" />Yes, write the firmware</span></span></button>
               <button type="button" className="btn ghost" onClick={() => setArmed(false)}><span className="b"><span className="i">Cancel</span></span></button>
             </div>
           )}
-          {step !== 'driver' && !busy && !(built && !confirmedWiring) && <span className="hint">{!built ? (confirmedWiring ? 'Build first.' : 'Build first. The wiring also needs confirming before anything is written.') : !canInstall ? (offline ? 'Plug the saber in to install. Everything up to here works without it.' : 'Reconnect the saber to install.') : inBootloader ? 'The board is in bootloader mode and ready to write.' : 'The whole flash is read to a backup file before anything is written.'}</span>}
+          {step !== 'driver' && !busy && !(built && !confirmedWiring) && <span className="hint">{stale ? 'The setup changed after this build. Build again to install it.' : !built ? (confirmedWiring ? 'Build first.' : 'Build first. The wiring also needs confirming before anything is written.') : !canInstall ? (offline ? 'Plug the saber in to install. Everything up to here works without it.' : 'Reconnect the saber to install.') : inBootloader ? 'The board is in bootloader mode and ready to write.' : 'The whole flash is read to a backup file before anything is written.'}</span>}
         </div>
 
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span className="col" style={{ gap: 8 }}><span>{note.text}</span>{(note.tone === 'red' || step === 'failed') && <SaveDiagnostics small />}</span></div>}

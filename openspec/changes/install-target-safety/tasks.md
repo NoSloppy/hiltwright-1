@@ -100,7 +100,7 @@
 
 ## 3. Installing to the right board
 
-- [ ] 3.1 In `installFlow.ts` (design D3, D4, D6):
+- [x] 3.1 In `installFlow.ts` (design D3, D4, D6):
   - note the bootloaders before the reboot, and take the one new serial as the target
   - recognise a board already in its bootloader, refuse another saber's, and ask about an unknown one through a new `confirmTarget` report
   - stop on several unknown bootloaders
@@ -108,13 +108,54 @@
   - record the pairing with `noteBootloader`, and after a confirmed unknown board, only when the saber returns with its own running serial
 
   Restore gets the same target checks plus the backup size. Verify in `apps/desktop/test/installFlow.test.ts`: one test per refusal (nothing backed up or written), the pairing after a reboot, no pairing after a mistaken confirmation, the early refusal with no reboot, and restore refusing a 256 KB backup on a 512 KB board.
-- [ ] 3.2 In `Build.tsx` (design D5):
+  - **Result, 2026-09-27.** `installFlow.ts`:
+    - **`reachBootloader`:**
+      - **A connected saber:** notes the bootloaders present, reboots, and waits for a new one. That one is the target, or it stops when two appear at once.
+      - **Otherwise:** takes the one bootloader that belongs to this saber (its running serial, or its recorded bootloader serial). It refuses one that belongs to another saber, naming it, and stops when there are several or none. For a board belonging to no saber, it asks `confirmTarget(saber name)`. Cancel returns to "built".
+    - **`checkTarget`:**
+      - refuses a flash size Hiltwright does not know, or the other board type, both with how to leave the bootloader
+      - records the pairing with `noteBootloader`, except on the owner's word
+    - **After a confirmed board is written:** the pairing is recorded only when this saber's running serial was absent before and is present after.
+    - **Before any reboot:** `installSequence` refuses early when the saber's recorded board is not the build's.
+    - **`restoreSequence(deps, saber, backup, connected)`** gets the same target checks, plus the backup size. Its signature changed from `(deps, saberId, backup)`.
+    - **Backup, write, restore, the runtime wait and the reconnect** all use the target's serial.
+    - **The refusal words** live in the new `shared/boards.ts`, which main's `flash.ts` also uses.
+
+    `apps/desktop/test/installFlow.test.ts` was rewritten around a fake USB world (boards running or in bootloader, each with its flash). All 26 tests pass:
+    - the four audit tests and the driver pause
+    - the board type: V2 build on a V3, early refusal with no reboot, unknown size, and a V3 build remembered
+    - which board:
+      - two sabers
+      - another bootloader present
+      - two new bootloaders
+      - recognised by running serial and by recorded bootloader serial
+      - another saber's board
+      - asked and cancelled
+      - asked, with no pairing, and asked with the pairing
+      - a mistaken answer still refused by size
+      - two unknown bootloaders
+      - two with one ours
+      - after the driver step
+    - the built model recorded
+    - restore: wrong size, own board with reconnect, another saber's
+- [x] 3.2 In `Build.tsx` (design D5):
   - keep `built: { model, result }`, and mark the build out of date when `preview.hash` differs, with Install locked and the note
   - pass `built.model` to the install
   - show the "Is it <saber>?" confirmation with Yes and Cancel
   - show the refusals
 
   `BuildResult` gains `board`. Verify in `installFlow.test.ts` that the built model, not a later one, is recorded, and that `expectAfterInstall` gets its name. Then `npm run typecheck`, and see 5.2.
+  - **Result, 2026-09-27.**
+    - **What the build keeps:** `Build.tsx` keeps `builtModel`, the model passed to `build.run`. The install and the record use it. `BuildResult` gains `board` (set in main's `build.ts`).
+    - **Out of date:** the build is stale when `preview.hash` differs from `result.configHash`. Then:
+      - the Build step reads "out of date", with the note "The setup changed after this build. Build again to install it."
+      - Install and its confirmation are locked, and an armed install is disarmed
+      - the hint says the same
+    - **The question:** "Is it <saber>?" appears in the Install step, with "Yes, it is <saber>" and Cancel. It is wired as the flow's `confirmTarget`.
+    - **What the flow is given:** `noteBootloader` refreshes the library, `sabers` is the library, and `connected` is the live status.
+    - **The development aid:** `hiltwrightPretendBuilt` now pretends a build of the current setup, for 5.2.
+
+    Verified by the `installFlow.test.ts` test "the record after the install is the model the job carries": the name and model come from the built model. The type check is clean in both workspaces, and desktop has 313 tests passing. See 5.2.
 
 ## 4. Reconnecting to the installed saber
 

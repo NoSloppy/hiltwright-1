@@ -36,6 +36,8 @@ export interface BuildResult {
   manifest: GeneratedConfig['manifest'] | null;
   /** ProffieOS tag the build used. */
   os: string;
+  /** The board this firmware was built for; the install checks it against the bootloader's flash size. */
+  board: 'V2' | 'V3';
 }
 
 /** What translateErrors needs to say which preset slot an error comes from. */
@@ -148,7 +150,7 @@ export async function buildFirmware(opts: { toolchainRoot: string; buildRoot?: s
   const flashBytes = FLASH_BYTES[opts.model.board];
   // The model is checked before anything is written (FW16): a bad config name never reaches a path.
   const errors = validateModel(opts.model);
-  if (errors.length) return { ok: false, cached: false, ms: Date.now() - t0, configPath: '', configHash: '', flashBytes, warnings: [], manifest: null, os: PROFFIEOS_TAG, dfuPath: null, textBytes: null, flashPct: null, problems: errors, output: '' };
+  if (errors.length) return { ok: false, cached: false, ms: Date.now() - t0, configPath: '', configHash: '', flashBytes, warnings: [], manifest: null, os: PROFFIEOS_TAG, board: opts.model.board, dfuPath: null, textBytes: null, flashPct: null, problems: errors, output: '' };
   const gen = generateConfig(opts.model);
   const buildRoot = opts.buildRoot ?? userBuildRoot();
   const saberDir = join(buildRoot, opts.saberId.replace(/[^A-Za-z0-9_-]/g, '_'));
@@ -160,7 +162,7 @@ export async function buildFirmware(opts: { toolchainRoot: string; buildRoot?: s
   await ensureBuildRoot(buildRoot);
   await mkdir(saberDir, { recursive: true });
   await writeFile(configPath, gen.text, 'utf8');
-  const base = { configPath, configHash: gen.hash, flashBytes, warnings: gen.warnings, manifest: gen.manifest, os: PROFFIEOS_TAG };
+  const base = { configPath, configHash: gen.hash, flashBytes, warnings: gen.warnings, manifest: gen.manifest, os: PROFFIEOS_TAG, board: opts.model.board };
 
   // Options the chosen prop refuses together, caught from its own rules before the compiler runs (FW14).
   const propFile = /#ifdef CONFIG_PROP\s*\n#include "([^"]+)"/.exec(gen.text)?.[1];

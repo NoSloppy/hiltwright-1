@@ -162,6 +162,8 @@ export interface BuildResult {
   /** Which look went into which slot, for the saber record once installed. */
   manifest: Omit<FirmwareManifest, 'os' | 'at'> | null;
   os: string;
+  /** The board this firmware was built for; the install checks it against the bootloader's flash size. */
+  board: 'V2' | 'V3';
 }
 
 export interface UsbState {
