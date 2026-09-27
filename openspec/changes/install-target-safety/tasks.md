@@ -189,11 +189,27 @@
 
 ## 5. Checks
 
-- [ ] 5.1 Run `npm test` and `npm run typecheck`; verify both pass.
-- [ ] 5.2 Development run with no board, on a scratch folder holding a saber that has no firmware and no bootloader record, and a saber with a firmware record. Verify that:
+- [x] 5.1 Run `npm test` and `npm run typecheck`; verify both pass.
+  - **Result, 2026-09-27.** From the repository root: `npm test` passes 204 core tests and 320 desktop tests (13 gated skipped), and `npm run typecheck` is clean in both workspaces.
+- [x] 5.2 Development run with no board, on a scratch folder holding a saber that has no firmware and no bootloader record, and a saber with a firmware record. Verify that:
   - the first saber's Wiring page chooses neither board, shows the note, and the Build page refuses. Choosing V3 clears both.
   - the second saber's board is chosen without asking
   - after `hiltwrightPretendBuilt(true)`, changing a pixel count shows "The setup changed after this build" with Install locked, and changing it back unlocks it
+  - **Result, 2026-09-27.** Scratch folder copied from the remembered-hote2 one, with no board:
+    - "Fresh V3": no firmware or bootloader record, config name `config/proffieboard_v3_config.h`.
+    - hote2: given a V2 firmware record.
+    - A development-only `hiltwrightChangeSetup` was added to the Build page. The page unmounts on every page switch, so this is how to change the saved setup while it stays open.
+
+    Everything held:
+    - **Fresh V3:**
+      - The Wiring page showed neither board pressed, with "Which Proffieboard is this? Check the label on the board (V2.2 or V3.x) and choose it above. Nothing is built until you do. Its config name suggests a V3."
+      - The Build page showed "Choose the board (Proffieboard V2 or V3) on the Wiring page."
+      - Choosing V3 pressed it, cleared both notes, and saved `V3 owner`.
+    - **hote2:** V2 was pressed without a note, and nothing asked for a board.
+    - **The stale build:**
+      - After `hiltwrightPretendBuilt(true)`, the Build step read "unchanged, reused", with Install enabled.
+      - Blade 1 one pixel shorter: "out of date", the note "The setup changed after this build. Build again to install it.", and Install disabled.
+      - Changed back: "unchanged, reused", with Install enabled again.
 - [ ] 5.3 Hardware check by the owner, from a development build:
   - **V3.9:** set its Wiring to V2, confirm, build, and install. The install stops at the bootloader with the V2-on-V3 words, and nothing is written. RESET brings the saber back on its old firmware. Set it back to V3.
   - **V2.2 hote2:** build, change a preset's style, and see Install locked as out of date. Build again and install; it finishes "Installed", and the Wiring page shows V2 chosen from the saber.

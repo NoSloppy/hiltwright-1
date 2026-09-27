@@ -206,6 +206,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
       setStep('built'); setConfirmedWiring(confirmed);
     };
     (window as unknown as { hiltwrightPretendWriting?: (pct: number) => void }).hiltwrightPretendWriting = (pct) => { setConfirmedWiring(true); setStep('writing'); setXfer(pct); };
+    // Change the saved setup while this page stays open, as a change made elsewhere would (to see a build go stale).
+    (window as unknown as { hiltwrightChangeSetup?: (fn: (m: SaberConfigModel) => SaberConfigModel) => Promise<void> }).hiltwrightChangeSetup = async (fn) => { if (modelRef.current) await ws.saveModel(fn(modelRef.current)); };
   }, []);
 
   // Dev aid: main calls this to run a compile-only pass against the connected board.
