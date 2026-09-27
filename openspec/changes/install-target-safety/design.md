@@ -11,7 +11,23 @@ See proposal.md for why. The current state:
   - Only the bootloader proves the board: `dfu-util -l` shows the flash layout, parsed by `dfuInfo` in `apps/desktop/src/main/flash.ts`. The V2 (STM32L433) is 256 KB, the V3 (STM32L452) 512 KB.
 - **Serials.**
   - The running saber's USB serial is the composite device's PnP instance id (`usb.ts`, `proffieSerials`). `board.ts` records it only when exactly one board is plugged in.
-  - The ST bootloader has its own serial in its instance id. The spike's log (`spike/flash-log.json`, 2026-09-08, the owner's V2.2) holds `USB\VID_0483&PID_DF11\206033865232`, while hote2 runs as `209133815232`. The last four digits match and the first eight do not. So the two are related but not equal, and one sample does not give the rule.
+  - The ST bootloader has its own serial in its instance id. The spike's log (`spike/flash-log.json`, 2026-09-08) holds `USB\VID_0483&PID_DF11\206033865232`, for a V2 running ProffieOS 4.7 at the time. Its running serial was never recorded.
+- **Measured in 1.1 (2026-09-27, V2.2 hote2 and V3.9 plugged in together):**
+
+  | | Running serial (PnP) | Bootloader serial (PnP and `dfu-util -l`) | `@Internal Flash` |
+  |---|---|---|---|
+  | V2.2 hote2 (8.10 Hiltwright firmware) | `209133815232` (COM8) | `209133815232` | `/0x08000000/0128*0002Kg` = 262144 |
+  | V3.9 (stock ProffieOS from 2023) | `207A349A5430` (COM3) | `207A349A5430` | `/0x08000000/0256*0002Kg` = 524288 |
+
+  - **The bootloader uses the same serial as the running firmware** on both boards. The spike's `206033865232` came from a board whose running serial is unknown, so equality is not guaranteed for every board and firmware.
+  - **Listing and targeting:**
+    - `dfu-util -l` lists four alt settings per board, each line carrying `serial="…"`. Only `alt=0`, "@Internal Flash", gives the size.
+    - `-d 0483:df11 -S <serial> -l` lists only that board, with the other board also in its bootloader.
+  - **Leaving without writing:** `dfu-util -d 0483:df11 -S <serial> -a 0 -s 0x08000000:4:leave -U <file>` reads 4 bytes, then returns the board to its firmware. Both boards answered `version` again. This is noted for FW29 in `install-safety-nets`; this change still tells the owner (design Non-Goals).
+  - **Ports in the running app:**
+    - `requestPort()` without a click fails: "Must be handling a user gesture to show a permission request". So `select-serial-port` cannot choose the port for an automatic reconnect.
+    - The device permission handler is called for each port, with `{ device_instance_id: "USB\VID_1209&PID_6668&MI_00\7&380A8E11&0&0000", name }` and no serial. `getPorts()` returned both boards, in the order V3, then hote2.
+    - The interface's PnP `DEVPKEY_Device_Parent` is `USB\VID_1209&PID_6668\209133815232`, which is the serial. The same holds for COM3 and the V3.
 - **Install.**
   - `installFlow.ts` skips the reboot whenever any bootloader is present (`flash.usb().bootloaderPresent`), whichever board it is.
   - `backupFlash` runs `dfu-util -d 0483:df11`, and `writeFirmware` runs `-d 1209:6668,0483:df11`. Neither says which device.
@@ -98,17 +114,17 @@ It is written only by the install and restore sequences, when they have seen thi
 
 The recorded serial becomes the target for backup, write and wait. When more than one new one appears at once, the flow stops (D6).
 
-**A board already in its bootloader** (Install pressed with no saber connected, or the reboot skipped):
-- **Exactly one bootloader, whose serial is this saber's `bootloader.serial`:** go on.
-- **Exactly one bootloader, whose serial is another saber's recorded `bootloader.serial`:** stop with "The board in bootloader mode is <other>, not <this>. Nothing was written."
-- **Exactly one bootloader, unknown or with no serial:** the page asks "Hiltwright has not seen this board in bootloader mode before. Is it <saber>?", with "Yes, it is <saber>" and Cancel. Confirming goes on. The pairing is recorded only after the write, when the saber comes back and its running serial is this saber's `identity.usbSerial`. An owner's mistaken answer is therefore never remembered.
-- **More than one bootloader:** go on only if exactly one is this saber's. Otherwise stop (D6).
+**A board already in its bootloader** (Install pressed with no saber connected, or the reboot skipped). A bootloader *belongs to* a saber when its serial equals that saber's recorded `bootloader.serial` or its running `identity.usbSerial`. Changed after 1.1, which found the two serials equal on both boards.
+- **Exactly one bootloader, belonging to this saber:** go on.
+- **Exactly one bootloader, belonging to another saber:** stop with "The board in bootloader mode is <other>, not <this>. Nothing was written."
+- **Exactly one bootloader, belonging to no saber, or with no serial:** the page asks "Hiltwright cannot tell which saber this board is. Is it <saber>?", with "Yes, it is <saber>" and Cancel. Confirming goes on. The pairing is recorded only after the write, when the saber comes back and its running serial is this saber's `identity.usbSerial`. An owner's mistaken answer is therefore never remembered.
+- **More than one bootloader:** go on only if exactly one belongs to this saber. Otherwise stop (D6).
 
 **A connected saber when a bootloader is already present:** the reboot still happens, and the target is the new serial from step 2. The existing bootloader belongs to another board.
 
 **Rejected:**
-- *Treating the bootloader serial as the running serial.* The spike shows they differ.
-- *Deriving one from the other.* The rule is unknown from one sample, and 1.1 records a second. If 1.1 shows a fixed rule on both boards, it is noted, not relied on.
+- *Recognising only a bootloader seen before (the plan before 1.1).* 1.1 showed the bootloader and the firmware share one serial. Matching the running serial as well recognises a saber's board the first time, without asking.
+- *Relying on equality alone.* The spike's board is not proven to share the serial. A board that does not share it is recognised once paired (steps 1–3), or the owner is asked, and never matched to a different saber.
 - *Refusing an unrecognised bootloader.* A board whose write failed can only sit in its bootloader, and refusing would strand it. The owner confirms instead.
 
 ### D5. A build goes stale; the record is what was built
@@ -140,15 +156,19 @@ The runtime id pair (`1209:6668,…`) is dropped, so dfu-util can never detach a
 - Two or more bootloaders are present and none is known as this saber: the same words.
 
 **The reconnect:**
-- The install flow calls `board.connect(false, { serial: saber.identity.usbSerial })`.
-- `board.ts` passes the serial to main (`usb.wantSerial(serial)`), then calls `requestPort`.
-- Main's `select-serial-port` picks the port whose USB serial is the wanted one. It uses `SerialPort.serialNumber` when Electron fills it. Otherwise it maps the port's device instance id to its composite parent's serial through PnP (`DEVPKEY_Device_Parent`). Task 1.1 records which of the two works.
+- The install flow calls `board.connect(false, { serial })`, with the target's serial.
+- `board.ts` first asks main to allow only that board: `usb.wantSerial(serial)`.
+- Main resolves, through one PnP query, which Proffieboard serial interface (`…&MI_00\…`) has that composite parent (`DEVPKEY_Device_Parent`). It then lets the device permission handler allow only that interface's `device_instance_id`.
+- `getPorts()` then returns only that board, and the connect opens it without a click.
+- `usb.wantSerial(null)` restores the normal rule once the connection is read, or after 60 s.
 - The identity read on that connection takes the wanted serial, not null. That makes the reconnect match the right record with two boards plugged in.
+- Changed after 1.1: `requestPort()` needs a click, so `select-serial-port` cannot be used for an automatic reconnect, and it gave no port list to inspect.
 - When the saber has no recorded serial, the reconnect runs as today. If the saber reached is not the installed one, the page says "Installed on <saber>. Reconnected to <other>, which is also plugged in."
 
 **Rejected:**
 - *Refusing whenever two boards are plugged in.* The owner chose targeting, and the `v3-verification` two-board step needs it.
 - *Choosing the port in the renderer.* Web Serial gives the page only the vendor and product id.
+- *`select-serial-port` with `requestPort()`.* It needs a user gesture (1.1).
 
 ### D7. Checks
 **Hardware facts first (1.1).** They set the parsing and the port mapping:
@@ -171,7 +191,7 @@ The runtime id pair (`1209:6668,…`) is dropped, so dfu-util can never detach a
   - the corrected board
 - `generate.test.ts`: the refusal without a board
 - `library.test.ts`: `noteBootloader` validation
-- `serialGate.test.ts`: choosing a port by serial
+- `serialGate.test.ts`: allowing only the wanted board's interface while a serial is wanted, and every Proffieboard otherwise
 
 **Development run:** no board.
 
@@ -180,7 +200,7 @@ The runtime id pair (`1209:6668,…`) is dropped, so dfu-util can never detach a
 ## Risks / Trade-offs
 
 - **[The bootloader's serial changes, or two boards report the same one]** → A duplicate serial looks like "another saber" or "never seen". Both stop or ask; neither writes silently.
-- **[Electron gives no serial for a port, and the PnP parent lookup fails]** → The reconnect falls back to today's behaviour, and says which saber it reached. The install itself does not depend on the reconnect.
+- **[The PnP parent lookup fails, or finds no interface for the serial]** → The reconnect falls back to today's behaviour, and says which saber it reached. The install itself does not depend on the reconnect.
 - **[An owner answers "Yes, it is <saber>" for the wrong board]** → The flash-size check still refuses a wrong board type. The same type gets the owner's firmware for that saber, as they asked, and the backup is taken first. The answer is never remembered as a pairing (D4).
 - **[Older firmware records named the wrong board]** → A saber whose record says V2 but whose bootloader says V3 is corrected at the next install (D2). The install's check stops the write first.
 

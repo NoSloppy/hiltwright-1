@@ -19,10 +19,11 @@ Nothing checks that the firmware being written matches the board it lands on. Th
   - Putting a backup back is checked in the same way.
 - **FW4: Know the saber.**
   - Install writes to a board already in its bootloader only in two cases:
-    - Hiltwright recognises it as this saber, by the bootloader's USB serial number, which it learns the first time it reboots this saber into its bootloader itself.
+    - Hiltwright recognises it as this saber by its USB serial number.
     - The owner says explicitly which saber it is.
   - A board recognised as a different saber is refused.
-  - The bootloader's serial is not the running saber's serial. The spike recorded `206033865232` for the bootloader of the V2.2 whose running serial is `209133815232`. So the two are paired by watching, never assumed equal.
+  - **Measured 2026-09-27 (task 1.1):** hote2 and the V3.9 each use the same serial in the bootloader as in their firmware.
+  - The spike's V2 bootloader (`206033865232`) never had its running serial recorded. So Hiltwright also remembers the bootloader serial it sees when it reboots a saber itself.
 - **FW5: A build goes stale when the setup changes.**
   - As soon as the setup a build was made from changes, Install offers only a fresh build.
   - The record stored after an install is the model that was actually built.
@@ -49,7 +50,7 @@ None.
 
 ### Modified Capabilities
 
-- `firmware-install`: The target is checked in two ways: against the build's board (by flash size), and against the saber's identity (by bootloader serial). A stale build cannot be installed. With several boards plugged in, only this saber's board is written, and the reconnect reaches it.
+- `firmware-install`: The target is checked in two ways: against the build's board (by flash size), and against the saber's identity (by USB serial). A stale build cannot be installed. With several boards plugged in, only this saber's board is written, and the reconnect reaches it.
 - `firmware-build`: A build stays tied to the setup it was made from, and goes stale when that setup changes.
 - `hardware-wiring`: The board is known from the saber, or asked for, never defaulted.
 

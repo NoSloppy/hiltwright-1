@@ -37,8 +37,8 @@ Installing SHALL take two clicks: the install button, then an explicit confirmat
 For a connected saber, the installer SHALL reboot it into its bootloader: first with the ProffieOS reboot command, then with the 1200-baud touch as a fallback. It SHALL wait a bounded time for this saber's bootloader to appear, and SHALL remember that bootloader as this saber's.
 
 A board already in its bootloader SHALL be installed without a reboot, but only in two cases:
-- It is recognised as this saber, because Hiltwright has seen this saber's bootloader before.
-- The owner confirms it is this saber, when Hiltwright has not seen that bootloader before. The question names the saber, and Cancel leaves the board untouched.
+- It is recognised as this saber by its USB serial number: the serial the saber has when running, or the one its bootloader had when Hiltwright last rebooted it.
+- The owner confirms it is this saber, when Hiltwright cannot tell which saber it is. The question names the saber, and Cancel leaves the board untouched.
 
 A board recognised as a different saber SHALL be refused, and nothing SHALL be written.
 
@@ -51,11 +51,12 @@ If the bootloader does not appear, the owner SHALL be told how to enter it by ha
 - *Needs a real board (either).*
 
 #### Scenario: Board already in its bootloader
-- **WHEN** the board is already in its bootloader when the owner installs, and Hiltwright has seen this saber's bootloader before
+- **WHEN** the board is already in its bootloader when the owner installs, and its serial is this saber's
 - **THEN** the reboot is skipped, and the install goes straight to the checks and the backup
+- *Needs a real board (either).*
 
-#### Scenario: Board already in its bootloader, never seen
-- **WHEN** a board is in its bootloader that Hiltwright has never seen, and the owner presses Install on a saber
+#### Scenario: Board already in its bootloader, not recognised
+- **WHEN** a board is in its bootloader whose serial belongs to no saber Hiltwright knows, and the owner presses Install on a saber
 - **THEN** the page asks whether the board is that saber, naming it, before anything is read or written
 - **AND** Cancel leaves the board untouched, and confirming continues the install
 

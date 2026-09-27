@@ -2,13 +2,25 @@
 
 ## 1. Hardware facts
 
-- [ ] 1.1 On the V2.2 hote2 and the V3.9 (design D7), before any code. Check the connected board first (PnP `VID_1209&PID_6668`), and ask the owner before rebooting a board into its bootloader. Record in design.md:
+- [x] 1.1 On the V2.2 hote2 and the V3.9 (design D7), before any code. Check the connected board first (PnP `VID_1209&PID_6668`), and ask the owner before rebooting a board into its bootloader. Record in design.md:
   - each board's bootloader serial (PnP instance id and `dfu-util -l` `serial=`) next to its running serial
   - a `dfu-util -l` listing with both boards in their bootloaders
   - Electron's `select-serial-port` port list with both running: whether `serialNumber` or `deviceInstanceId` is filled
   - that `dfu-util -d 0483:df11 -S <serial> -l` lists only that board
 
   Leave both boards back in their firmware, and confirm with `version`. Verify: the values are written into design.md's Context, and D4/D6 are adjusted if they contradict it.
+  - **Result, 2026-09-27.** Both boards were plugged in together, and the open development window was closed by the owner first. The table is in design.md's Context.
+    - **Serials:** each bootloader uses the same serial as its firmware: hote2 `209133815232`, V3.9 `207A349A5430`.
+    - **Flash:** hote2 reports `0128*0002Kg` (256 KB), the V3 `0256*0002Kg` (512 KB).
+    - **Targeting:** `-S <serial>` lists only that board.
+    - **Leaving:** a 4-byte read ending in `:leave` returns a board to its firmware. Both answered `version` afterwards, unchanged.
+    - **Ports:** `requestPort()` needs a click, so the reconnect cannot use `select-serial-port`. The device permission handler gets each interface's instance id, whose PnP parent is the serial.
+
+    Adjusted to match:
+    - **Recognising a saber (D4):** a bootloader is recognised by the saber's running serial as well as a recorded bootloader serial. The spec's recognition wording follows.
+    - **The reconnect (D6):** it filters the permission handler rather than using `select-serial-port`.
+    - **Proposal:** corrected.
+    - **FW29:** the leave step is noted in `install-safety-nets`.
 
 ## 2. Knowing the board
 
@@ -54,7 +66,7 @@
 
 ## 4. Reconnecting to the installed saber
 
-- [ ] 4.1 Add `usb.wantSerial(serial)` in main. `select-serial-port` picks the port with that USB serial, using `serialNumber` or the PnP parent as 1.1 found (design D6). `board.connect(interactive, { serial })` passes it, and the identity takes it. The install and restore flows reconnect with the saber's serial. When the saber reached is not the installed one, the page says "Installed on <saber>. Reconnected to <other>, which is also plugged in." Verify in `apps/desktop/test/serialGate.test.ts` (choosing by serial, falling back to the first Proffieboard when none matches or none is wanted), and in `installFlow.test.ts` (the reconnect asks for the serial, and the note when another saber answers).
+- [ ] 4.1 Add `usb.wantSerial(serial)` in main. While a serial is wanted, the device permission handler allows only the Proffieboard interface whose PnP parent has that serial, and `getPorts()` returns only that board (design D6, as changed after 1.1). `board.connect(interactive, { serial })` passes it, and the identity takes it. The install and restore flows reconnect with the saber's serial. When the saber reached is not the installed one, the page says "Installed on <saber>. Reconnected to <other>, which is also plugged in." Verify in `apps/desktop/test/serialGate.test.ts` (choosing by serial, falling back to the first Proffieboard when none matches or none is wanted), and in `installFlow.test.ts` (the reconnect asks for the serial, and the note when another saber answers).
 
 ## 5. Checks
 
