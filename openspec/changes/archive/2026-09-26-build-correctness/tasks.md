@@ -62,4 +62,5 @@
   - **Result, 2026-09-26 (owner).** Passed on V2.2 hote2 from a development build: Build & Install finished "Installed", and after reconnecting the header showed `v8.10 hiltwright <sha>`. The config generated with the new comment handling and header builds and runs on the saber.
 - [x] 3.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 186 core and 266 desktop tests pass (13 gated skipped), and the type check is clean in both workspaces.
-- [ ] 3.5 After archive, tick roadmap task 3.14 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 3.5 After archive, tick roadmap task 3.14 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-26.** Archived to `openspec/changes/archive/2026-09-26-build-correctness`, with the firmware-build spec (7 requirements, 14 scenarios) and the config-generation spec (12 requirements, 13 scenarios) synced. Roadmap 3.14 is ticked.
