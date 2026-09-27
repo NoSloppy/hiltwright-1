@@ -44,7 +44,7 @@
 - **Line comments:** line breaks become spaces, and trailing backslashes are removed.
 - **Block comments:** also, `*/` becomes `* /`.
 
-It is used at the three sites. The manifest and the header JSON keep the real names; the header's JSON already goes through `JSON.stringify`, and a `*/` inside it is written as `*\/`, which is still valid JSON.
+It is used at the three sites. The manifest keeps the real names. The header's JSON sits inside a block comment and `JSON.stringify` does not escape `/`, so `*/` in it is replaced with `*\/` (still valid JSON, which `readGeneratedHeader` reads back unchanged).
 
 **Rejected:**
 - *Refusing such names.* Library style names come from pasted text, and the owner should not have to rename them.
