@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bladeTables, commentSafe, generateConfig, getDefine, hasDefine, parseConfig, presetArrays, readGeneratedHeader, rowToBlades, validateModel, withWiringConfirmation, type LookDef, type SaberConfigModel } from '../src';
+import { bladeTables, commentSafe, generateConfig, getDefine, hasDefine, parseConfig, presetArrays, readGeneratedHeader, rowToBlades, validateModel, withWiringConfirmation, type LookDef, type ModelBlade, type SaberConfigModel } from '../src';
 
 const hote2: SaberConfigModel = {
   name: 'hiltwright_hote2', board: 'V2', buttons: 2, prop: 'fett263',
@@ -74,8 +74,8 @@ describe('generateConfig', () => {
   it('validates the model before generating', () => {
     expect(validateModel(hote2)).toEqual([]);
     expect(validateModel({ ...hote2, name: 'bad name' })).toContain('Config name must be letters, digits and underscores.');
-    expect(validateModel({ ...hote2, blades: [{ ...hote2.blades[0], wiring: { kind: 'own', dataPin: 'bladePin', powerPins: [] } }] })).toEqual(['main: a pixel strip needs at least one power pin.']);
-    expect(validateModel({ ...hote2, blades: [hote2.blades[0], { ...hote2.blades[1], wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin4'] } }] })[0]).toMatch(/bladePin is used by 2/);
+    expect(validateModel({ ...hote2, blades: [{ ...hote2.blades[0], wiring: { kind: 'own', dataPin: 'bladePin', powerPins: [] } }] })).toEqual(['Blade 1 needs at least one power pin.']);
+    expect(validateModel({ ...hote2, blades: [hote2.blades[0], { ...hote2.blades[1], wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin4'] } }] })[0]).toMatch(/bladePin has 2 separate strips on it/);
   });
 });
 
@@ -197,5 +197,26 @@ describe('names in the config', () => {
     // The line before a preset's first slot is its `{ font, track,` line.
     const first = g.slotLines.find((s) => s.preset === 0 && s.blade === 0)!;
     expect(lines[first.line - 2]).toContain('{ "Mara Jade Skywalker;common",');
+  });
+});
+
+// wiring-validation FW27: each preset slot's style against its blade.
+describe('styles against their blades', () => {
+  const motor: ModelBlade = { id: 'motor', role: 'motor', type: 'simple', pixels: 1, order: '', extra: [], parallel: 1, leds: ['CreeXPE2WhiteTemplate<550>', 'NoLED', 'NoLED', 'NoLED'], wiring: { kind: 'power', pins: ['bladePowerPin1'] } };
+  it('fills an unchosen slot with the role default and says so, grouped per blade', () => {
+    const { warnings } = generateConfig(hote2);
+    expect(warnings).toContain('3 presets (Mara Jade Skywalker, Valkyrie, Battery Level), main blade (blade 1): no style chosen, using "Steady".');
+    expect(warnings).toContain('3 presets (Mara Jade Skywalker, Valkyrie, Battery Level), crystal (blade 2): no style chosen, using "Follow the blade".');
+  });
+  it('refuses a blade style on a motor, naming the preset', () => {
+    const m: SaberConfigModel = { ...hote2, blades: [...hote2.blades, motor], presets: hote2.presets.map((p, i) => (i === 0 ? { ...p, looks: ['hw_blade', null, null, 'hw_fire'] } : p)) };
+    expect(validateModel(m)).toEqual(['Preset Mara Jade Skywalker: the motor needs a motor style, not "Fire".']);
+    const ok: SaberConfigModel = { ...m, presets: m.presets.map((p, i) => (i === 0 ? { ...p, looks: ['hw_blade', null, null, 'hw_motor'] } : p)) };
+    expect(validateModel(ok)).toEqual([]);
+  });
+  it('builds a main-blade style on a crystal, with a warning', () => {
+    const m: SaberConfigModel = { ...hote2, presets: hote2.presets.map((p, i) => (i === 1 ? { ...p, looks: ['hw_blade', 'hw_fire', null] } : p)) };
+    expect(validateModel(m)).toEqual([]);
+    expect(generateConfig(m).warnings).toContain('Preset Valkyrie, crystal: "Fire" is not made for this blade.');
   });
 });

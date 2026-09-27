@@ -7,6 +7,7 @@ import { emitBladeExpr, emitPresetArray } from './emit';
 import { bladesToExprs, sharedPowerPins, stripLength } from './blades';
 import { quote } from './cpp';
 import { STARTER_LOOKS, starterLookFor, type FirmwareManifest, type LookDef } from '../looks';
+import { wiringProblems } from './pinRules';
 import { LIBRARY_LOOKS, LOOK_FX } from '../lookLibrary';
 
 export type Prop = 'fett263' | 'sa22c' | 'bc' | 'default';
@@ -103,6 +104,37 @@ export function commentSafe(s: string, kind: 'line' | 'block'): string {
   return out;
 }
 
+const ROLE_WORD: Record<BladeRole, string> = { main: 'main blade', crystal: 'crystal', accent: 'accent', side: 'side blade', motor: 'motor' };
+
+/**
+ * Each preset slot's style against its blade (wiring-validation FW27). A motor only takes a motor style: anything else
+ * is an error. Any other mismatch, and a slot with no style chosen (filled with the role's default), is a warning.
+ * Unchosen slots are grouped per blade, since presets read from a saber often choose nothing for the crystal or accent.
+ */
+export function slotChecks(m: SaberConfigModel): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const looks = modelLooks(m);
+  const presetName = (pi: number) => (m.presets[pi]?.name ?? `${pi + 1}`).replace(/[\r\n]+/g, ' ');
+  m.blades.forEach((b, bi) => {
+    const unchosen: number[] = [];
+    m.presets.forEach((p, pi) => {
+      const id = p.looks?.[bi];
+      if (!id) { unchosen.push(pi); return; }
+      const look = looks.find((l) => l.id === id);
+      if (!look || look.roles.includes(b.role)) return;
+      if (b.role === 'motor') errors.push(`Preset ${presetName(pi)}: the motor needs a motor style, not "${look.name}".`);
+      else warnings.push(`Preset ${presetName(pi)}, ${ROLE_WORD[b.role]}: "${look.name}" is not made for this blade.`);
+    });
+    if (unchosen.length) {
+      const names = unchosen.slice(0, 4).map(presetName).join(', ') + (unchosen.length > 4 ? ` and ${unchosen.length - 4} more` : '');
+      const which = unchosen.length === 1 ? `Preset ${names}` : `${unchosen.length} presets (${names})`;
+      warnings.push(`${which}, ${ROLE_WORD[b.role]} (blade ${bi + 1}): no style chosen, using "${starterLookFor(b.role).name}".`);
+    }
+  });
+  return { errors, warnings };
+}
+
 /** Small stable hash for identity headers. Not cryptographic. */
 export function contentHash(text: string): string {
   let h1 = 0x811c9dc5;
@@ -119,24 +151,16 @@ export function validateModel(m: SaberConfigModel): string[] {
   const errors: string[] = [];
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(m.name)) errors.push('Config name must be letters, digits and underscores.');
   if (!m.blades.length) errors.push('At least one blade is needed.');
-  if (!m.blades.some((b) => b.role === 'main')) errors.push('One blade must be the main blade.');
   if (!m.presets.length) errors.push('At least one preset is needed.');
-  const dataPins = new Map<string, number>();
-  for (const b of m.blades) {
-    if (b.type === 'pixel' && b.wiring.kind === 'own') {
-      dataPins.set(b.wiring.dataPin, (dataPins.get(b.wiring.dataPin) ?? 0) + 1);
-      if (!b.wiring.powerPins.length) errors.push(`${b.id}: a pixel strip needs at least one power pin.`);
-    }
-    if (b.type === 'pixel' && b.pixels < 1) errors.push(`${b.id}: pixel count must be at least 1.`);
-    if (b.wiring.kind === 'power' && !b.wiring.pins.length) errors.push(`${b.id}: needs a power pin.`);
-  }
-  for (const [pin, n] of dataPins) if (n > 1) errors.push(`${pin} is used by ${n} separate strips. Chain them or use different data pins.`);
+  // The same wiring rules, and words, as the Wiring page (pinRules.ts).
+  for (const p of wiringProblems(m.blades, m.board)) errors.push(p.message);
   const known = new Set(modelLooks(m).map((l) => l.id));
   m.presets.forEach((p, pi) => (p.looks ?? []).forEach((id, bi) => { if (id && !known.has(id)) errors.push(`Preset ${pi + 1}, blade ${bi + 1}: unknown style "${id}".`); }));
   for (const l of m.looks ?? []) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(l.id)) errors.push(`Style id "${l.id}" must be letters, digits and underscores.`);
     if (!l.code.trim()) errors.push(`Style "${l.name}" has no style code.`);
   }
+  errors.push(...slotChecks(m).errors);
   const variants = m.bladeId?.variants ?? [];
   if (variants.length) {
     const main = m.blades.find((b) => b.role === 'main');
@@ -276,6 +300,7 @@ export function generateConfig(m: SaberConfigModel): GeneratedConfig {
     '',
   ].join('\n');
   if (shared.length) warnings.push(`Power ${shared.length > 1 ? 'pins' : 'pin'} ${shared.join(', ')} shared between blades: SHARED_POWER_PINS added.`);
+  warnings.push(...slotChecks(m).warnings);
   manifest.hash = hash;
   // Which config lines hold which preset slot's style, so a compiler error can name the preset, blade and style.
   // Counted from the emitted text: the array opens on one line, then each preset is `{ font, track,`, one entry per

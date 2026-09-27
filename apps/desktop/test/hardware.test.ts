@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateConfig, validateModel, type ModelBlade, type SaberConfigModel } from '@hiltwright/core';
-import { bladeSummary, kindOf, newBlade, pinTable, withBladeCount, withKind } from '../src/renderer/src/hardwareModel';
+import { bladeSummary, freeDataPins, kindOf, newBlade, pinTable, withBladeCount, withKind } from '../src/renderer/src/hardwareModel';
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
 const model = (blades: ModelBlade[], board: 'V2' | 'V3' = 'V2'): SaberConfigModel => ({ name: 'hw_editor', board, buttons: 2, prop: 'sa22c', blades, presets: [{ font: 'A', track: '', name: 'One' }] });
@@ -77,13 +77,29 @@ describe('hardware-wiring audit', () => {
   });
 });
 
-// FST-3 (wiring-validation, beside FW6): switching a blade to a star LED keeps its one pin and pads with the first FET,
-// so a new star gets the same pin twice, and that pin may already be another blade's. Its three channels should each
-// get a pin no other channel or blade uses, while free pins remain.
-it.fails('a new star LED gets three pins of its own', () => {
+// FST-3, fixed in wiring-validation: a new star LED's three channels each get a pin no other channel or blade uses.
+it('a new star LED gets three pins of its own', () => {
   const accent = newBlade('b2', 'accent', 'V2', { data: ['bladePin'], power: ['bladePowerPin2', 'bladePowerPin3'] });
-  const star = withKind(accent, 'star', 'V2');
+  const star = withKind(accent, 'star', 'V2', ['bladePowerPin2', 'bladePowerPin3']);
   const pins = (star.wiring as { pins: string[] }).pins;
   expect(new Set(pins).size).toBe(3);
   expect(pins.some((p) => ['bladePowerPin2', 'bladePowerPin3'].includes(p))).toBe(false);
+});
+
+// wiring-validation: the page shows exactly the problems the build refuses, in the same words.
+describe('the page and the build agree', () => {
+  it('pinTable and validateModel give the same wiring problems', () => {
+    const accentOnPwm = { ...withKind(newBlade('b2', 'motor', 'V3', { data: ['bladePin'], power: ['bladePowerPin2', 'bladePowerPin3'] }), 'motor', 'V3'), role: 'motor' as const, wiring: { kind: 'power' as const, pins: ['blade5Pin'] } };
+    const chainFirst = { ...main, id: 'b3', role: 'side' as const, pixels: 10, wiring: { kind: 'chain' as const, after: 'b1' } };
+    const blades = [chainFirst, main, accentOnPwm];
+    const t = pinTable(blades, 'V3');
+    const build = validateModel(model(blades, 'V3'));
+    expect(t.problems.length).toBeGreaterThanOrEqual(2);
+    for (const p of t.problems) expect(build).toContain(p);
+    expect(t.power.find((r) => r.pin === 'blade5Pin')!.conflict).toBe(true);
+  });
+  it('labels only the V3-only data pins as free', () => {
+    expect(freeDataPins('V3')).toEqual(['blade5Pin', 'blade6Pin', 'blade7Pin']);
+    expect(freeDataPins('V2')).toEqual([]);
+  });
 });

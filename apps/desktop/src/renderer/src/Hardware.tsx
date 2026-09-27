@@ -6,7 +6,7 @@ import { chainRanges, type BladeVariant, type BoardModel, type ModelBlade } from
 import { Icon } from './Icon';
 import { BladeBar, Crystal, Hilt } from './Saber';
 
-import { KIND_LABEL, ROLES, ROLE_META, bladeSummary, dataPins, kindOf, pinLabel, pinTable, powerOptions, withBladeCount, withKind, type Kind } from './hardwareModel';
+import { KIND_LABEL, ROLES, ROLE_META, bladeSummary, dataPins, freeDataPins, kindOf, pinLabel, pinTable, powerOptions, powerPinsOf, withBladeCount, withKind, type Kind } from './hardwareModel';
 import { Select } from './Select';
 
 export interface SwapProps {
@@ -24,6 +24,8 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
   const pins = pinTable(blades, board);
   const ranges = chainRanges(blades);
   const crystal = blades.find((b) => b.role === 'crystal');
+  // The power pins every other blade uses: a blade switched to a star LED takes free ones for its extra channels.
+  const othersPower = (id: string) => blades.filter((x) => x.id !== id).flatMap(powerPinsOf);
   const set = (id: string, patch: Partial<ModelBlade>) => onChange(blades.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   const setCount = (n: number) => {
     if (locked) return;
@@ -87,7 +89,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
                     <div className="col" style={{ gap: 6 }}>
                       <span className="label">Built from</span>
                       <div className="seg" role="radiogroup" aria-label="Type">
-                        {(['pixel', 'single', 'star'] as Kind[]).map((k) => <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'on' : ''} disabled={locked} onClick={() => set(b.id, withKind(b, k, board))}><Icon name={k === 'pixel' ? 'strip' : 'led'} />{KIND_LABEL[k]}</button>)}
+                        {(['pixel', 'single', 'star'] as Kind[]).map((k) => <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'on' : ''} disabled={locked} onClick={() => set(b.id, withKind(b, k, board, othersPower(b.id)))}><Icon name={k === 'pixel' ? 'strip' : 'led'} />{KIND_LABEL[k]}</button>)}
                       </div>
                     </div>
                   )}
@@ -119,7 +121,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
                       </div>
                       {w.kind === 'own' && (
                         <div className="grid2">
-                          <label className="field"><span className="label">Data pin</span><span className="input"><span className="ellip">{w.dataPin}</span><span className="caret"><Icon name="down" /></span><Select value={w.dataPin} disabled={locked} aria-label="Data pin" onChange={(e) => set(b.id, { wiring: { ...w, dataPin: e.target.value } })}>{dataPins(board).map((p) => <option key={p} value={p}>{p}{board === 'V3' && p >= 'blade5Pin' ? ' (Free)' : ''}</option>)}</Select></span></label>
+                          <label className="field"><span className="label">Data pin</span><span className="input"><span className="ellip">{w.dataPin}</span><span className="caret"><Icon name="down" /></span><Select value={w.dataPin} disabled={locked} aria-label="Data pin" onChange={(e) => set(b.id, { wiring: { ...w, dataPin: e.target.value } })}>{dataPins(board).map((p) => <option key={p} value={p}>{p}{freeDataPins(board).includes(p) ? ' (Free)' : ''}</option>)}</Select></span></label>
                           <div className="field"><span className="label">Power pins</span><div className="row wrap" style={{ gap: 6, minHeight: 38 }}>{powerOptions(board).filter((o) => o.kind === 'fet').map((o) => { const on = w.powerPins.includes(o.pin); return <button key={o.pin} type="button" className={`chip ${on ? 'sel' : ''}`} aria-pressed={on} disabled={locked} onClick={() => { const next = on ? w.powerPins.filter((x) => x !== o.pin) : [...w.powerPins, o.pin].sort(); if (next.length) set(b.id, { wiring: { ...w, powerPins: next } }); }}>{o.label}</button>; })}</div></div>
                         </div>
                       )}

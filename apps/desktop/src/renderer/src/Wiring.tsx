@@ -17,24 +17,43 @@ export const PROPS: { value: Prop; label: string }[] = [
 
 export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (page: 'presets' | 'armory') => void }) {
   const { saber, info, model, live } = ws;
-  // Edits happen on a local copy and are saved a moment after the last change, so a slider drag is one write.
+  // Edits happen on a local copy and are saved a moment after the last change, so a slider drag is one write. A change
+  // still waiting when the page closes is saved then, not dropped (FW22).
   const [draft, setDraft] = useState<SaberConfigModel | null>(model);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { setDraft(model); }, [saber?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pending = useRef<{ t: ReturnType<typeof setTimeout>; next: SaberConfigModel } | null>(null);
+  // What this page edits, as last loaded or saved here: a model that differs from it was changed elsewhere.
+  const wiringOf = (m: SaberConfigModel) => JSON.stringify({ board: m.board, buttons: m.buttons, prop: m.prop, blades: m.blades, bladeId: m.bladeId ?? null });
+  const known = useRef<string | null>(model ? wiringOf(model) : null);
+  const [outside, setOutside] = useState<string | null>(null);
+  useEffect(() => { setDraft(model); known.current = model ? wiringOf(model) : null; setOutside(null); }, [saber?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (model && !draft) setDraft(model); }, [model, draft]);
+  // The saber's model changed elsewhere (an adoption, a restore): show it, and never save the older copy over it.
+  useEffect(() => {
+    if (!model) return;
+    const now = wiringOf(model);
+    if (now === known.current) return;
+    known.current = now;
+    if (pending.current) {
+      clearTimeout(pending.current.t); pending.current = null;
+      setOutside("This saber's wiring was changed elsewhere; your last change was not applied.");
+    }
+    setDraft(model);
+  }, [model]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = (next: SaberConfigModel) => { pending.current = null; known.current = wiringOf(next); void ws.saveModel(next); };
   // A confirmation records the layout it was given for, so a board or blade change withdraws it by itself and
   // changing back restores it; nothing here has to clear it.
   const update = (fn: (d: SaberConfigModel) => SaberConfigModel) => {
     setDraft((d) => {
       if (!d) return d;
       const next = fn(d);
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => { void ws.saveModel(next); }, 300);
+      if (pending.current) clearTimeout(pending.current.t);
+      pending.current = { t: setTimeout(() => save(next), 300), next };
+      setOutside(null);
       return next;
     });
   };
   const change = (patch: Partial<SaberConfigModel>) => update((d) => ({ ...d, ...patch }));
-  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+  useEffect(() => () => { const p = pending.current; if (p) { clearTimeout(p.t); save(p.next); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!saber || !info || !draft) {
     return <section className="panel"><div className="pb col" style={{ gap: 6 }}><h3>No saber to wire yet</h3><span className="dim small">Plug a saber in, or start one in the Armory, and describe its wiring here.</span> <button type="button" className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => go('armory')}><span className="b"><span className="i">Go to the Armory</span></span></button></div></section>;
@@ -70,6 +89,7 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
                 <Select value={draft.prop} aria-label="Prop file" onChange={(e) => change({ prop: e.target.value as Prop })}>{PROPS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select></span>
             </label>
           </div>
+          {outside && <div className="note amber"><Icon name="warn" /><span>{outside}</span></div>}
           <HardwareEditor blades={draft.blades} board={draft.board} detected={detected} locked={board.busy} onChange={(b: ModelBlade[]) => change({ blades: b })}
             swap={FEATURES.bladeId ? {
               variants: draft.bladeId?.variants ?? [],
