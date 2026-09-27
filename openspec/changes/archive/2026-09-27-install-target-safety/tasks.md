@@ -273,4 +273,10 @@
       9. "want any board"
 
       After: the Wiring page showed V3 pressed and V2 disabled, and the record held `bootloader: V3, 524288`. A first try with a shorter wait had ended the run before the reconnect; the board was found running on its firmware afterwards.
-- [ ] 5.4 After archive, tick roadmap task 3.16 in `openspec/changes/beta-1-roadmap/tasks.md`. Also note in `v3-verification`'s proposal that its deferred two-boards step is unblocked. Verify both edits.
+- [x] 5.4 After archive, tick roadmap task 3.16 in `openspec/changes/beta-1-roadmap/tasks.md`. Also note in `v3-verification`'s proposal that its deferred two-boards step is unblocked. Verify both edits.
+  - **Result, 2026-09-27.** Archived to `openspec/changes/archive/2026-09-27-install-target-safety`, with the specs synced:
+    - `firmware-install`: 4 requirements replaced, 2 added
+    - `firmware-build`: 1 added
+    - `hardware-wiring`: 1 replaced
+
+    Roadmap task 3.16 is ticked. `v3-verification`'s proposal notes that its two-boards step is unblocked, and now expects hote2 back by its serial.

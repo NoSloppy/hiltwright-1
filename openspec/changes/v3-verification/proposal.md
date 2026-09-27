@@ -19,7 +19,8 @@ Beta 1 promises Proffieboard V3 support, and nothing has ever been compiled for,
 - **From `baseline-sd-fonts`, on the V3:** sharing its card over USB (2.11) and giving it back (2.13).
 - **From `baseline-styles`:** the same side-by-side blade sample on the V3 (2.2), since the V3's LEDs and power path differ.
 - **From `library-integrity` 6.3 (deferred by the owner, 2026-09-25)**, run once the app can reach the right board after an install (HW-2026-09-25c in `install-target-safety`), with V2.2 hote2 and the V3.9 plugged in together:
-  - After a reflash, hote2 reconnects with no USB serial and is matched to its record through the install's expectation (the log shows "expected … matched" with the same id), with no second record.
+  - **Unblocked by `install-target-safety` (archived 2026-09-27):** after an install, only the saber installed may be opened, and it is reached by its USB serial. That change's 5.3 passed the install of hote2 with both plugged in.
+  - After a reflash, hote2 reconnects to its own record with its USB serial (the log shows `[usb] want 209133815232` and "expected … matched" with the same id), with no second record.
   - Putting back a backup Hiltwright took (the backup now records its config) brings hote2 back to the same record, with its firmware record cleared.
 
 ## Non-goals
