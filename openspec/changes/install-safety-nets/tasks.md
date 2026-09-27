@@ -184,5 +184,5 @@
 - [ ] 5.3 Hardware check by the owner, from a development build:
   - **V2.2 hote2:** build and install. It finishes "Installed and checked: the saber reports config/hiltwright_hote2.h, v8.10 hiltwright …".
   - **V2.2 hote2:** put the backup from before that install back. The Backups tab then lists a new "before restore" backup, and the saber runs its previous firmware.
-  - **V3.9, plugged in alone:** set its Wiring to V2, and try to install. The install stops with the V2-on-V3 words, then the V3 comes back on its firmware by itself, with no RESET.
+  - **V3.9, plugged in alone, on a fresh scratch data folder** (the owner's library already knows it is a V3, so a V2 build is refused before any reboot): choose V2, confirm, build and install. The install stops at the bootloader with the V2-on-V3 words, then the V3 comes back on its firmware by itself, with no RESET. Run by me with the owner's go-ahead, or by the owner with `HILTWRIGHT_USER_DATA`.
 - [ ] 5.4 After archive, tick roadmap task 3.17 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
