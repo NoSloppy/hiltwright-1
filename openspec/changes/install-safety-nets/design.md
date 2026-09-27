@@ -18,6 +18,18 @@ See proposal.md for why. What the code does now, after `install-target-safety`:
 - **Leaving the bootloader.** `leaveBootloader(root, serial)` exists (`install-target-safety` D8), and `checkBoard` uses it. After a refusal or a failed backup, the flows only tell the owner to press RESET.
 - **The reconnect.** `board.currentSaber()` returns the record read after the reconnect, with `identity.configName` and `identity.version`. A Hiltwright build reports `v8.10 hiltwright <sha>` (`firmware-build`) and `config/<model.name>.h`.
 - **Reboot time.** From 1.1 of `install-target-safety`: "after 3 s" on both boards. From 2026-09-24 on hote2: anything up to 30 s or more (HW-2026-09-24b).
+- **Measured in 1.1 (2026-09-27).** Twenty rounds on each board, plugged in together:
+  - each round: `RebootDFU`; the time until the bootloader is in PnP; the 4-byte leave; the time until the running board is back in PnP; the time until it answers `version`
+  - the V3 was replugged once midway (see below)
+
+  | | To bootloader | Back running (PnP) | Answering `version` | Came back with no USB serial |
+  |---|---|---|---|---|
+  | V2.2 hote2 (8.10 Hiltwright firmware) | 0.66 s min, 1.02 s median, 1.43 s max | 1.0–2.4 s | 2.5 s min, 3.1 s median, 23.6 s max (22–24 s twice) | 0 of 20 |
+  | V3.9 (stock ProffieOS from 2023) | 0.65 s min, 0.9 s median, 16.0 s max (its first round) | 1.0–1.4 s | 2.9 s min, 3.2 s median, 4.8 s max | 2 of 20 |
+
+  - **Twice on the V3**, after a leave, it ran its firmware normally, but gave no USB serial. Windows listed it as `USB\VID_1209&PID_6668\6&3026EF5A&0&2` on a new COM port, and it answered `version` there. An unplug and replug brought its serial back.
+  - Anything that waits for a saber by its serial would miss it, and say "not reappeared". The owner chose to fix that here (D8).
+  - **hote2 twice took 22–24 s** before answering `version` after coming back. The reconnect after an install can meet a saber that is present but not answering yet (D3).
 
 ## Goals / Non-Goals
 
@@ -121,10 +133,32 @@ The map lives only for the run, like the page's build (`firmware-install`: "a bu
 
 **The wait:** `BOOTLOADER_WAIT_MS` in `installFlow.ts` is set to about twice the slowest measured, rounded up to 5 s, and at least 30 s. It is used by install, restore and `checkBoard`.
 
+**Chosen after 1.1:** 45 s.
+- By the rule, the slowest measured reboot was 16.0 s, which gives 35 s.
+- The owner's report of 30 s or more on hote2 (HW-2026-09-24b) is also a measurement on a real board, and 35 s would barely cover it. So 45 s.
+
+**The runtime wait:** it stays at 25 s. The board was back in PnP within 2.4 s every time.
+
+**The reconnect:** it gets one more try after 10 s when the install check could not read the saber, because hote2 twice took 22–24 s to answer.
+
 **What the page says:** after 5 s in the `bootloader` step, "Still waiting for the saber to restart in bootloader mode. This can take up to <n> seconds."
 
 **Rejected:**
 - *A fixed longer wait without measuring.* The finding asks for the spread, and the wait decides how long a real failure takes to report.
+
+### D8. A saber that comes back without its serial (added during 1.1, the owner's choice)
+**What counts as back:**
+- `usbState` counts running boards with no serial (`runtimeNoSerial`).
+- `backAfter(state, serial, noSerialBefore)` counts the saber as back when its serial is running again, or when a serial-less running board has appeared since the wait began. In both cases, the saber's bootloader must be gone.
+- `flash:waitForRuntime` takes the count at its start, and uses `backAfter`.
+
+**What follows:**
+- **The reconnect:** it then finds no interface for the wanted serial, gives the want up (`reachNext(serial, false)`), and connects as before.
+- **The install check:** it compares the config name of the saber reached. The page says which saber it reached if another answered.
+- **The record:** the saber is matched through the install's expectation, as with no serial before.
+
+**Rejected:**
+- *Asking the owner to replug.* The saber is running the new firmware, and only its serial is missing.
 
 ### D7. Checks
 **Unit tests:**

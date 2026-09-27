@@ -1,13 +1,21 @@
 // Which board a bootloader is, and which one dfu-util talks to (install-target-safety, design D3 and D6). The listings
 // are the ones taken from the owner's V2.2 hote2 and V3.9, both in their bootloaders together (task 1.1).
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const calls: string[][] = [];
 let listing = '';
+/** What the next flash read returns: firmware of the size asked for, all erased, garbage, or a short read. */
+let nextRead: 'firmware' | 'erased' | 'garbage' | 'short' = 'firmware';
+const readImage = (bytes: number) => {
+  if (nextRead === 'short') return Buffer.alloc(1024, 0x11);
+  const b = Buffer.alloc(bytes, nextRead === 'erased' ? 0xff : 0x11);
+  if (nextRead === 'firmware') { b[3] = 0x20; b[7] = 0x08; }
+  return b;
+};
 vi.mock('../src/main/toolchain', () => ({
   toolchainPaths: () => ({}),
   findDfuUtil: async () => 'dfu-util.exe',
@@ -15,12 +23,13 @@ vi.mock('../src/main/toolchain', () => ({
     calls.push(args);
     if (args[0] === '-l') return { code: 0, stdout: listing, stderr: '', ms: 1 };
     const u = args.indexOf('-U');
-    if (u >= 0) writeFileSync(args[u + 1], Buffer.alloc(16));
+    const size = Number(/0x08000000:(\d+)/.exec(args[args.indexOf('-s') + 1] ?? '')?.[1] ?? 16);
+    if (u >= 0) writeFileSync(args[u + 1], readImage(size));
     return { code: 0, stdout: 'Download done.', stderr: '', ms: 1 };
   },
 }));
 
-const { backupFlash, backupSizeMismatch, boardForFlash, dfuDeviceArgs, flashTarget, leaveBootloader, newBootloaders, parseDfuList, pickDevice, restoreBackup, serialFromInstanceId, usbStateFrom, writeFirmware } = await import('../src/main/flash');
+const { backAfter, backupFlash, backupSizeMismatch, boardForFlash, dfuDeviceArgs, flashTarget, imageKind, leaveBootloader, listBackups, newBootloaders, parseDfuList, pickDevice, restoreBackup, serialFromInstanceId, usbStateFrom, writeFirmware } = await import('../src/main/flash');
 
 const HOTE2 = '209133815232';
 const V3 = '207A349A5430';
@@ -84,7 +93,7 @@ describe('reading the bootloaders', () => {
 
 describe('talking to one board', () => {
   let dir: string;
-  beforeEach(() => { calls.length = 0; listing = BOTH; dir = mkdtempSync(join(tmpdir(), 'hw-flash-')); });
+  beforeEach(() => { calls.length = 0; listing = BOTH; nextRead = 'firmware'; dir = mkdtempSync(join(tmpdir(), 'hw-flash-')); });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   it('dfu-util is given the running and bootloader ids, and the serial when there is one', () => {
@@ -133,5 +142,77 @@ describe('talking to one board', () => {
     expect(r).toEqual({ ok: false, ms: 0, detail: 'This backup is from a Proffieboard V2 (256 KB); this saber is a Proffieboard V3 (512 KB). Nothing was written.' });
     expect(calls).toHaveLength(0);
     expect(backupSizeMismatch(524288, 262144)).toBe('This backup is from a Proffieboard V3 (512 KB); this saber is a Proffieboard V2 (256 KB). Nothing was written.');
+  });
+});
+
+// install-safety-nets design D1 (FW7): a backup counts only when it reads back as this board's firmware.
+describe('what a backup read is', () => {
+  let dir: string;
+  beforeEach(() => { calls.length = 0; listing = BOTH; nextRead = 'firmware'; dir = mkdtempSync(join(tmpdir(), 'hw-kind-')); });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  const file = (bytes: Buffer) => { const f = join(dir, `i${Math.random()}.bin`); writeFileSync(f, bytes); return f; };
+
+  it('the kinds: firmware, all erased, short, and garbage', async () => {
+    const fw = Buffer.alloc(262144, 0x11); fw[3] = 0x20; fw[7] = 0x08;
+    expect(await imageKind(file(fw), 262144)).toBe('firmware');
+    expect(await imageKind(file(Buffer.alloc(262144, 0xff)), 262144)).toBe('erased');
+    expect(await imageKind(file(fw.subarray(0, 100 * 1024)), 262144)).toBe('unusable');
+    expect(await imageKind(file(Buffer.alloc(262144, 0x11)), 262144)).toBe('unusable');
+    expect(await imageKind(file(fw), 524288)).toBe('unusable');
+    expect(await imageKind(join(dir, 'missing.bin'), 262144)).toBe('unusable');
+  });
+
+  it("a backup of hote2's firmware counts, and is kept with its config", async () => {
+    const r = await backupFlash(dir, join(dir, 'b'), 'before-install', () => undefined, 'config/hiltwright_hote2.h', HOTE2);
+    expect(r).toMatchObject({ ok: true, kind: 'firmware' });
+    expect(existsSync(r.file!)).toBe(true);
+    expect(existsSync(`${r.file!}.json`)).toBe(true);
+  });
+
+  it('an erased read is not a backup, and no file is left', async () => {
+    nextRead = 'erased';
+    const r = await backupFlash(dir, join(dir, 'b'), 'before-install', () => undefined, 'config/x.h', HOTE2);
+    expect(r).toMatchObject({ ok: false, kind: 'erased' });
+    expect(r.detail).toMatch(/no firmware on it/);
+    expect(readdirSync(join(dir, 'b'))).toEqual([]);
+  });
+
+  it('a garbage or short read is not a backup; the file stays, and the list marks it unusable', async () => {
+    for (const bad of ['garbage', 'short'] as const) {
+      nextRead = bad;
+      const r = await backupFlash(dir, join(dir, bad), 'before-install', () => undefined, null, HOTE2);
+      expect(r).toMatchObject({ ok: false, kind: 'unusable' });
+      expect(existsSync(r.file!)).toBe(true);
+      const [listed] = await listBackups(join(dir, bad));
+      expect(listed.valid).toBe(false);
+    }
+  });
+});
+
+// install-safety-nets 1.1: once in eleven leaves, the V3.9 came back running without a USB serial.
+describe('the saber running again', () => {
+  const V3_NO_SERIAL = 'USB\\VID_1209&PID_6668\\6&3026EF5A&0&2';
+  const state = (ids: string[]) => usbStateFrom(ids.map((InstanceId) => ({ InstanceId, Service: null, Problem: 0 })));
+
+  it('a board with no serial is counted apart from the ones with a serial', () => {
+    const s = state([V3_NO_SERIAL, `USB\\VID_1209&PID_6668\\${HOTE2}`]);
+    expect([s.runtimeSerials, s.runtimeNoSerial]).toEqual([[HOTE2], 1]);
+  });
+
+  it('back: its serial is running and its bootloader gone', () => {
+    expect(backAfter(state([`USB\\VID_1209&PID_6668\\${V3}`]), V3, 0)).toBe(true);
+    expect(backAfter(state([`USB\\VID_0483&PID_DF11\\${V3}`]), V3, 0)).toBe(false);
+  });
+
+  it('back without its serial: a serial-less board that was not there before, with its bootloader gone', () => {
+    expect(backAfter(state([V3_NO_SERIAL]), V3, 0)).toBe(true);
+    // A serial-less board that was already running before the wait is somebody else.
+    expect(backAfter(state([V3_NO_SERIAL]), V3, 1)).toBe(false);
+    expect(backAfter(state([V3_NO_SERIAL, `USB\\VID_0483&PID_DF11\\${V3}`]), V3, 0)).toBe(false);
+  });
+
+  it('with no serial to wait for, any running board and no bootloader', () => {
+    expect(backAfter(state([V3_NO_SERIAL]), null, 0)).toBe(true);
+    expect(backAfter(state([V3_NO_SERIAL, `USB\\VID_0483&PID_DF11\\${HOTE2}`]), null, 0)).toBe(false);
   });
 });

@@ -26,6 +26,8 @@ export interface UsbState {
   /** Every board in its bootloader, and the USB serials of every board running its firmware. */
   bootloaders: BootloaderDevice[];
   runtimeSerials: string[];
+  /** Running boards that gave no USB serial (Windows made up their id). The V3.9 came back like this once in eleven leaves. */
+  runtimeNoSerial: number;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -48,19 +50,32 @@ export function usbStateFrom(list: { InstanceId: string; Service: string | null;
     bootloaderProblem: bootloaders[0]?.problem ?? null,
     bootloaders,
     runtimeSerials: runs.map((d) => serialFromInstanceId(d.InstanceId)).filter((s): s is string => !!s),
+    runtimeNoSerial: runs.filter((d) => !serialFromInstanceId(d.InstanceId)).length,
   };
 }
 
 export async function usbState(): Promise<UsbState> {
   if (process.platform !== 'win32') {
     // TODO macOS/Linux: use dfu-util -l for the bootloader and the serial port list for runtime.
-    return { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: 'n/a', bootloaderProblem: null, bootloaders: [], runtimeSerials: [] };
+    return { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: 'n/a', bootloaderProblem: null, bootloaders: [], runtimeSerials: [], runtimeNoSerial: 0 };
   }
   const script = `Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match 'VID_1209&PID_6668|VID_0483&PID_DF11' } | Select-Object InstanceId, Service, Status, Problem | ConvertTo-Json`;
   const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 10000, windowsHide: true }, (err, stdout) => resolve(err ? '' : stdout)));
   let list: { InstanceId: string; Service: string | null; Status: string; Problem: number }[] = [];
   try { const parsed = JSON.parse(out || '[]'); list = Array.isArray(parsed) ? parsed : [parsed]; } catch { list = []; }
   return usbStateFrom(list);
+}
+
+/**
+ * Whether the saber with this serial is running again: its serial is back and its bootloader gone. A board may also
+ * come back without giving a serial at all (seen once on the V3.9, install-safety-nets 1.1): a serial-less running
+ * board that was not there when the wait began (`noSerialBefore`) counts too, while this saber's bootloader is gone.
+ * With no serial, any running board and no bootloader will do.
+ */
+export function backAfter(u: UsbState, serial: string | null, noSerialBefore: number): boolean {
+  if (!serial) return u.runtimePresent && !u.bootloaderPresent;
+  if (u.bootloaders.some((b) => b.serial === serial)) return false;
+  return u.runtimeSerials.includes(serial) || u.runtimeNoSerial > noSerialBefore;
 }
 
 /** The bootloaders present now that were not in `before` (serials noted before a reboot). */
@@ -147,7 +162,14 @@ export async function flashTarget(toolchainRoot: string, serial: string | null):
   return { serial, flashBytes: dev?.flashBytes ?? null, board: boardForFlash(dev?.flashBytes ?? null), found: !!dev };
 }
 
-export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string }
+/** What a flash read is: firmware for this chip, all erased (a blank or wiped board), or neither. */
+export type ImageKind = 'firmware' | 'erased' | 'unusable';
+
+/**
+ * `kind`: for a backup, what the read turned out to be. Only 'firmware' is a backup; an erased read is deleted and
+ * anything else is kept, but is never written back.
+ */
+export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string; kind?: ImageKind }
 
 /**
  * Read the whole flash of the board with this serial into a backup file. `configName` is the config the saber
@@ -166,9 +188,17 @@ export async function backupFlash(toolchainRoot: string, backupDir: string, labe
   const file = join(backupDir, `${new Date().toISOString().replace(/[:.]/g, '-')}-${label.replace(/[^A-Za-z0-9_-]/g, '_')}.bin`);
   onLine(`reading ${dev.flashBytes} bytes of flash`);
   const r = await run(dfuUtil, [...dfuDeviceArgs(dev.serial), '-a', '0', '-s', `0x08000000:${dev.flashBytes}`, '-U', file], { timeoutMs: 120000, onLine });
-  const ok = r.code === 0 && (await stat(file).then((s) => s.size > 0, () => false));
-  if (ok && configName) { try { await writeFile(`${file}.json`, JSON.stringify({ configName }), 'utf8'); } catch { /* the backup still restores; only the match after it is lost */ } }
-  return { ok, ms: r.ms, detail: ok ? `backup written (${dev.flashBytes} bytes)` : (r.stderr || r.stdout).slice(-800), file };
+  if (r.code !== 0) return { ok: false, ms: r.ms, detail: (r.stderr || r.stdout).slice(-800), file };
+  // A backup counts only when it is the board's whole flash and reads back as firmware (FW7).
+  const kind = await imageKind(file, dev.flashBytes);
+  if (kind === 'erased') {
+    // A blank or wiped board: nothing to lose, and nothing worth keeping (putting it back would erase the saber).
+    await rm(file, { force: true });
+    return { ok: false, ms: r.ms, detail: 'The board had no firmware on it (its flash is erased), so there was nothing to back up.', kind };
+  }
+  if (kind === 'unusable') return { ok: false, ms: r.ms, detail: 'The read was not usable firmware (it may be short, protected, or damaged).', file, kind };
+  if (configName) { try { await writeFile(`${file}.json`, JSON.stringify({ configName }), 'utf8'); } catch { /* the backup still restores; only the match after it is lost */ } }
+  return { ok: true, ms: r.ms, detail: `backup written (${dev.flashBytes} bytes)`, file, kind };
 }
 
 /** Write a firmware image to the board with this serial (see dfuDeviceArgs). */
@@ -222,6 +252,18 @@ async function looksLikeFirmware(path: string): Promise<boolean> {
   } catch { return false; }
 }
 
+/**
+ * What a flash image is. Firmware: exactly `flashBytes` long and starting like firmware. Erased: exactly that long
+ * and every byte 0xFF. Anything else, including a short read, is unusable.
+ */
+export async function imageKind(path: string, flashBytes: number): Promise<ImageKind> {
+  let buf: Buffer;
+  try { buf = await readFile(path); } catch { return 'unusable'; }
+  if (buf.length !== flashBytes) return 'unusable';
+  if (buf.every((b) => b === 0xff)) return 'erased';
+  return (await looksLikeFirmware(path)) ? 'firmware' : 'unusable';
+}
+
 /** Backups taken before installs, newest first. File names carry the time and a label. */
 export async function listBackups(backupDir: string): Promise<BackupInfo[]> {
   let names: string[] = [];
@@ -232,7 +274,7 @@ export async function listBackups(backupDir: string): Promise<BackupInfo[]> {
     const path = join(backupDir, file);
     const st = await stat(path).catch(() => null);
     if (!st) continue;
-    out.push({ file, at: m ? `${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z` : st.mtime.toISOString(), label: m ? m[6].replace(/_/g, ' ') : file, bytes: st.size, valid: await looksLikeFirmware(path), configName: await backupConfig(path) });
+    out.push({ file, at: m ? `${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z` : st.mtime.toISOString(), label: m ? m[6].replace(/_/g, ' ') : file, bytes: st.size, valid: (st.size === 262144 || st.size === 524288) && (await imageKind(path, st.size)) === 'firmware', configName: await backupConfig(path) });
   }
   return out.sort((a, b) => b.at.localeCompare(a.at));
 }

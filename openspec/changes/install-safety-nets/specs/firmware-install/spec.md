@@ -113,7 +113,7 @@ After the backup, the installer SHALL write the firmware. The write counts as su
 
 As soon as the write succeeds, the saber's record SHALL hold the firmware record and model of that build, before the saber has come back. So a slow return, or none, never leaves the record describing the old firmware.
 
-The installer SHALL then wait a bounded time for the saber to return in normal mode, and reconnect to that saber on its own, not another board plugged in beside it.
+The installer SHALL then wait a bounded time for the saber to return in normal mode, and reconnect to that saber on its own, not another board plugged in beside it. A board that comes back running without giving its USB serial, while this saber's bootloader is gone, SHALL count as this saber coming back. A saber that is back but not answering yet SHALL be read once more before the page says it could not be checked.
 
 It SHALL then check the install: read the version and config name the saber reports, and compare them with the build (the build's config name, and the Hiltwright version stamp). Only when they match SHALL the page say "Installed", with what the saber reports and the backup's location. On a mismatch, the page SHALL say the firmware was written, what the saber reports instead, and that the backup can be put back. When the saber cannot be read, it SHALL say the firmware was written but could not be checked.
 
@@ -137,6 +137,11 @@ If the saber's record cannot be saved after a successful write, the page SHALL s
 - **WHEN** the firmware was written but the saber does not reappear within the wait
 - **THEN** the page says it was written and asks the owner to unplug, replug and connect
 - **AND** the saber's record already holds the new firmware record
+
+#### Scenario: The saber comes back without its USB serial
+- **WHEN** after the write, the board comes back running but gives no USB serial
+- **THEN** the install counts it as this saber coming back, reconnects, and checks what it reports, rather than saying it has not reappeared
+- *Needs a real board (V3); seen twice in twenty returns on the V3.9.*
 
 #### Scenario: The saber reports something else
 - **WHEN** the saber comes back reporting a different config name from the build's

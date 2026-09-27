@@ -20,10 +20,24 @@ const jobFor = (over: Partial<InstallJob> = {}): InstallJob => ({
 
 /** The boards plugged in: serial → flash size, and whether each is running or in its bootloader. */
 type Board = { serial: string | null; flash: number; mode: 'run' | 'boot' };
-type Over = { backup?: { ok: boolean; detail?: string }; write?: () => Promise<{ ok: boolean; detail: string }>; runtime?: boolean; confirm?: boolean; connectedSerial?: string; noDriver?: boolean; reached?: SaberRecord; leaveFails?: boolean };
+type Over = {
+  backup?: { ok: boolean; detail?: string; kind?: 'firmware' | 'erased' | 'unusable'; file?: string }; write?: () => Promise<{ ok: boolean; detail: string }>; runtime?: boolean; confirm?: boolean;
+  connectedSerial?: string; noDriver?: boolean; reached?: SaberRecord | null; leaveFails?: boolean;
+  /** What the saber reports when it is read after the reconnect. */
+  comesBackAs?: { config: string | null; version: string | null };
+  recordFails?: string;
+};
+/** The saber read after a reconnect: the record for that serial, just seen, reporting what `comesBackAs` says. */
+const readBack = (serial: string | null | undefined, over: Over): SaberRecord | null => {
+  const rec = serial === V3 ? v3Rec : serial === HOTE2 || serial == null ? saberRec() : null;
+  if (!rec) return null;
+  const said = over.comesBackAs ?? { config: rec.id === 's3' ? 'config/hiltwright_v3.h' : 'config/hiltwright_hote2.h', version: 'v8.10 hiltwright abc' };
+  return { ...rec, lastSeen: new Date(Date.now() + 1000).toISOString(), identity: { ...rec.identity, configName: said.config, version: said.version } } as SaberRecord;
+};
 function world(boards: Board[], over: Over = {}) {
   const calls: string[] = [];
   const reports: InstallReport[] = [];
+  let reached: SaberRecord | null = null;
   const connectedSerial = over.connectedSerial ?? HOTE2;
   const usb = (): UsbState => {
     const boots = boards.filter((b) => b.mode === 'boot');
@@ -31,6 +45,7 @@ function world(boards: Board[], over: Over = {}) {
       runtimePresent: boards.some((b) => b.mode === 'run'), bootloaderPresent: boots.length > 0, bootloaderDriver: boots.length ? 'WinUSB' : null, bootloaderProblem: null,
       bootloaders: boots.map((b) => ({ serial: b.serial, driver: over.noDriver ? null : 'WinUSB', problem: over.noDriver ? 28 : 0 })),
       runtimeSerials: boards.filter((b) => b.mode === 'run' && b.serial).map((b) => b.serial!),
+      runtimeNoSerial: boards.filter((b) => b.mode === 'run' && !b.serial).length,
     };
   };
   const deps: InstallDeps = {
@@ -54,7 +69,7 @@ function world(boards: Board[], over: Over = {}) {
         for (const b of boards) if (b.mode === 'boot' && b.serial === serial) b.mode = 'run';
         return { ok: true, ms: 1, detail: 'left the bootloader' };
       }),
-      backup: vi.fn(async (_id: string, _l: string, _c?: string | null, serial?: string | null) => { calls.push(`backup ${serial}`); return { ok: true, ms: 1, detail: 'backup written', file: 'C:\\backups\\before-install.bin', ...over.backup }; }),
+      backup: vi.fn(async (_id: string, _l: string, _c?: string | null, serial?: string | null) => { calls.push(`backup ${serial}`); return { ok: true, ms: 1, detail: 'backup written', file: 'C:\\backups\\before-install.bin', kind: 'firmware' as const, ...over.backup }; }),
       write: vi.fn(async (_p: string, serial?: string | null) => {
         calls.push(`write ${serial}`);
         const r = over.write ? { ms: 1, ...(await over.write()) } : { ok: true, ms: 1, detail: 'wrote' };
@@ -72,11 +87,11 @@ function world(boards: Board[], over: Over = {}) {
       info: null,
       send: vi.fn(),
       rebootToBootloader: vi.fn(async () => { calls.push('reboot'); for (const b of boards) if (b.serial === connectedSerial) b.mode = 'boot'; return true; }),
-      connect: vi.fn(async (_i?: boolean, o?: { serial?: string | null }) => { calls.push(`connect ${o?.serial ?? null}`); }),
+      connect: vi.fn(async (_i?: boolean, o?: { serial?: string | null }) => { calls.push(`connect ${o?.serial ?? null}`); reached = over.reached !== undefined ? over.reached : readBack(o?.serial, over); }),
       expectAfterInstall: vi.fn(),
       reachNext: vi.fn(async (serial: string | null) => { calls.push(`reach ${serial}`); return true; }),
-      currentSaber: vi.fn(() => over.reached ?? null),
-      updateSaber: vi.fn(async () => { calls.push('updateSaber'); }),
+      currentSaber: vi.fn(() => reached),
+      updateSaber: vi.fn(async () => { calls.push('updateSaber'); if (over.recordFails) throw new Error(over.recordFails); }),
     } as unknown as InstallDeps['board'],
     report: (r) => reports.push(r),
     sleep: async () => undefined,
@@ -84,17 +99,19 @@ function world(boards: Board[], over: Over = {}) {
   /** What the page shows at the end: the last step and note reported. */
   const shown = () => ({ step: [...reports].reverse().find((r) => r.step)?.step, note: [...reports].reverse().find((r) => r.note !== undefined)?.note ?? null });
   const touched = () => calls.filter((c) => /^(backup|write|restore)/.test(c));
-  return { deps, calls, shown, touched, boards };
+  /** The notes shown under the main one, from the last report that set them. */
+  const extra = () => [...reports].reverse().find((r) => r.notes !== undefined)?.notes ?? [];
+  return { deps, calls, shown, touched, boards, extra };
 }
 const hote2 = (mode: Board['mode'] = 'run'): Board => ({ serial: HOTE2, flash: 262144, mode });
 const theV3 = (mode: Board['mode'] = 'run'): Board => ({ serial: V3, flash: 524288, mode });
 
 describe('firmware-install audit', () => {
-  it('a normal install: reboot, check, backup, write, wait, reconnect, record, and "Installed" with the backup location', async () => {
+  it('a normal install: reboot, check, backup, write, record, wait, reconnect, check, and "Installed and checked" with the backup location', async () => {
     const f = world([hote2()]);
     await installSequence(f.deps, jobFor());
-    expect(f.calls).toEqual(['usb', 'reboot', 'waitForBootloader', `target ${HOTE2}`, `note s1 ${HOTE2} 262144`, `backup ${HOTE2}`, `reach ${HOTE2}`, `write ${HOTE2}`, `waitForRuntime ${HOTE2}`, `connect ${HOTE2}`, 'updateSaber']);
-    expect(f.shown()).toEqual({ step: 'done', note: { tone: 'green', text: 'Installed. Backup of the previous firmware: C:\\backups\\before-install.bin' } });
+    expect(f.calls).toEqual(['usb', 'reboot', 'waitForBootloader', `target ${HOTE2}`, `note s1 ${HOTE2} 262144`, `backup ${HOTE2}`, `reach ${HOTE2}`, `write ${HOTE2}`, 'updateSaber', `waitForRuntime ${HOTE2}`, `connect ${HOTE2}`]);
+    expect(f.shown()).toEqual({ step: 'done', note: { tone: 'green', text: 'Installed and checked: the saber reports config/hiltwright_hote2.h, v8.10 hiltwright abc. Backup of the previous firmware: C:\\backups\\before-install.bin' } });
     expect(f.deps.board.expectAfterInstall).toHaveBeenCalledWith('s1', 'config/hiltwright_hote2.h');
   });
 
@@ -111,8 +128,8 @@ describe('firmware-install audit', () => {
     await installSequence(f.deps, jobFor());
     expect(f.calls.some((c) => c.startsWith('connect'))).toBe(false);
     expect(f.shown().note).toEqual({ tone: 'amber', text: 'The firmware was written but the saber has not reappeared yet. Unplug and replug it, then press Connect.' });
-    // Today the saber's record is not updated when it is slow to return; install-safety-nets FW9 changes that.
-    expect(f.calls).not.toContain('updateSaber');
+    // FW9 (install-safety-nets): the record already holds the new firmware, written before the wait.
+    expect(f.calls.indexOf('updateSaber')).toBeLessThan(f.calls.indexOf(`waitForRuntime ${HOTE2}`));
   });
 
   it('5.13 an unexpected error: the page shows "Stopped" with the error, the BOOT/RESET steps and the backup reminder', async () => {
@@ -137,7 +154,8 @@ describe('the board type (design D3)', () => {
     const f = world([theV3()], { connectedSerial: V3 });
     await installSequence(f.deps, jobFor({ saber: v3Rec }));
     expect(f.touched()).toEqual([]);
-    expect(f.shown().note?.text).toBe('This saber is a Proffieboard V3, but this firmware was built for a V2. Nothing was written. Choose V3 on the Wiring page and build again. To bring the saber back to its firmware, press RESET on the board, or unplug it and plug it back in.');
+    expect(f.shown().note?.text).toBe('This saber is a Proffieboard V3, but this firmware was built for a V2. Nothing was written. Choose V3 on the Wiring page and build again. The saber is back on the firmware it had.');
+    expect(f.calls).toContain(`leave ${V3}`);
     // The board is learnt all the same, so the Wiring page shows the saber's real board.
     expect(f.calls).toContain(`note s3 ${V3} 524288`);
   });
@@ -276,7 +294,7 @@ describe('reconnecting to the installed saber (design D6, HW-2026-09-25c)', () =
   it('when another saber answers the reconnect, the page says which', async () => {
     const f = world([theV3(), hote2()], { reached: v3Rec });
     await installSequence(f.deps, jobFor());
-    expect(f.shown()).toEqual({ step: 'done', note: { tone: 'amber', text: 'Installed on hote2. Reconnected to The V3, which is also plugged in. Backup of the previous firmware: C:\\backups\\before-install.bin' } });
+    expect(f.shown()).toEqual({ step: 'done', note: { tone: 'amber', text: 'Installed on hote2. Reconnected to The V3, which is also plugged in, so the install was not checked. Backup of the previous firmware: C:\\backups\\before-install.bin' } });
   });
 
   it('a board the owner vouched for is not waited on by serial: any board coming back will do', async () => {
@@ -310,7 +328,7 @@ describe('putting a backup back', () => {
   it("the saber's own backup goes back to its own board, and it reconnects to it", async () => {
     const f = world([theV3(), hote2()]);
     await restoreSequence(f.deps, saberRec(), backup(262144), true);
-    expect(f.touched()).toEqual([`restore ${HOTE2}`]);
+    expect(f.touched()).toEqual([`backup ${HOTE2}`, `restore ${HOTE2}`]);
     expect(f.calls).toContain(`connect ${HOTE2}`);
     expect(f.shown().step).toBe('done');
   });
@@ -363,5 +381,149 @@ describe('checking the board', () => {
     const r = await checkBoard(f.deps, v3Rec);
     expect(r).toEqual({ tone: 'amber', text: 'This saber is a Proffieboard V3. Hiltwright could not send it back to its firmware. To bring the saber back to its firmware, press RESET on the board, or unplug it and plug it back in.', board: 'V3' });
     expect(f.calls.some((c) => c.startsWith('connect'))).toBe(false);
+  });
+});
+
+// install-safety-nets design D2 (FW29): a stop before the write sends this saber's board back to its firmware.
+describe('stopping before the write', () => {
+  it('a failed backup: nothing written, the saber sent back and reconnected, and said so', async () => {
+    const f = world([hote2()], { backup: { ok: false, detail: 'dfu-util: Cannot open DFU device', kind: undefined } });
+    await installSequence(f.deps, jobFor());
+    expect(f.deps.flash.write).not.toHaveBeenCalled();
+    expect(f.calls.slice(-4)).toEqual([`leave ${HOTE2}`, `reach ${HOTE2}`, `waitForRuntime ${HOTE2}`, `connect ${HOTE2}`]);
+    expect(f.shown().note?.text).toBe('Backup failed, so nothing was written. dfu-util: Cannot open DFU device The saber is back on the firmware it had.');
+  });
+
+  it('when the board cannot be sent back, the RESET words', async () => {
+    const f = world([hote2()], { backup: { ok: false, detail: 'x' }, leaveFails: true });
+    await installSequence(f.deps, jobFor());
+    expect(f.shown().note?.text).toMatch(/To bring the saber back to its firmware, press RESET on the board, or unplug it and plug it back in\.$/);
+  });
+
+  it('a failed write leaves the board in its bootloader, naming the backup', async () => {
+    const f = world([hote2()], { write: async () => ({ ok: false, detail: 'dfu-util: Error during download' }) });
+    await installSequence(f.deps, jobFor());
+    expect(f.calls.some((c) => c.startsWith('leave'))).toBe(false);
+    expect(f.shown().note?.text).toMatch(/^Writing failed\. The backup from just now is at C:.+before-install\.bin\./);
+    expect(f.calls).not.toContain('updateSaber');
+  });
+
+  it("another saber's board, or two bootloaders, are left alone", async () => {
+    const a = world([theV3('boot')]);
+    await installSequence(a.deps, jobFor({ connected: false }));
+    const b = world([{ serial: 'A1', flash: 262144, mode: 'boot' }, { serial: 'B2', flash: 262144, mode: 'boot' }]);
+    await installSequence(b.deps, jobFor({ connected: false }));
+    for (const f of [a, b]) expect(f.calls.some((c) => c.startsWith('leave'))).toBe(false);
+  });
+
+  it('a saber that ignores the reboot and keeps running: said so, nothing touched', async () => {
+    const f = world([hote2()]);
+    (f.deps.board.rebootToBootloader as ReturnType<typeof vi.fn>).mockImplementation(async () => true);
+    await installSequence(f.deps, jobFor());
+    expect(f.touched()).toEqual([]);
+    expect(f.shown().note?.text).toBe('The saber did not restart into bootloader mode; it is still running its firmware. Hold BOOT, tap RESET, release BOOT, then press Install again.');
+  });
+});
+
+// Design D1, D4 (FW7, FW8): backups that count, in the install and before a restore.
+describe('backups in the sequences', () => {
+  it('a blank board (an erased read): the install goes on, and says there was nothing to back up', async () => {
+    const f = world([hote2()], { backup: { ok: false, kind: 'erased', detail: 'erased', file: undefined } });
+    await installSequence(f.deps, jobFor());
+    expect(f.touched()).toEqual([`backup ${HOTE2}`, `write ${HOTE2}`]);
+    expect(f.shown()).toEqual({ step: 'done', note: { tone: 'green', text: 'Installed and checked: the saber reports config/hiltwright_hote2.h, v8.10 hiltwright abc.' } });
+    expect(f.extra()).toEqual([{ tone: 'amber', text: 'The board had no firmware on it, so there was nothing to back up.' }]);
+  });
+
+  it('an unusable read: stopped with nothing written, and the saber sent back', async () => {
+    const f = world([hote2()], { backup: { ok: false, kind: 'unusable', detail: 'The read was not usable firmware (it may be short, protected, or damaged).' } });
+    await installSequence(f.deps, jobFor());
+    expect(f.deps.flash.write).not.toHaveBeenCalled();
+    expect(f.calls).toContain(`leave ${HOTE2}`);
+    expect(f.shown().note?.text).toMatch(/^Backup failed, so nothing was written\. The read was not usable firmware/);
+  });
+
+  it('a restore backs up what is on the board first, labelled before-restore', async () => {
+    const f = world([hote2()]);
+    await restoreSequence(f.deps, saberRec(), { file: 'b.bin', at: '2026-09-27T10:00:00.000Z', label: 'before install', bytes: 262144, valid: true, configName: 'config/hiltwright_hote2.h' }, true);
+    expect(f.deps.flash.backup).toHaveBeenCalledWith('s1', 'before-restore', null, HOTE2);
+    expect(f.touched()).toEqual([`backup ${HOTE2}`, `restore ${HOTE2}`]);
+  });
+
+  it('a restore whose backup of the board fails: nothing put back, the saber sent back', async () => {
+    const f = world([hote2()], { backup: { ok: false, detail: 'dfu-util: error' } });
+    await restoreSequence(f.deps, saberRec(), { file: 'b.bin', at: '2026-09-27T10:00:00.000Z', label: 'x', bytes: 262144, valid: true, configName: null }, true);
+    expect(f.deps.flash.restore).not.toHaveBeenCalled();
+    expect(f.shown().note?.text).toBe('The firmware on the board could not be backed up, so the backup was not put back. dfu-util: error The saber is back on the firmware it had.');
+  });
+
+  it('a restore from a board already in its bootloader (after the driver step) is a restore, not an install', async () => {
+    const f = world([hote2('boot')]);
+    await restoreSequence(f.deps, saberRec(), { file: 'b.bin', at: '2026-09-27T10:00:00.000Z', label: 'x', bytes: 262144, valid: true, configName: null }, false);
+    expect(f.calls).not.toContain('reboot');
+    expect(f.touched()).toEqual([`backup ${HOTE2}`, `restore ${HOTE2}`]);
+    expect(f.deps.flash.write).not.toHaveBeenCalled();
+  });
+});
+
+// Design D3 (FW9, FW12, HW-2026-09-24c): the record at the write, the check after the return.
+describe('record and check', () => {
+  const restoreOf = (configName: string | null): BackupInfo => ({ file: 'b.bin', at: '2026-09-27T10:00:00.000Z', label: 'x', bytes: 262144, valid: true, configName });
+
+  it("a restore clears the firmware record before waiting for the saber", async () => {
+    const f = world([hote2()], { runtime: false });
+    await restoreSequence(f.deps, saberRec(), restoreOf(null), true);
+    expect(f.deps.board.updateSaber).toHaveBeenCalledWith({ firmware: null }, 's1');
+    expect(f.calls.indexOf('updateSaber')).toBeLessThan(f.calls.indexOf(`waitForRuntime ${HOTE2}`));
+  });
+
+  it('the record cannot be saved: still installed, with the problem as a separate warning', async () => {
+    const f = world([hote2()], { recordFails: "Error invoking remote method 'library:update': Error: disk full, could not write library.json" });
+    await installSequence(f.deps, jobFor());
+    expect(f.shown().step).toBe('done');
+    expect(f.shown().note?.tone).toBe('green');
+    expect(f.extra()).toEqual([{ tone: 'amber', text: 'Installed, but Hiltwright could not update its record of the saber: disk full, could not write library.json' }]);
+  });
+
+  it('the saber comes back reporting another config: written, but said plainly, with the backup to hand', async () => {
+    const f = world([hote2()], { comesBackAs: { config: 'config/default_proffieboard_config.h', version: 'v8.10 hiltwright abc' } });
+    await installSequence(f.deps, jobFor());
+    expect(f.shown().note).toEqual({ tone: 'amber', text: 'The firmware was written, but the saber reports config/default_proffieboard_config.h, v8.10 hiltwright abc instead of config/hiltwright_hote2.h, v8.10 hiltwright. If it misbehaves, put the backup from just now back from the Backups tab. Backup of the previous firmware: C:\\backups\\before-install.bin' });
+  });
+
+  it('a version without the Hiltwright stamp is a mismatch too', async () => {
+    const f = world([hote2()], { comesBackAs: { config: 'config/hiltwright_hote2.h', version: 'v7.14' } });
+    await installSequence(f.deps, jobFor());
+    expect(f.shown().note?.tone).toBe('amber');
+  });
+
+  it('the saber cannot be read after the reconnect: written, not checked', async () => {
+    const f = world([hote2()], { reached: null });
+    await installSequence(f.deps, jobFor());
+    expect(f.shown().note?.text).toMatch(/^The firmware was written, but the saber could not be read to check it\./);
+  });
+
+  it('a saber slow to answer after coming back is read again once, 10 s later', async () => {
+    const f = world([hote2()]);
+    (f.deps.board.connect as ReturnType<typeof vi.fn>).mockImplementationOnce(async (_i?: boolean, o?: { serial?: string | null }) => { f.calls.push(`connect ${o?.serial ?? null}`); });
+    await installSequence(f.deps, jobFor());
+    expect(f.calls.filter((c) => c.startsWith('connect'))).toHaveLength(2);
+    expect(f.shown().note?.text).toMatch(/^Installed and checked:/);
+  });
+
+  it('a reading from before the write does not count as the check', async () => {
+    const stale = { ...saberRec(), lastSeen: '2026-01-01T00:00:00.000Z', identity: { usbSerial: HOTE2, configName: 'config/hiltwright_hote2.h', version: 'v8.10 hiltwright abc' } } as unknown as SaberRecord;
+    const f = world([hote2()], { reached: stale });
+    await installSequence(f.deps, jobFor());
+    expect(f.shown().note?.text).toMatch(/could not be read to check it/);
+  });
+
+  it('a restore is checked against the config its backup recorded', async () => {
+    const ok = world([hote2()]);
+    await restoreSequence(ok.deps, saberRec(), restoreOf('config/hiltwright_hote2.h'), true);
+    expect(ok.shown().note?.text).toMatch(/^Restored the backup from .+, and checked: the saber reports config\/hiltwright_hote2\.h/);
+    const off = world([hote2()], { comesBackAs: { config: 'config/other.h', version: 'x' } });
+    await restoreSequence(off.deps, saberRec(), restoreOf('config/hiltwright_hote2.h'), true);
+    expect(off.shown().note?.tone).toBe('amber');
   });
 });

@@ -2,16 +2,28 @@
 
 ## 1. Reboot times
 
-- [ ] 1.1 Measure the reboot into the bootloader on the V2.2 hote2 and the V3.9 (design D6), before setting the wait.
+- [x] 1.1 Measure the reboot into the bootloader on the V2.2 hote2 and the V3.9 (design D6), before setting the wait.
   - **Before:** check which boards are connected (PnP `VID_1209&PID_6668`), and ask the owner before rebooting any board.
   - **For each board, twenty times:** send `RebootDFU`, time until its bootloader is present in PnP, then leave with `dfu-util -S <serial> -a 0 -s 0x08000000:4:leave -U <temp>`, and time until it runs again. Nothing is written.
   - **Afterwards:** leave both on their firmware, and confirm with `version`.
 
   Verify: the minimum, median and maximum for each board are recorded in design.md's Context, and `BOOTLOADER_WAIT_MS` is chosen from them in D6.
+  - **Result, 2026-09-27.** The owner allowed the reboots, and plugged hote2 in beside the V3. There were no writes, and no app running.
+    - **Reboot times:** hote2 reached its bootloader in 0.66–1.43 s (median 1.02). The V3 took 0.65–16.0 s (median 0.9), and its 16 s was its first round.
+    - **Back running:** 1.0–2.4 s on both.
+    - **Answering `version`:** a median of about 3 s. hote2 twice took 22–24 s.
+    - **No USB serial:** twice in twenty, the V3 came back running with no USB serial (a Windows-made id on a new COM port). A replug restored it, and the owner replugged it once midway.
+
+    Recorded in design.md's Context, with these changes:
+    - `BOOTLOADER_WAIT_MS` is 45 s (D6: the rule gives 35 s, raised to cover the owner's 30 s+ report).
+    - The runtime wait stays at 25 s.
+    - The check after an install gets one more try 10 s later.
+    - **Added at the owner's choice:** D8, a saber coming back without its serial counts as back. It is `runtimeNoSerial` with `backAfter` in main, plus a spec scenario. It is tested in `flash.test.ts` using the V3's real instance id.
+    - Both boards were left running, answering `version`. The V3 came back without its serial on the last round, and needs replugging before 5.3.
 
 ## 2. Backups that count
 
-- [ ] 2.1 In `apps/desktop/src/main/flash.ts`:
+- [x] 2.1 In `apps/desktop/src/main/flash.ts`:
   - add `imageKind(path, flashBytes)`
   - `backupFlash` returns `kind`; it is `ok` only for `'firmware'`, and deletes an erased read
   - `listBackups` marks `valid` from `imageKind` with the file's size (FST-1)
@@ -20,10 +32,24 @@
   - `apps/desktop/test/flash.test.ts`: `imageKind` for a firmware, an erased, a short and a garbage image; `backupFlash` for each, with the erased file gone
   - in `backups.test.ts`, the FST-1 expected failure becomes a normal test
   - `npm test`
+  - **Result, 2026-09-27.**
+    - **`imageKind(path, flashBytes)`** in `flash.ts` returns:
+      - `'firmware'`: exactly the flash size, and starts like firmware
+      - `'erased'`: exactly the flash size, all `0xFF`
+      - `'unusable'`: anything else, or unreadable
+    - **`backupFlash`** returns `kind`, and is `ok` only for firmware. An erased read deletes its file, and says "The board had no firmware on it (its flash is erased), so there was nothing to back up." An unusable read keeps its file, and says "The read was not usable firmware (it may be short, protected, or damaged)."
+    - **`listBackups`** marks `valid` only for 256 KB or 512 KB files that read as firmware (FST-1).
+    - **`FlashStepResult.kind`** is added in `shared/api.ts`.
+
+    Verified:
+    - The fake dfu-util in `apps/desktop/test/flash.test.ts` now returns an image of the size asked for.
+    - Four new tests pass: the kinds (including the other board's size, and a missing file); firmware kept with its config; erased not kept; garbage and short kept but listed unusable.
+    - FST-1 in `backups.test.ts` is a normal test and passes.
+    - Desktop tests pass.
 
 ## 3. The sequences
 
-- [ ] 3.1 In `installFlow.ts`:
+- [x] 3.1 In `installFlow.ts`:
   - `stopInBootloader` sends this saber's board back to its firmware and reports the stop (design D2). Use it for every stop before the write, with this saber's board in its bootloader: an unknown size, the wrong board, a failed or unusable backup, and restore's size mismatch or failed backup.
   - Report a saber that ignored the reboot, when its running serial is still present.
   - Set the bootloader wait from 1.1 (`BOOTLOADER_WAIT_MS`).
@@ -33,13 +59,42 @@
   - no leave after a failed write, for another saber's board, or with two bootloaders
   - the RESET words when the leave fails
   - the ignored reboot
-- [ ] 3.2 Backups in the sequences (design D1, D4):
+  - **Result, 2026-09-27.** `installFlow.ts`:
+    - **`stopInBootloader`:** leaves the bootloader, waits for this saber, and reconnects. It then reports the stop with "The saber is back on the firmware it had.", or with the RESET words if that failed. It is used for:
+      - an unknown size and the wrong board (in `checkTarget`)
+      - a failed or unusable backup, in the install and before a restore
+      - restore's size mismatch
+    - **Not used:** after a failed write, for another saber's board, or with two bootloaders.
+    - **An ignored reboot:** when no bootloader appears and this saber's running serial is still present, the page says `IGNORED_REBOOT`.
+    - **The waits:** `BOOTLOADER_WAIT_MS` (45 s, from 1.1) is used by install, restore and `checkBoard`, and `RUNTIME_WAIT_MS` (25 s) by every return wait.
+    - **The words** are in `shared/boards.ts`.
+
+    Verified by new tests in `installFlow.test.ts`:
+    - a failed backup: leave, hold, wait, reconnect, and the words
+    - the RESET words when the leave fails
+    - no leave after a failed write
+    - another saber's board and two bootloaders left alone
+    - the ignored reboot
+
+    The V2-on-V3 test now expects the leave and "back on the firmware".
+- [x] 3.2 Backups in the sequences (design D1, D4):
   - an erased read goes on, with the note, and an unusable one stops
   - `restoreSequence` backs up first (`'before-restore'`)
   - `restoreFromBootloader` resumes a restore after the driver step
 
   Verify in `installFlow.test.ts`: erased goes on; unusable stops, with a leave; the restore's backup comes before its write; the restore after the driver is a restore, not an install.
-- [ ] 3.3 Record and check (design D3):
+  - **Result, 2026-09-27.**
+    - **`takeBackup`:** a firmware read is the backup. An erased read goes on, with the note "The board had no firmware on it, so there was nothing to back up." Anything else stops through `stopInBootloader`.
+    - **`restoreSequence`:** backs up first (`'before-restore'`, with the saber's reported config), and stops, with a leave, if that backup fails.
+    - **With `connected: false`,** it restores from a board already in its bootloader. That is what the driver step resumes (4.1).
+
+    Verified by new tests in `installFlow.test.ts`:
+    - erased goes on, with no backup named and the note
+    - unusable stops, with a leave
+    - the restore's backup, with its label, comes before its write
+    - a failed pre-restore backup puts nothing back
+    - a restore from a board in its bootloader is a restore, with no write
+- [x] 3.3 Record and check (design D3):
   - the record is updated right after a successful write or restore, and a failure to save it becomes a separate amber note
   - after the reconnect, the version and config name are compared with the build ("Installed and checked", a mismatch, nothing read)
   - `InstallReport.notes` carries the second note
@@ -49,6 +104,27 @@
   - the restore's clear is written before its wait
   - a record failure still says installed, with the warning
   - match, mismatch (another config), and nothing read
+  - **Result, 2026-09-27.**
+    - **The record:**
+      - It is updated right after a successful write: the model and firmware record, with the staged mark cleared.
+      - After a restore, it is cleared right after the write.
+      - A failure to save it becomes a separate amber note ("Installed, but Hiltwright could not update its record of the saber: …"), carried in `InstallReport.notes`, and the install still ends "done".
+    - **The check:** `checkBack` compares the saber read after the reconnect with the build. It counts only a reading whose `lastSeen` is after the write, and compares the config name and the `<os> hiltwright` stamp:
+      - a match reads "Installed and checked: the saber reports …"
+      - a mismatch is amber, with what it reports and the backup
+      - nothing read is amber, "could not be read to check it"
+      - a restore compares the backup's recorded config
+    - **One more try:** a failed reading is retried once after 10 s (from 1.1).
+
+    Verified by new tests in `installFlow.test.ts`:
+    - the restore clears before its wait
+    - a record failure is a separate warning, with the IPC prefix stripped
+    - a mismatched config, and a missing stamp
+    - nothing read, and a stale reading ignored
+    - the retry succeeding
+    - the restore check, matching and mismatched
+
+    The audit tests expect the record before the wait, and "Installed and checked". 52 tests pass in the file.
 
 ## 4. The page and main
 

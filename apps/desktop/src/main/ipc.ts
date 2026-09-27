@@ -24,7 +24,7 @@ import { cleanFirmware, hexMap } from './firmwareRecord';
 import { insideFolder } from './paths';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
-import { backupFlash, describeBootloader, flashTarget, leaveBootloader, listBackups, newBootloaders, restoreBackup, usbState, waitFor, writeFirmware, type UsbState } from './flash';
+import { backAfter, backupFlash, describeBootloader, flashTarget, leaveBootloader, listBackups, newBootloaders, restoreBackup, usbState, waitFor, writeFirmware, type UsbState } from './flash';
 import { logged } from './ipcLog';
 import { JsonStore, storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
@@ -433,8 +433,8 @@ export function registerIpc(): void {
   // With a serial, wait for that saber: running again, and its bootloader gone. Another board may stay in its bootloader.
   handle('flash:waitForRuntime', async (_e, timeoutMs: unknown, serial: unknown) => {
     const s = serialArg(serial);
-    const back = (u: UsbState) => (s ? u.runtimeSerials.includes(s) && !u.bootloaders.some((b) => b.serial === s) : u.runtimePresent && !u.bootloaderPresent);
-    return result('waitForRuntime')(!!(await waitFor(back, Math.min(Number(timeoutMs) || 20000, 60000), (l) => emit('flash', l))));
+    const noSerialBefore = (await usbState()).runtimeNoSerial;
+    return result('waitForRuntime')(!!(await waitFor((u: UsbState) => backAfter(u, s, noSerialBefore), Math.min(Number(timeoutMs) || 20000, 60000), (l) => emit('flash', l))));
   });
 
   // Save diagnostics: compose the file from what main knows and the page's snapshot, write it, show it. Never sent.

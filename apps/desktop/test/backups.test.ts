@@ -47,9 +47,8 @@ describe('firmware-install audit', () => {
     expect(r).toEqual({ ok: false, ms: 0, detail: 'That file is not a full flash backup (256 KB or 512 KB).' });
   });
 
-  // FST-1 (install-safety-nets, beside FW7): the list checks only the first bytes, so a wrong-size read is offered as
-  // usable until the owner presses Restore. The spec lists it as not usable.
-  it.fails('5.15 a wrong-size read is listed as not a usable image', async () => {
+  // FST-1, fixed by install-safety-nets (design D1): the list checks the size as well as the first bytes.
+  it('5.15 a wrong-size read is listed as not a usable image', async () => {
     writeFileSync(join(dir, '2026-09-25T16-00-00-000Z-before-install.bin'), image().subarray(0, 100 * 1024));
     const [b] = await listBackups(dir);
     expect(b.valid).toBe(false);

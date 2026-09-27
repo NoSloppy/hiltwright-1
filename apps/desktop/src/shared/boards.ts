@@ -26,6 +26,15 @@ export function otherSaber(other: string, wanted: string): string {
 /** Checking the board met a bootloader Windows has no driver for: dfu-util cannot read it, nor send it back. */
 export const NO_DRIVER_FOR_CHECK = 'Windows has no driver for the bootloader yet. It is installed with the first install on Build & Install; choose the board yourself for now.';
 
+/** After a stop before anything was written: Hiltwright sent the board back to its firmware itself (FW29). */
+export const BACK_ON_FIRMWARE = 'The saber is back on the firmware it had.';
+
+/** The wait for the bootloader ended with the saber still running its firmware. */
+export const IGNORED_REBOOT = 'The saber did not restart into bootloader mode; it is still running its firmware. Hold BOOT, tap RESET, release BOOT, then press Install again.';
+
+/** The backup read was all erased: a blank or wiped board, so the install goes on (owner's decision, FW7). */
+export const NOTHING_TO_BACK_UP = 'The board had no firmware on it, so there was nothing to back up.';
+
 export const SEVERAL_BOOTLOADERS = 'More than one board is in bootloader mode. Unplug the other Proffieboards, then press Install again.';
 export const NO_BOOTLOADER = 'No board is in bootloader mode. Hold BOOT, tap RESET, release BOOT, then press Install again.';
 

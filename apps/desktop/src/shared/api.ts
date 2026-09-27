@@ -174,6 +174,8 @@ export interface UsbState {
   /** Every board in its bootloader (serial null when the device gave none), and the serials of every running board. */
   bootloaders: { serial: string | null; driver: string | null; problem: number | null }[];
   runtimeSerials: string[];
+  /** Running boards that gave no USB serial. */
+  runtimeNoSerial: number;
 }
 
 /** What one bootloader says about its board: the flash size, and the board type it means (null when unknown). */
@@ -181,7 +183,8 @@ export interface FlashTarget { serial: string | null; flashBytes: number | null;
 
 export interface BackupInfo { file: string; at: string; label: string; bytes: number; /** Starts like real firmware; anything else is refused. */ valid: boolean; /** The config the saber reported when this was taken, if known. */ configName: string | null }
 
-export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string }
+/** `kind`: for a backup, what the read turned out to be; only 'firmware' is a backup (an erased read means a blank board). */
+export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string; kind?: 'firmware' | 'erased' | 'unusable' }
 
 /** Progress lines from long-running main-process jobs. */
 export interface JobEvent { job: 'toolchain' | 'build' | 'flash'; line: string; at: number }
