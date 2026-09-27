@@ -58,9 +58,12 @@
     - **Back to V2:** with a blade moved to `blade6Pin`, switching to V2 showed "Blade 3 uses blade6Pin, which the Proffieboard V2 does not have."
 
     The scratch values were put back afterwards.
-- [ ] 3.3 Hardware check by the owner, from a development build. Verify that:
+- [x] 3.3 Hardware check by the owner, from a development build. Verify that:
   - Build & Install to V2.2 hote2 with its real wiring finishes "Installed"
   - on the V3.9, the Wiring page labels only `blade5Pin`–`blade7Pin` as "(Free)"
+  - **Result, 2026-09-27 (owner).** Passed:
+    - Build & Install to V2.2 hote2 with its real wiring finished "Installed".
+    - On the V3.9, the Wiring page's data-pin list labels only `blade5Pin`–`blade7Pin` as "(Free)".
 - [x] 3.4 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 202 core and 268 desktop tests pass (13 gated skipped), and the type check is clean in both workspaces.
 - [ ] 3.5 After archive, tick roadmap task 3.15 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
