@@ -211,7 +211,7 @@
       - Blade 1 one pixel shorter: "out of date", the note "The setup changed after this build. Build again to install it.", and Install disabled.
       - Changed back: "unchanged, reused", with Install enabled again.
 - [ ] 5.3 Hardware check by the owner, from a development build:
-  - **V3.9:** set its Wiring to V2, confirm, build, and install. The install stops at the bootloader with the V2-on-V3 words, and nothing is written. RESET brings the saber back on its old firmware. Set it back to V3.
+  - **V3.9:** set its Wiring to V2, confirm, build, and install. The install stops at the bootloader with the V2-on-V3 words, and nothing is written. RESET brings the saber back on its old firmware. Its Wiring page now shows V3, fixed, with the note that the board was corrected from V2.
   - **V2.2 hote2:** build, change a preset's style, and see Install locked as out of date. Build again and install; it finishes "Installed", and the Wiring page shows V2 chosen from the saber.
   - **Both plugged in:** install hote2. Only hote2 reboots and is written, and the app reconnects to hote2, not the V3.
   - **hote2 already in its bootloader** (BOOT+RESET), no saber connected: Install on hote2 goes on without asking. Install on the V3's record is refused, naming hote2.

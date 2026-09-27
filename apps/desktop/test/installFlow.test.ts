@@ -132,7 +132,8 @@ describe('the board type (design D3)', () => {
     await installSequence(f.deps, jobFor({ saber: v3Rec }));
     expect(f.touched()).toEqual([]);
     expect(f.shown().note?.text).toBe('This saber is a Proffieboard V3, but this firmware was built for a V2. Nothing was written. Choose V3 on the Wiring page and build again. To bring the saber back to its firmware, press RESET on the board, or unplug it and plug it back in.');
-    expect(f.calls.some((c) => c.startsWith('note'))).toBe(false);
+    // The board is learnt all the same, so the Wiring page shows the saber's real board.
+    expect(f.calls).toContain(`note s3 ${V3} 524288`);
   });
 
   it('a board Hiltwright knows is a V3 is not even rebooted for a V2 build', async () => {

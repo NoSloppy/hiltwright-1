@@ -97,6 +97,7 @@ It is written only by the install and restore sequences, when they have seen thi
 - a null board: "Hiltwright does not recognise this board (its bootloader reports N KB). Nothing was written."
 - a board different from `result.board`, which `BuildResult` gains from `model.board`: "This saber is a Proffieboard V3, but this firmware was built for a V2. Nothing was written. Choose V3 on the Wiring page and build again."
 - either refusal adds "To bring the saber back to its firmware, press RESET on the board, or unplug it and plug it back in."
+- **Changed before 5.3:** the bootloader's board is recorded before the comparison, unless the owner only vouched for the board. So a refused wrong-board install still teaches Hiltwright the board, and the Wiring page then shows it, with the "corrected" note.
 
 **The early check:** when the saber's `bootloader` record exists and its board differs from `result.board`, the same words are shown before the reboot. Nothing is touched.
 

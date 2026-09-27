@@ -103,8 +103,9 @@ async function checkTarget(deps: InstallDeps, saber: SaberRecord, target: Target
   const t = await deps.flash.target(target.serial);
   if (!t.found) { fail(deps, NO_BOOTLOADER); return null; }
   if (!t.board) { fail(deps, `${unknownBoard(t.flashBytes)} ${LEAVE_BOOTLOADER}`); return null; }
-  if (built && t.board !== built) { fail(deps, `${wrongBoard(t.board, built)} ${LEAVE_BOOTLOADER}`); return null; }
+  // Learnt even when this build is refused: the Wiring page then shows the board the saber really has.
   if (!target.asked && t.flashBytes) { try { await deps.noteBootloader(saber.id, { serial: target.serial, flashBytes: t.flashBytes }); } catch { /* the install goes on; the board is learnt next time */ } }
+  if (built && t.board !== built) { fail(deps, `${wrongBoard(t.board, built)} ${LEAVE_BOOTLOADER}`); return null; }
   return t;
 }
 
