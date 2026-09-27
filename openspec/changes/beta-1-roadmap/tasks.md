@@ -125,7 +125,7 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 
 - [x] 3.11 Deliver `firmware-side-test-coverage`: seams and tests for the flasher before it is changed; verify it is archived
 - [x] 3.12 Deliver `connection-robustness`: unplug and silence handling that installs rely on; verify it is archived
-- [ ] 3.13 Deliver `toolchain-integrity`: pinned, verified toolchain before builds are relied on; verify it is archived
+- [x] 3.13 Deliver `toolchain-integrity`: pinned, verified toolchain before builds are relied on; verify it is archived
 - [ ] 3.14 Deliver `build-correctness`; verify it is archived
 - [ ] 3.15 Deliver `wiring-validation`; verify it is archived
 - [ ] 3.16 Deliver `install-target-safety`: after 3.1, reusing the board and blade layout it adds to the firmware record; verify it is archived

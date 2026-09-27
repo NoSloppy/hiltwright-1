@@ -105,4 +105,5 @@
     Line 42's "1.6 GB" is the compiler package's own size and stays.
 - [x] 3.5 Run `npm test` and `npm run typecheck`; verify both pass.
   - **Result, 2026-09-26.** 184 core and 261 desktop tests pass (9 gated skipped), and the type check is clean in both workspaces.
-- [ ] 3.6 After archive, tick roadmap task 3.13 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 3.6 After archive, tick roadmap task 3.13 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-26.** Archived to `openspec/changes/archive/2026-09-26-toolchain-integrity`, with the toolchain spec (6 requirements, 13 scenarios) and the firmware-build spec (7 requirements, 9 scenarios) synced. Roadmap 3.13 is ticked.
