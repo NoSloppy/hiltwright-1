@@ -245,7 +245,7 @@
       - After `hiltwrightPretendBuilt(true)`, the Build step read "unchanged, reused", with Install enabled.
       - Blade 1 one pixel shorter: "out of date", the note "The setup changed after this build. Build again to install it.", and Install disabled.
       - Changed back: "unchanged, reused", with Install enabled again.
-- [ ] 5.3 Hardware check by the owner, from a development build. With both boards plugged in, the app opens the first one it may and offers no choice (F4, `board-side-polish`), so only the both-plugged-in step has both:
+- [x] 5.3 Hardware check by the owner, from a development build. With both boards plugged in, the app opens the first one it may and offers no choice (F4, `board-side-polish`), so only the both-plugged-in step has both:
   - **V3.9, plugged in alone:** set its Wiring to V2, confirm, build, and install. The install stops at the bootloader with the V2-on-V3 words, and nothing is written. RESET brings the saber back on its old firmware. Its Wiring page now shows V3, fixed, with the note that the board was corrected from V2.
   - **V2.2 hote2, alone or with the V3:** build, change a preset's style, and see Install locked as out of date. Build again and install; it finishes "Installed", and the Wiring page shows V2 chosen from the saber.
   - **Both plugged in:** install hote2. Only hote2 reboots and is written, and the app reconnects to hote2, not the V3.
@@ -259,4 +259,18 @@
       - back to 132: "unchanged, reused", with Install enabled
     - Step 2 to be rechecked by the owner.
   - **Check the board (4.2):** with the V3 plugged in alone, on a data folder where its board is not known, "Check the board" brings it back on its firmware within seconds, and the Wiring page shows V3, fixed. Needs the owner's go-ahead to reboot it, or the owner runs it.
+  - **Result, 2026-09-27, final.** Passed.
+    - **Owner:** step 2 was rechecked after the fix and passed. Steps 1, 3 and 4 had passed on the first pass.
+    - **Check the board, run by me at the owner's request:** only the V3.9 was plugged in (PnP showed only `207A349A5430`), on a fresh scratch data folder, from a development build. Before: neither board was chosen, with the button shown. From pressing it to the note "This saber is a Proffieboard V3. Nothing was written." took 19 s. The log showed each step:
+      1. `RebootDFU`
+      2. one new bootloader `207A349A5430`
+      3. target 524288 bytes, V3
+      4. leave in 0.58 s
+      5. want `207A349A5430`, 1 interface found
+      6. runtime back
+      7. port opened
+      8. read again: `git-ce12a06`, the stock config, 14 presets, as before
+      9. "want any board"
+
+      After: the Wiring page showed V3 pressed and V2 disabled, and the record held `bootloader: V3, 524288`. A first try with a shorter wait had ended the run before the reconnect; the board was found running on its firmware afterwards.
 - [ ] 5.4 After archive, tick roadmap task 3.16 in `openspec/changes/beta-1-roadmap/tasks.md`. Also note in `v3-verification`'s proposal that its deferred two-boards step is unblocked. Verify both edits.
