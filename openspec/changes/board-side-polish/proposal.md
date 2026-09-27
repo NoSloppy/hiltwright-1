@@ -9,6 +9,7 @@ Low-severity findings from the board-side baseline. None blocks Beta 1, but each
 ## What Changes
 
 - **F4:** Let the owner choose among several connected boards.
+  - Seen again in `install-target-safety` 5.3 (2026-09-27, V2.2 hote2 and V3.9 plugged in together): the app opened hote2, and the owner could not switch to the V3 without unplugging hote2. Installs and the reconnect after them already target a board by USB serial (`install-target-safety` D6). Only choosing which board to work with is missing.
 - **F19:** The Armory rail marks Fonts & SD done when the presets' fonts are on the card, and says so when everything is installed.
 - **F20:** After unplugging, the working saber stays the one just unplugged.
 - **F21:** The demo room uses the working saber.
