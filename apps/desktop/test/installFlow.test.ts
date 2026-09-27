@@ -70,7 +70,7 @@ function world(boards: Board[], over: Over = {}) {
         return { ok: true, ms: 1, detail: 'left the bootloader' };
       }),
       backup: vi.fn(async (_id: string, _l: string, _c?: string | null, serial?: string | null) => { calls.push(`backup ${serial}`); return { ok: true, ms: 1, detail: 'backup written', file: 'C:\\backups\\before-install.bin', kind: 'firmware' as const, ...over.backup }; }),
-      write: vi.fn(async (_p: string, serial?: string | null) => {
+      write: vi.fn(async (_id: string, _p: string, serial?: string | null) => {
         calls.push(`write ${serial}`);
         const r = over.write ? { ms: 1, ...(await over.write()) } : { ok: true, ms: 1, detail: 'wrote' };
         if (r.ok) for (const b of boards) if (b.mode === 'boot' && b.serial === serial) b.mode = 'run';
@@ -245,7 +245,7 @@ describe('which board (design D4, D6)', () => {
 
   it('a board nobody knows, confirmed, that comes back running as this saber: now the pairing is remembered', async () => {
     const f = world([{ serial: 'BOOT999', flash: 262144, mode: 'boot' }]);
-    (f.deps.flash.write as ReturnType<typeof vi.fn>).mockImplementation(async (_p: string, serial?: string | null) => {
+    (f.deps.flash.write as ReturnType<typeof vi.fn>).mockImplementation(async (_id: string, _p: string, serial?: string | null) => {
       f.calls.push(`write ${serial}`);
       f.boards[0] = { serial: HOTE2, flash: 262144, mode: 'run' };
       return { ok: true, ms: 1, detail: 'wrote' };
@@ -525,5 +525,16 @@ describe('record and check', () => {
     const off = world([hote2()], { comesBackAs: { config: 'config/other.h', version: 'x' } });
     await restoreSequence(off.deps, saberRec(), restoreOf('config/hiltwright_hote2.h'), true);
     expect(off.shown().note?.tone).toBe('amber');
+  });
+});
+
+// Design D5 (FW10): main refused to write. Nothing was written, so the board goes back like any stop before the write.
+describe('main refusing the write', () => {
+  it("stopped with main's words, the saber sent back, and the record untouched", async () => {
+    const f = world([hote2()], { write: async () => ({ ok: false, detail: 'This is not the build just made for this saber, so nothing was written. Build again, then install.', refused: true } as { ok: boolean; detail: string }) });
+    await installSequence(f.deps, jobFor());
+    expect(f.calls).toContain(`leave ${HOTE2}`);
+    expect(f.calls).not.toContain('updateSaber');
+    expect(f.shown().note?.text).toBe('This is not the build just made for this saber, so nothing was written. Build again, then install. The saber is back on the firmware it had.');
   });
 });

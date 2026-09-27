@@ -13,7 +13,7 @@ import { Icon } from './Icon';
 import { SaveDiagnostics } from './SaveDiagnostics';
 import { readTransfer } from './transfer';
 import { toolchainBlockers } from '../../shared/toolchainChecks';
-import { STOPPED_HINT, installSequence, restoreSequence, writeFromBootloader as writeFromBootloaderFlow, type InstallDeps } from './installFlow';
+import { BOOTLOADER_WAIT_MS, STOPPED_HINT, installSequence, restoreSequence, writeFromBootloader as writeFromBootloaderFlow, type InstallDeps, type InstallNote } from './installFlow';
 
 const api = () => window.hiltwright;
 
@@ -48,6 +48,10 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const [askTarget, setAskTarget] = useState<{ name: string; answer: (yes: boolean) => void } | null>(null);
   const [step, setStep] = useState<Step>('idle');
   const [note, setNote] = useState<{ tone: 'green' | 'amber' | 'red'; text: string } | null>(null);
+  // Further notes under the main one: a record that could not be saved, a blank board with nothing to back up.
+  const [notes, setNotes] = useState<InstallNote[]>([]);
+  // What met the driver step: once the driver is in, that is what carries on (FW8), never an install in a restore's place.
+  const paused = useRef<{ kind: 'install' } | { kind: 'restore'; backup: BackupInfo } | null>(null);
   const [armed, setArmed] = useState(false);
   const [withBackup, setWithBackup] = useState(true);
   const [tab, setTab] = useState<Tab>('config');
@@ -98,7 +102,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   // Work in progress is watched in the log; nobody should have to go and find it.
   useEffect(() => { if (step === 'building' || step === 'bootloader') setTab('log'); }, [step]);
   useEffect(() => {
-    if (step === 'building' || step === 'writing' || step === 'backup') { const t = setInterval(() => setElapsed((e) => e + 1), 1000); return () => clearInterval(t); }
+    if (step === 'building' || step === 'writing' || step === 'backup' || step === 'bootloader' || step === 'verifying') { const t = setInterval(() => setElapsed((e) => e + 1), 1000); return () => clearInterval(t); }
   }, [step]);
 
   const queuedLooks = queuedLookIds(model ?? undefined, saber?.firmware);
@@ -151,7 +155,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     noteBootloader: async (id, seen) => { const r = await api().library.noteBootloader(id, seen); await board.refreshLibrary(); return r; },
     sabers: board.library,
     confirmTarget: (name) => new Promise<boolean>((resolve) => setAskTarget({ name, answer: (yes) => { setAskTarget(null); resolve(yes); } })),
-    report: (r) => { if (r.xfer !== undefined) setXfer(r.xfer); if (r.step) setStep(r.step); if (r.note !== undefined) setNote(r.note); },
+    report: (r) => { if (r.xfer !== undefined) setXfer(r.xfer); if (r.step) setStep(r.step); if (r.note !== undefined) setNote(r.note); if (r.notes !== undefined) setNotes(r.notes); },
     sleep: (ms) => new Promise((res) => setTimeout(res, ms)),
   }), [board]);
   const connectedNow = status === 'connected';
@@ -165,7 +169,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const install2 = useCallback(async () => {
     if (!result?.ok || !result.dfuPath || !saber) return;
     setWithBackup(true);
-    setNote(null); setElapsed(0);
+    setNote(null); setNotes([]); setElapsed(0);
+    paused.current = { kind: 'install' };
     await installSequence(flowDeps(), { saber, model: builtModel, result, info, connected: connectedNow });
   }, [result, saber, builtModel, info, flowDeps, connectedNow]);
 
@@ -175,7 +180,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     setDriverBusy(true); setDriverCheck('Downloading the driver installer, then asking Windows for approval…');
     try {
       const r = await api().flash.installDriver();
-      if (r.ok) { setDriverCheck(null); await writeFromBootloader(); } else setDriverCheck(r.text);
+      if (r.ok) { setDriverCheck(null); await resumeAfterDriver(); } else setDriverCheck(r.text);
     } catch (err) { setDriverCheck(String(err)); } finally { setDriverBusy(false); }
   };
 
@@ -198,30 +203,64 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   useEffect(() => { loadBackups(); }, [loadBackups, step]);
   const restore = useCallback(async (b: BackupInfo) => {
     if (!saber) return;
-    setWithBackup(false);
-    setRestoreArmed(null); setNote(null); setElapsed(0);
+    // A restore backs up what is on the board first, like an install (FW8), so its bar has a backup phase too.
+    setWithBackup(true);
+    setRestoreArmed(null); setNote(null); setNotes([]); setElapsed(0);
+    paused.current = { kind: 'restore', backup: b };
     await restoreSequence(flowDeps(), saber, b, connectedNow);
   }, [saber, flowDeps, connectedNow]);
+  /** After the driver step: carry on with what was paused, the board already in its bootloader. */
+  const resumeAfterDriver = useCallback(async () => {
+    const p = paused.current;
+    if (p?.kind === 'restore') { if (saber) await restoreSequence(flowDeps(), saber, p.backup, false); return; }
+    await writeFromBootloader();
+  }, [saber, flowDeps, writeFromBootloader]);
   const checkDriver = useCallback(async () => {
     setDriverCheck('Checking…');
     const boot = await api().flash.waitForBootloader(5000);
-    if (boot.ok) { setDriverCheck(null); await writeFromBootloader(); return; }
+    if (boot.ok) { setDriverCheck(null); await resumeAfterDriver(); return; }
     const usb = await api().flash.usb();
     setDriverCheck(usb.bootloaderPresent ? `Still no driver (Windows reports ${usb.bootloaderDriver ?? 'none'}). Run the installer with the board plugged in, then check again.` : 'The board is no longer in bootloader mode. Hold BOOT, tap RESET, release BOOT, then check again.');
-  }, [writeFromBootloader]);
+  }, [resumeAfterDriver]);
 
   // Dev aid: pretend a build finished, to look at the states that follow one without compiling.
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as { hiltwrightPretendBuilt?: (confirmed: boolean) => void }).hiltwrightPretendBuilt = (confirmed) => {
       // Built from the setup as it is now, so it counts as current until the setup changes.
-      const pretend = { ok: true, cached: true, ms: 0, textBytes: 184400, flashBytes: 262144, flashPct: 70, problems: [], output: '', dfuPath: null, configHash: previewRef.current?.hash ?? '', board: modelRef.current?.board ?? 'V2' } as unknown as BuildResult;
+      const pretend = { ok: true, cached: true, ms: 0, textBytes: 184400, flashBytes: 262144, flashPct: 70, problems: [], output: '', dfuPath: null, configHash: previewRef.current?.hash ?? '', board: modelRef.current?.board ?? 'V2', os: 'v8.10', manifest: { hash: 'pretend', looks: [], presets: [] } } as unknown as BuildResult;
       setResult(pretend);
       setBuiltModel(modelRef.current);
       if (saberIdRef.current) lastBuilds.set(saberIdRef.current, { result: pretend, model: modelRef.current });
       setStep('built'); setConfirmedWiring(confirmed);
     };
     (window as unknown as { hiltwrightPretendWriting?: (pct: number) => void }).hiltwrightPretendWriting = (pct) => { setConfirmedWiring(true); setStep('writing'); setXfer(pct); };
+    // Run the real install sequence against pretend flash and board calls, to see the page's words for a normal
+    // install, a failed write, a slow return, a record that cannot be saved, or a slow reboot, with no board.
+    (window as unknown as { hiltwrightPretendInstall?: (fault?: 'write' | 'return' | 'record' | 'slow') => Promise<void> }).hiltwrightPretendInstall = async (fault) => {
+      const { saber: s, result: r, builtModel: m, info: i } = liveRef.current;
+      if (!s || !r || !m) return;
+      const serial = 'PRETEND1';
+      const wait = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
+      const ok = { ok: true, ms: 1, detail: 'pretend' };
+      const flash: InstallDeps['flash'] = {
+        usb: async () => ({ runtimePresent: true, bootloaderPresent: false, bootloaderDriver: null, bootloaderProblem: null, bootloaders: [], runtimeSerials: [serial], runtimeNoSerial: 0 }),
+        waitForBootloader: async () => { await wait(fault === 'slow' ? 7000 : 800); return { ok: true, text: 'pretend', serials: [serial] }; },
+        target: async () => ({ serial, flashBytes: r.board === 'V3' ? 524288 : 262144, board: r.board, found: true }),
+        leave: async () => ok,
+        backup: async () => { await wait(800); return { ...ok, file: 'C:\\Users\\owner\\AppData\\Roaming\\@hiltwright\\desktop\\sabers\\pretend\\backups\\before-install.bin', kind: 'firmware' as const }; },
+        write: async () => { await wait(1500); return fault === 'write' ? { ok: false, ms: 1, detail: 'dfu-util: Error during download (pretend)' } : ok; },
+        restore: async () => ok,
+        waitForRuntime: async () => { await wait(1000); return fault !== 'return'; },
+      };
+      const pretendBoard: InstallDeps['board'] = {
+        info: null, send: async () => ({}), rebootToBootloader: async () => true, connect: async () => undefined, expectAfterInstall: () => undefined, reachNext: async () => true,
+        currentSaber: () => ({ ...s, lastSeen: new Date(Date.now() + 1000).toISOString(), identity: { ...s.identity, configName: `config/${m.name}.h`, version: `${r.os} hiltwright pretend` } }),
+        updateSaber: async () => { if (fault === 'record') throw new Error("Error invoking remote method 'library:update': Error: EPERM: operation not permitted, rename 'C:\\Users\\owner\\AppData\\Roaming\\@hiltwright\\desktop\\library.json.tmp' -> 'C:\\Users\\owner\\AppData\\Roaming\\@hiltwright\\desktop\\library.json'"); },
+      };
+      setWithBackup(true); setNote(null); setNotes([]); setElapsed(0);
+      await installSequence({ ...flowDeps(), flash, board: pretendBoard, noteBootloader: async () => s }, { saber: s, model: m, result: { ...r, ok: true, dfuPath: 'pretend.dfu' }, info: i, connected: true });
+    };
     // Change the saved setup while this page stays open, as a change made elsewhere would (to see a build go stale).
     (window as unknown as { hiltwrightChangeSetup?: (fn: (m: SaberConfigModel) => SaberConfigModel) => Promise<void> }).hiltwrightChangeSetup = async (fn) => { if (modelRef.current) await ws.saveModel(fn(modelRef.current)); };
   }, []);
@@ -237,6 +276,9 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     };
   }, [model, build]);
 
+  // For the development aids, which are set up once: what an install would use, as it is now.
+  const liveRef = useRef({ saber, result, builtModel, info });
+  liveRef.current = { saber, result, builtModel, info };
   const pct = result?.flashPct ?? null;
   const busy = step === 'building' || step === 'backup' || step === 'bootloader' || step === 'writing' || step === 'verifying';
   const stepLabel: Record<Step, string> = { idle: 'Ready', building: 'Building firmware…', built: 'Firmware built', backup: 'Backing up the saber…', bootloader: 'Rebooting into bootloader…', driver: 'Windows needs a driver', writing: 'Writing firmware…', verifying: 'Waiting for the saber…', done: 'Installed', failed: 'Stopped' };
@@ -371,6 +413,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
               <div className="row between" style={{ alignItems: 'baseline' }}><span className="small">{phaseText}</span><span className="mono mute small">{Math.round(overall)}%</span></div>
               <div style={{ height: 8, background: '#1b2836' }}><div style={{ height: '100%', width: `${overall}%`, background: 'var(--amber)', transition: 'width .3s linear' }} /></div>
               <span className="hint">Leave the saber plugged in until this finishes.</span>
+              {step === 'bootloader' && elapsed >= 5 && <span className="hint">Still waiting for the saber to restart in bootloader mode. This can take up to {BOOTLOADER_WAIT_MS / 1000} seconds.</span>}
             </div>
           )}
           {askTarget ? (
@@ -416,6 +459,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         </div>
 
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span className="col" style={{ gap: 8 }}><span>{note.text}</span>{(note.tone === 'red' || step === 'failed') && <SaveDiagnostics small />}</span></div>}
+        {notes.map((n) => <div key={n.text} className={`note ${n.tone}`}><Icon name={n.tone === 'green' ? 'check' : n.tone === 'red' ? 'x' : 'warn'} /><span>{n.text}</span></div>)}
         {verdict && <div className={`note ${verdict.tone}`}><Icon name={verdict.ok ? 'check' : 'warn'} /><span>{verdict.text}</span></div>}
         {preview?.warnings.map((w) => <div key={w} className="note"><Icon name="info" /><span>{w}</span></div>)}
         {step === 'failed' && <span className="hint">{STOPPED_HINT}</span>}

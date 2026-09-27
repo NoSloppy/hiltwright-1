@@ -4,7 +4,7 @@ import { app, dialog, ipcMain, shell, BrowserWindow } from 'electron';
 import { arch, release, version as osVersion } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
-import { generateConfig, isBank, isStyleDoc, isTreeDoc, validateModel, type PresetBank, type PresetRecord, type SaberConfigModel } from '@hiltwright/core';
+import { generateConfig, isBank, isStyleDoc, isTreeDoc, validateModel, wiringFingerprint, type PresetBank, type PresetRecord, type SaberConfigModel } from '@hiltwright/core';
 import { Library, libraryPath } from './library';
 import { LooksStore, cleanLook, looksPath } from './looksStore';
 import { BanksStore, banksPath } from './banksStore';
@@ -24,6 +24,7 @@ import { cleanFirmware, hexMap } from './firmwareRecord';
 import { insideFolder } from './paths';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
+import { writeAllowed, type KeptBuild } from './writeGuard';
 import { backAfter, backupFlash, describeBootloader, flashTarget, leaveBootloader, listBackups, newBootloaders, restoreBackup, usbState, waitFor, writeFirmware, type UsbState } from './flash';
 import { logged } from './ipcLog';
 import { JsonStore, storeProblems } from './jsonStore';
@@ -377,11 +378,15 @@ export function registerIpc(): void {
   });
   // The last build of this run, for the diagnostics file (the page forgets it when it changes page).
   let lastBuild: LastBuild | null = null;
+  // Each saber's last successful build this run: the only firmware `flash:write` accepts for it (FW10).
+  const lastBuildBySaber = new Map<string, KeptBuild>();
   handle('build:run', async (_e, saberId: unknown, m: unknown, force: unknown) => {
     const id = str(saberId, 40);
     const at = new Date().toISOString();
     try {
-      const r = await buildFirmware({ toolchainRoot, saberId: id, model: model(m), force: force === true, onLine: (l) => emit('build', l) });
+      const mm = model(m);
+      const r = await buildFirmware({ toolchainRoot, saberId: id, model: mm, force: force === true, onLine: (l) => emit('build', l) });
+      if (r.ok && r.dfuPath) lastBuildBySaber.set(id, { dfuPath: r.dfuPath, layout: wiringFingerprint(mm.board, mm.blades) });
       lastBuild = { at, saberId: id, ok: r.ok, cached: r.cached, ms: r.ms, textBytes: r.textBytes, flashBytes: r.flashBytes, flashPct: r.flashPct, warnings: r.warnings, problems: r.problems };
       console.log(`[build] result ok=${r.ok} cached=${r.cached} ms=${r.ms} flash=${r.flashPct ?? '?'}% warnings=${r.warnings.length} problems=${r.problems.length}${r.problems[0] ? `: ${r.problems[0]}` : ''}`);
       return r;
@@ -410,11 +415,16 @@ export function registerIpc(): void {
   handle('flash:target', (_e, serial: unknown) => flashTarget(toolchainRoot, serialArg(serial)).then(result('target')));
   handle('flash:leave', (_e, serial: unknown) => leaveBootloader(toolchainRoot, serialArg(serial), (l) => emit('flash', l)).then(result('leave')));
   handle('flash:backup', (_e, saberId: unknown, label: unknown, configName: unknown, serial: unknown) => backupFlash(toolchainRoot, join(userData, 'sabers', str(saberId, 40), 'backups'), str(label, 60), (l) => emit('flash', l), typeof configName === 'string' ? str(configName, 200) : null, serialArg(serial)).then(result('backup')));
-  handle('flash:write', (_e, dfuPath: unknown, serial: unknown) => {
+  handle('flash:write', async (_e, saberId: unknown, dfuPath: unknown, serial: unknown) => {
+    const id = str(saberId, 40);
     const p = str(dfuPath, 1000);
     // Paths arrive with whatever slashes the builder used; compare them resolved and case-folded (Windows).
     const norm = (x: string) => resolve(x).replace(/[\\/]+/g, '/').toLowerCase();
     if (!norm(p).startsWith(norm(userBuildRoot()) + '/')) throw new Error('Only firmware built by Hiltwright can be written');
+    // Main's own gate, whatever the page asks for: this saber's last build, from wiring the owner confirmed (FW10).
+    const saved = (await library.list()).find((s) => s.id === id)?.model;
+    const allowed = writeAllowed(lastBuildBySaber.get(id), saved, p);
+    if (!allowed.ok) return result('write')({ ok: false, ms: 0, detail: allowed.text, refused: true });
     return writeFirmware(toolchainRoot, p, (l) => emit('flash', l), serialArg(serial)).then(result('write'));
   });
   const backupsDir = (saberId: unknown) => join(userData, 'sabers', str(saberId, 40).replace(/[^A-Za-z0-9_-]/g, '_'), 'backups');

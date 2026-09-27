@@ -169,7 +169,7 @@ export type ImageKind = 'firmware' | 'erased' | 'unusable';
  * `kind`: for a backup, what the read turned out to be. Only 'firmware' is a backup; an erased read is deleted and
  * anything else is kept, but is never written back.
  */
-export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string; kind?: ImageKind }
+export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string; kind?: ImageKind; refused?: boolean }
 
 /**
  * Read the whole flash of the board with this serial into a backup file. `configName` is the config the saber

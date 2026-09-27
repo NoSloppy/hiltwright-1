@@ -128,28 +128,59 @@
 
 ## 4. The page and main
 
-- [ ] 4.1 In `Build.tsx`:
+- [x] 4.1 In `Build.tsx`:
   - `paused` remembers whether an install or a restore met the driver step, and "Install the driver" and "Check again" resume that one
   - the second note is rendered
   - after 5 s in the bootloader step, the waiting words are shown
   - add `hiltwrightFlashFault('write' | 'return' | 'record')` for development runs
 
   Verify with `npm run typecheck`, and in 5.2.
-- [ ] 4.2 Main writes only this saber's last build (design D5):
+  - **Result, 2026-09-27.** `Build.tsx`:
+    - **`paused`** records whether an install or a restore met the driver step. "Install the driver" and "Check again" call `resumeAfterDriver`, which runs a restore with `restoreSequence(..., false)`, or an install with `writeFromBootloader`.
+    - **Restores** have a backup phase in the bar now.
+    - **`notes`** are shown under the main note.
+    - **Waiting:** the timer also runs during the bootloader and return waits. After 5 s in the bootloader step, "Still waiting for the saber to restart in bootloader mode. This can take up to 45 seconds." appears.
+    - **Changed from the task:** in place of `hiltwrightFlashFault`, `hiltwrightPretendInstall(fault?)` runs the real `installSequence` against pretend flash and board calls (`'write' | 'return' | 'record' | 'slow'`). With no board, a fault switch alone would never get past the reboot. The pretend build now carries an OS tag and a manifest.
+
+    The type check is clean. See 5.2.
+- [x] 4.2 Main writes only this saber's last build (design D5):
   - `build:run` keeps `lastBuildBySaber`
   - `flash:write(saberId, dfuPath, serial)` checks it through a pure `writeAllowed(...)`, which also checks the saved model's wiring confirmation against the build's layout
   - the page passes the saber id
 
   Verify in a new `apps/desktop/test/writeGuard.test.ts`: the last build allowed; an older path, another saber's build, no build, unconfirmed wiring and a confirmation for other blades all refused, each with its words. Then `npm run typecheck`.
+  - **Result, 2026-09-27.**
+    - **The guard:** the new `apps/desktop/src/main/writeGuard.ts` has `writeAllowed(lastBuild, savedModel, dfuPath)`. It allows only this saber's last build (paths compared resolved and case-folded), with the saved model's wiring confirmed for exactly that build's board and blades (`wiringFingerprint`).
+    - **What `build:run` keeps:** `lastBuildBySaber` per saber, set on every successful build.
+    - **The write:** `flash:write(saberId, dfuPath, serial)` reads the saber's saved model from the library. It returns `{ ok: false, refused: true, detail }` when the guard refuses.
+    - **Added beyond the task:** the flow treats `refused` as a stop before the write. It sends the board back with main's words, and leaves the record alone. `FlashStepResult.refused` and the saber id are added in `shared/api.ts` and the preload.
+
+    Verified:
+    - `apps/desktop/test/writeGuard.test.ts`, four tests:
+      - allowed, with the path spelled differently
+      - an older build refused, and no build refused
+      - unconfirmed wiring, no saved model, other blades and another board refused
+      - the words
+    - `installFlow.test.ts`: main's refusal sends the board back, with no record written.
+    - The type check is clean, and 357 desktop tests pass.
 
 ## 5. Checks
 
-- [ ] 5.1 Run `npm test` and `npm run typecheck`; verify both pass.
-- [ ] 5.2 Development run with no board, on a scratch folder with a saber that has a model, using `hiltwrightPretendBuilt` and `hiltwrightFlashFault`. Verify the page's words for:
+- [x] 5.1 Run `npm test` and `npm run typecheck`; verify both pass.
+  - **Result, 2026-09-27.** From the repository root: `npm test` passes 204 core tests and 357 desktop tests (13 gated skipped), and `npm run typecheck` is clean in both workspaces.
+- [x] 5.2 Development run with no board, on a scratch folder with a saber that has a model, using `hiltwrightPretendBuilt` and `hiltwrightFlashFault`. Verify the page's words for:
   - a failed write (names the backup, the board left in bootloader)
   - a slow return (written; the record already updated)
   - a record failure (installed, plus a wrapping amber warning with a long reason)
   - the waiting words after 5 s in the bootloader step
+  - **Result, 2026-09-27.** Scratch folder with a saber that has a model, no board, `fake:build`, `hiltwrightPretendBuilt(true)`, then `hiltwrightPretendInstall` with each fault. Every note stayed within the rail (checked by its width):
+    - **Normal:** "Installed", with the green "Installed and checked: the saber reports config/hiltwright_fresh_v3.h, v8.10 hiltwright pretend. Backup of the previous firmware: C:\…\before-install.bin".
+    - **Write:** "Stopped", with the red "Writing failed. The backup from just now is at C:\…\before-install.bin. dfu-util: Error during download (pretend)", and Save diagnostics.
+    - **Return:** "Stopped", with the amber "The firmware was written but the saber has not reappeared yet. Unplug and replug it, then press Connect." The record was already written before the wait, as `installFlow.test.ts` shows.
+    - **Record:** "Installed", with the green check note, plus a separate amber "Installed, but Hiltwright could not update its record of the saber: EPERM: operation not permitted, rename 'C:\…\library.json.tmp' -> 'C:\…\library.json'", wrapped within the rail.
+    - **Slow:** after 6 s in the bootloader step, "Still waiting for the saber to restart in bootloader mode. This can take up to 45 seconds."
+
+    A first run showed "undefined hiltwright" and no record warning. Both came from the pretend build lacking an OS tag and a manifest, and were fixed in the development aid.
 - [ ] 5.3 Hardware check by the owner, from a development build:
   - **V2.2 hote2:** build and install. It finishes "Installed and checked: the saber reports config/hiltwright_hote2.h, v8.10 hiltwright …".
   - **V2.2 hote2:** put the backup from before that install back. The Backups tab then lists a new "before restore" backup, and the saber runs its previous firmware.

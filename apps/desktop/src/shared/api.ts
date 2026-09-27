@@ -184,7 +184,8 @@ export interface FlashTarget { serial: string | null; flashBytes: number | null;
 export interface BackupInfo { file: string; at: string; label: string; bytes: number; /** Starts like real firmware; anything else is refused. */ valid: boolean; /** The config the saber reported when this was taken, if known. */ configName: string | null }
 
 /** `kind`: for a backup, what the read turned out to be; only 'firmware' is a backup (an erased read means a blank board). */
-export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string; kind?: 'firmware' | 'erased' | 'unusable' }
+/** `refused`: main would not write it (not this saber's last build, or unconfirmed wiring), so nothing was written. */
+export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string; kind?: 'firmware' | 'erased' | 'unusable'; refused?: boolean }
 
 /** Progress lines from long-running main-process jobs. */
 export interface JobEvent { job: 'toolchain' | 'build' | 'flash'; line: string; at: number }
@@ -368,7 +369,8 @@ export interface HiltwrightApi {
     leave(serial: string | null): Promise<FlashStepResult>;
     /** `configName`: what the saber reported before its reboot, kept beside the backup so a restore can expect it back. `serial`: the board to read. */
     backup(saberId: string, label: string, configName?: string | null, serial?: string | null): Promise<FlashStepResult>;
-    write(dfuPath: string, serial?: string | null): Promise<FlashStepResult>;
+    /** Write this saber's last build. Main refuses any other file, or wiring the owner has not confirmed (`refused`). */
+    write(saberId: string, dfuPath: string, serial?: string | null): Promise<FlashStepResult>;
     /** Windows: download the official bootloader driver installer, run it elevated, wait for WinUSB to bind. */
     installDriver(): Promise<{ ok: boolean; text: string }>;
     /** Flash backups taken before installs for this saber, newest first. */

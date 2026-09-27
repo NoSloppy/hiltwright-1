@@ -201,7 +201,9 @@ export async function writeFromBootloader(deps: InstallDeps, job: InstallJob, gi
     // From here, the saber coming back is the only board the page may open (HW-2026-09-25c).
     if (serial) await board.reachNext(serial);
     report({ xfer: 0, step: 'writing' });
-    const w = await flash.write(result.dfuPath, target.serial);
+    const w = await flash.write(saber.id, result.dfuPath, target.serial);
+    // Main would not write it (FW10): nothing was written, so this is a stop before the write.
+    if (w.refused) { await stopInBootloader(deps, saber, target, w.detail, notes); return; }
     // A failed write leaves a partial image: the board stays in its bootloader, where a backup can be put back.
     if (!w.ok) { report({ step: 'failed', note: { tone: 'red', text: `Writing failed.${bak.file ? ` The backup from just now is at ${bak.file}.` : ''} ${w.detail}` }, notes }); return; }
     const written = Date.now();
