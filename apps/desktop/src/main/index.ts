@@ -7,7 +7,8 @@ import { writeFile } from 'node:fs/promises';
 import { release, version as osVersion } from 'node:os';
 import { registerIpc } from './ipc';
 import { scrubDevEnv } from './devEnv';
-import { isProffie, serialAllowed } from './serialGate';
+import { activeWant, isProffie, serialAllowed } from './serialGate';
+import { lookUpWanted } from './usb';
 import { startLog } from './log';
 
 // A packaged build ignores every HILTWRIGHT_* development switch: they are removed before anything reads one.
@@ -41,6 +42,8 @@ function grantSerial(): void {
   ses.setDevicePermissionHandler((details) => {
     if (details.deviceType !== 'serial') return false;
     const ok = serialAllowed(details.device, noBoard);
+    // A board held back while one saber is wanted: look its interfaces up, so the page's next try can reach it.
+    if (!ok && !noBoard && activeWant()) void lookUpWanted();
     console.log('[main] device permission', JSON.stringify(details.device), '→', ok);
     return ok;
   });

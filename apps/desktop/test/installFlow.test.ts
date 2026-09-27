@@ -20,7 +20,7 @@ const jobFor = (over: Partial<InstallJob> = {}): InstallJob => ({
 
 /** The boards plugged in: serial → flash size, and whether each is running or in its bootloader. */
 type Board = { serial: string | null; flash: number; mode: 'run' | 'boot' };
-type Over = { backup?: { ok: boolean; detail?: string }; write?: () => Promise<{ ok: boolean; detail: string }>; runtime?: boolean; confirm?: boolean; connectedSerial?: string; noDriver?: boolean };
+type Over = { backup?: { ok: boolean; detail?: string }; write?: () => Promise<{ ok: boolean; detail: string }>; runtime?: boolean; confirm?: boolean; connectedSerial?: string; noDriver?: boolean; reached?: SaberRecord };
 function world(boards: Board[], over: Over = {}) {
   const calls: string[] = [];
   const reports: InstallReport[] = [];
@@ -68,6 +68,8 @@ function world(boards: Board[], over: Over = {}) {
       rebootToBootloader: vi.fn(async () => { calls.push('reboot'); for (const b of boards) if (b.serial === connectedSerial) b.mode = 'boot'; return true; }),
       connect: vi.fn(async (_i?: boolean, o?: { serial?: string | null }) => { calls.push(`connect ${o?.serial ?? null}`); }),
       expectAfterInstall: vi.fn(),
+      reachNext: vi.fn(async (serial: string | null) => { calls.push(`reach ${serial}`); return true; }),
+      currentSaber: vi.fn(() => over.reached ?? null),
       updateSaber: vi.fn(async () => { calls.push('updateSaber'); }),
     } as unknown as InstallDeps['board'],
     report: (r) => reports.push(r),
@@ -85,7 +87,7 @@ describe('firmware-install audit', () => {
   it('a normal install: reboot, check, backup, write, wait, reconnect, record, and "Installed" with the backup location', async () => {
     const f = world([hote2()]);
     await installSequence(f.deps, jobFor());
-    expect(f.calls).toEqual(['usb', 'reboot', 'waitForBootloader', `target ${HOTE2}`, `note s1 ${HOTE2} 262144`, `backup ${HOTE2}`, `write ${HOTE2}`, `waitForRuntime ${HOTE2}`, `connect ${HOTE2}`, 'updateSaber']);
+    expect(f.calls).toEqual(['usb', 'reboot', 'waitForBootloader', `target ${HOTE2}`, `note s1 ${HOTE2} 262144`, `backup ${HOTE2}`, `reach ${HOTE2}`, `write ${HOTE2}`, `waitForRuntime ${HOTE2}`, `connect ${HOTE2}`, 'updateSaber']);
     expect(f.shown()).toEqual({ step: 'done', note: { tone: 'green', text: 'Installed. Backup of the previous firmware: C:\\backups\\before-install.bin' } });
     expect(f.deps.board.expectAfterInstall).toHaveBeenCalledWith('s1', 'config/hiltwright_hote2.h');
   });
@@ -252,6 +254,29 @@ describe('which board (design D4, D6)', () => {
     const f = world([theV3('run'), hote2('boot')]);
     await writeFromBootloader(f.deps, jobFor());
     expect(f.touched()).toEqual([`backup ${HOTE2}`, `write ${HOTE2}`]);
+  });
+});
+
+describe('reconnecting to the installed saber (design D6, HW-2026-09-25c)', () => {
+  it('from before the write, only the saber being installed may be opened; the reconnect asks for it by serial', async () => {
+    const f = world([theV3(), hote2()]);
+    await installSequence(f.deps, jobFor());
+    expect(f.calls.indexOf(`reach ${HOTE2}`)).toBeLessThan(f.calls.indexOf(`write ${HOTE2}`));
+    expect(f.calls).toContain(`connect ${HOTE2}`);
+    expect(f.shown().note?.tone).toBe('green');
+  });
+
+  it('when another saber answers the reconnect, the page says which', async () => {
+    const f = world([theV3(), hote2()], { reached: v3Rec });
+    await installSequence(f.deps, jobFor());
+    expect(f.shown()).toEqual({ step: 'done', note: { tone: 'amber', text: 'Installed on hote2. Reconnected to The V3, which is also plugged in. Backup of the previous firmware: C:\\backups\\before-install.bin' } });
+  });
+
+  it('a board the owner vouched for is not waited on by serial: any board coming back will do', async () => {
+    const f = world([{ serial: 'NEW123', flash: 262144, mode: 'boot' }]);
+    await installSequence(f.deps, jobFor({ connected: false }));
+    expect(f.calls.some((c) => c.startsWith('reach'))).toBe(false);
+    expect(f.calls).toContain('connect null');
   });
 });
 

@@ -241,6 +241,8 @@ export interface HiltwrightApi {
   usb: {
     /** Serial numbers of Proffieboards currently attached, when the platform can tell us. */
     proffieSerials(): Promise<string[]>;
+    /** Let only the board with this USB serial be reached until it is read (null: every board). Returns how many of its serial interfaces were found. */
+    wantSerial(serial: string | null): Promise<number>;
   };
   sd: {
     /** Removable volumes, flagged when they look like a ProffieOS card. */

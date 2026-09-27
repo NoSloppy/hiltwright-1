@@ -10,7 +10,8 @@ import { LooksStore, cleanLook, looksPath } from './looksStore';
 import { BanksStore, banksPath } from './banksStore';
 import type { LookDef } from '@hiltwright/core';
 import { Snapshots } from './snapshots';
-import { proffieSerials } from './usb';
+import { lookUpWanted, proffieSerials } from './usb';
+import { activeWant, wantSerial } from './serialGate';
 import { checkFontDir, copyFont, listFonts, listTracks, locateCards, readVoicePack, ejectVolume, readFontSounds } from './sd';
 import { cancelSetup, ensureToolchainRoot, installToolchain, lockFolder, plannedToolchainRoot, setupOnce, toolchainStatus, userBuildRoot } from './toolchain';
 import { listPacks, packFont, packMesh, userPacksDir } from './packs';
@@ -127,6 +128,15 @@ export function registerIpc(): void {
   handle('snapshots:read', (_e, id: unknown, file: unknown) => snapshots.read(str(id, 40), str(file, 200)));
 
   handle('usb:proffieSerials', () => proffieSerials());
+  // Reach only this board next (the saber an install is bringing back); null lets every Proffieboard through again.
+  handle('usb:wantSerial', async (_e, serial: unknown) => {
+    const s = typeof serial === 'string' && /^[A-Za-z0-9]{1,40}$/.test(serial) ? serial : null;
+    wantSerial(s);
+    if (s) await lookUpWanted();
+    const found = s ? activeWant()?.ids.size ?? 0 : 0;
+    console.log(`[usb] want ${s ?? 'any board'}${s ? `: ${found} interface(s) found` : ''}`);
+    return found;
+  });
 
   // SD card via a card reader. Roots must come from locate() so the renderer cannot point us at arbitrary folders.
   let knownRoots = new Set<string>();

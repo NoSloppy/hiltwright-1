@@ -65,6 +65,9 @@ export function useBoard() {
   // (two boards plugged in). Forgotten once it has matched, or after 5 minutes.
   const expected = useRef<{ id: string; configName: string; until: number } | null>(null);
   const saberRef = useRef<SaberRecord | null>(null);
+  // The one board to reach next, by USB serial: the saber an install or restore is bringing back. Main lets only that
+  // board through meanwhile, so the port opened is it, and the saber read is known by that serial.
+  const wanted = useRef<string | null>(null);
   infoRef.current = info;
   saberRef.current = saber;
 
@@ -211,7 +214,7 @@ export function useBoard() {
 
     // Remember the saber.
     let usbSerial: string | null = null;
-    try { const serials = await api().usb.proffieSerials(); usbSerial = serials.length === 1 ? serials[0] : null; } catch { /* not available on this platform */ }
+    try { const serials = await api().usb.proffieSerials(); usbSerial = wanted.current && serials.includes(wanted.current) ? wanted.current : serials.length === 1 ? serials[0] : null; } catch { /* not available on this platform */ }
     const identity: SaberIdentity = {
       usbSerial, configName: next.version?.config ?? null, version: next.version?.version ?? null, prop: next.version?.prop ?? null,
       buttons: next.version?.buttons ?? null, installed: next.version?.installed ?? null, pixelBlades: next.pixelBlades, bladeConfig: next.bladeConfig,
@@ -223,8 +226,10 @@ export function useBoard() {
       // Kept until the saber installed comes back: with two boards plugged in, the other one may reconnect first.
       if (ex && rec.id === ex.id) expected.current = null;
       if (ex) console.log(`[library] expected ${ex.id} (${ex.configName}) after the install; matched ${rec.id}${rec.id === ex.id ? '' : ' instead, still expecting it'}`);
-      setSaber(rec);
+      saberRef.current = rec; setSaber(rec);
       console.log(`[library] saber ${rec.id} "${rec.name}" serial=${rec.identity.usbSerial ?? 'none'} firstSeen=${rec.firstSeen}`);
+      // The saber wanted has been reached and read: every board may be reached again.
+      if (wanted.current) { wanted.current = null; void api().usb.wantSerial(null); }
       await api().snapshots.save(rec.id, 'Connected', next.presets);
       await refreshSnapshots(rec.id);
       await refreshLibrary();
@@ -286,12 +291,34 @@ export function useBoard() {
     await connectTo(ports[0]);
   }, [connectTo]);
 
-  const connect = useCallback(async (interactive = false) => {
+  /**
+   * Reach only the board with this USB serial next (null: any board again). Returns whether main found that board.
+   * `hold`: keep waiting for it even when it is not there yet (it is still in its bootloader). Without it, a board that
+   * cannot be found is given up on: reaching any board beats reaching none, and the page then says which one it was.
+   */
+  const reachNext = useCallback(async (serial: string | null, hold = true): Promise<boolean> => {
+    wanted.current = serial;
+    const found = (await api().usb.wantSerial(serial)) > 0;
+    if (serial && !found && !hold) { wanted.current = null; await api().usb.wantSerial(null); }
+    return found;
+  }, []);
+
+  /** Connect. `serial`: the saber an install is bringing back; only that board is opened, when main can tell which it is. */
+  const connect = useCallback(async (interactive = false, opts: { serial?: string | null } = {}) => {
     if (!('serial' in navigator)) { setStatus('error'); setError('Web Serial is not available in this window.'); return; }
     if (!(await api().app.boardAccess())) { setStatus('error'); setError('Board access is off for this run (HILTWRIGHT_NO_BOARD).'); return; }
+    // The owner's own Connect reaches whichever board is there.
+    if (interactive && wanted.current) await reachNext(null);
+    if (opts.serial) {
+      // Already reached (the Web Serial connect event came first, through main's filter): nothing more to open.
+      if (client.current) { if (wanted.current) await reachNext(null); return; }
+      await reachNext(opts.serial, false);
+    }
     // After a reflash both the install flow and the Web Serial 'connect' event try to open the port; one is enough.
     if (!(await gate(() => connectOnce(interactive)))) console.log('[board] connect skipped: already connecting');
-  }, [connectOnce, gate]);
+  }, [connectOnce, gate, reachNext]);
+  /** The saber on the other end right now (read after a connect, before React has re-rendered). */
+  const currentSaber = useCallback(() => saberRef.current, []);
 
   useEffect(() => {
     void refreshLibrary();
@@ -524,7 +551,7 @@ export function useBoard() {
     };
   }, []);
 
-  return { status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
+  return { status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, reachNext, currentSaber, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
 }
 
 export type Board = ReturnType<typeof useBoard>;

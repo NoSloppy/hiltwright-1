@@ -31,6 +31,10 @@ export interface InstallDeps {
     rebootToBootloader(): Promise<boolean>;
     connect(interactive?: boolean, opts?: { serial?: string | null }): Promise<unknown>;
     expectAfterInstall(id: string, configName: string): void;
+    /** Reach only this board next, so another saber plugged in is not opened first when this one comes back. */
+    reachNext(serial: string | null, hold?: boolean): Promise<boolean>;
+    /** The saber on the other end now: after the reconnect, which one was reached. */
+    currentSaber(): SaberRecord | null;
     updateSaber(patch: SaberPatch, id?: string): Promise<unknown>;
   };
   report: (r: InstallReport) => void;
@@ -128,11 +132,13 @@ export async function writeFromBootloader(deps: InstallDeps, job: InstallJob, gi
     report({ xfer: 0, step: 'backup' });
     const bak = await flash.backup(saber.id, 'before-install', info?.version?.config ?? null, target.serial);
     if (!bak.ok) { report({ step: 'failed', note: { tone: 'red', text: `Backup failed, so nothing was written. ${bak.detail}` } }); return; }
+    const serial = runningSerial(saber, target);
+    // From here, the saber coming back is the only board the page may open (HW-2026-09-25c).
+    if (serial) await board.reachNext(serial);
     report({ xfer: 0, step: 'writing' });
     const w = await flash.write(result.dfuPath, target.serial);
     if (!w.ok) { report({ step: 'failed', note: { tone: 'red', text: `Writing failed. The backup from just now is at ${bak.file}. ${w.detail}` } }); return; }
     report({ step: 'verifying' });
-    const serial = runningSerial(saber, target);
     const back = await flash.waitForRuntime(25000, serial);
     if (!back) { report({ step: 'failed', note: { tone: 'amber', text: 'The firmware was written but the saber has not reappeared yet. Unplug and replug it, then press Connect.' } }); return; }
     // The owner said which saber this was, and its running serial appeared only now: the pairing is certain.
@@ -141,7 +147,10 @@ export async function writeFromBootloader(deps: InstallDeps, job: InstallJob, gi
     if (cameBackAs && checked.flashBytes) { try { await deps.noteBootloader(saber.id, { serial: target.serial, flashBytes: checked.flashBytes }); } catch { /* learnt next time */ } }
     await deps.sleep(1500);
     await board.connect(false, { serial: cameBackAs ? own : serial });
-    report({ step: 'done', note: { tone: 'green', text: `Installed. Backup of the previous firmware: ${bak.file}` } });
+    const reached = board.currentSaber();
+    report({ step: 'done', note: reached && reached.id !== saber.id
+      ? { tone: 'amber', text: `Installed on ${saber.name}. Reconnected to ${reached.name}, which is also plugged in. Backup of the previous firmware: ${bak.file}` }
+      : { tone: 'green', text: `Installed. Backup of the previous firmware: ${bak.file}` } });
     // Once installed, the bank's presets are the saber's own; the next draft reads them back from the saber.
     if (model && result.manifest) { const { presetsFrom: _loaded, ...settled } = model; await board.updateSaber({ model: settled, firmware: { ...result.manifest, os: result.os, at: new Date().toISOString() } }, saber.id); }
   } catch (err) {
@@ -186,17 +195,22 @@ export async function restoreSequence(deps: InstallDeps, saber: SaberRecord, b: 
     if (t.flashBytes && b.bytes !== t.flashBytes) { fail(deps, `${backupSizeMismatch(b.bytes, t.flashBytes)} ${LEAVE_BOOTLOADER}`); return; }
     // The restored firmware reports the config it had when this backup was taken; expect the saber back with it.
     if (b.configName) board.expectAfterInstall(saber.id, b.configName);
+    const serial = runningSerial(saber, target);
+    if (serial) await board.reachNext(serial);
     report({ xfer: 0, step: 'writing' });
     const w = await flash.restore(saber.id, b.file, target.serial);
     if (!w.ok) { report({ step: 'failed', note: { tone: 'red', text: `The backup was not written. ${w.detail}` } }); return; }
     report({ step: 'verifying' });
-    const serial = runningSerial(saber, target);
     const back = await flash.waitForRuntime(25000, serial);
     if (!back) { report({ step: 'failed', note: { tone: 'amber', text: 'The backup was written but the saber has not reappeared yet. Unplug and replug it, then press Connect.' } }); return; }
     await deps.sleep(1500);
     // The restored firmware is not the one Hiltwright built: forget the manifest so looks and colours are not mislabelled.
     await board.updateSaber({ firmware: null }, saber.id);
     await board.connect(false, { serial });
-    report({ step: 'done', note: { tone: 'green', text: `Restored the backup from ${new Date(b.at).toLocaleString()}.` } });
+    const reached = board.currentSaber();
+    const when = new Date(b.at).toLocaleString();
+    report({ step: 'done', note: reached && reached.id !== saber.id
+      ? { tone: 'amber', text: `Restored the backup from ${when} on ${saber.name}. Reconnected to ${reached.name}, which is also plugged in.` }
+      : { tone: 'green', text: `Restored the backup from ${when}.` } });
   } catch (err) { report({ step: 'failed', note: { tone: 'red', text: String(err) } }); }
 }

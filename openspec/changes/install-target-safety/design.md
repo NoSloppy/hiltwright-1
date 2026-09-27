@@ -164,7 +164,10 @@ A bootloader with no serial is used only when it is the only bootloader present.
 - `board.ts` first asks main to allow only that board: `usb.wantSerial(serial)`.
 - Main resolves, through one PnP query, which Proffieboard serial interface (`…&MI_00\…`) has that composite parent (`DEVPKEY_Device_Parent`). It then lets the device permission handler allow only that interface's `device_instance_id`.
 - `getPorts()` then returns only that board, and the connect opens it without a click.
-- `usb.wantSerial(null)` restores the normal rule once the connection is read, or after 60 s.
+- `usb.wantSerial(null)` restores the normal rule once the connection is read, or after 5 minutes. It is also cleared by the owner's own Connect.
+- **Changed in 4.1:** the want is set before the write (`board.reachNext(serial)`), not only at the final connect. The Web Serial connect event fires while the saber is still coming back. That was HW-2026-09-25c: the V3 was opened first.
+  - While the wanted board's interface is not yet known, every Proffieboard is held back, and a lookup runs.
+  - The final connect looks again. If it still finds nothing, it gives up the want and connects as before. The page then says which saber it reached.
 - The identity read on that connection takes the wanted serial, not null. That makes the reconnect match the right record with two boards plugged in.
 - Changed after 1.1: `requestPort()` needs a click, so `select-serial-port` cannot be used for an automatic reconnect, and it gave no port list to inspect.
 - When the saber has no recorded serial, the reconnect runs as today. If the saber reached is not the installed one, the page says "Installed on <saber>. Reconnected to <other>, which is also plugged in."

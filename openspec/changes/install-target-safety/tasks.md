@@ -159,7 +159,33 @@
 
 ## 4. Reconnecting to the installed saber
 
-- [ ] 4.1 Add `usb.wantSerial(serial)` in main. While a serial is wanted, the device permission handler allows only the Proffieboard interface whose PnP parent has that serial, and `getPorts()` returns only that board (design D6, as changed after 1.1). `board.connect(interactive, { serial })` passes it, and the identity takes it. The install and restore flows reconnect with the saber's serial. When the saber reached is not the installed one, the page says "Installed on <saber>. Reconnected to <other>, which is also plugged in." Verify in `apps/desktop/test/serialGate.test.ts` (choosing by serial, falling back to the first Proffieboard when none matches or none is wanted), and in `installFlow.test.ts` (the reconnect asks for the serial, and the note when another saber answers).
+- [x] 4.1 Add `usb.wantSerial(serial)` in main. While a serial is wanted, the device permission handler allows only the Proffieboard interface whose PnP parent has that serial, and `getPorts()` returns only that board (design D6, as changed after 1.1). `board.connect(interactive, { serial })` passes it, and the identity takes it. The install and restore flows reconnect with the saber's serial. When the saber reached is not the installed one, the page says "Installed on <saber>. Reconnected to <other>, which is also plugged in." Verify in `apps/desktop/test/serialGate.test.ts` (choosing by serial, falling back to the first Proffieboard when none matches or none is wanted), and in `installFlow.test.ts` (the reconnect asks for the serial, and the note when another saber answers).
+  - **Result, 2026-09-27.**
+    - **Main:**
+      - `serialGate.ts` holds the wanted serial (`wantSerial`, `activeWant`, `setWantedInterfaces`, lapsing after 5 minutes). While a serial is wanted, `serialAllowed` lets through only the interfaces known to be that board's.
+      - `usb.ts` has `interfacesOf` (interface ids whose PnP parent carries the serial), `proffieInterfaces` (one PnP query) and `lookUpWanted` (one lookup at a time).
+      - The permission handler starts a lookup when it holds a board back.
+      - `usb:wantSerial` returns how many interfaces were found.
+    - **The page (`board.ts`):**
+      - `reachNext(serial, hold)`: without `hold`, a board that cannot be found is given up on.
+      - `connect(interactive, { serial })`. The owner's own Connect clears the want.
+      - The identity takes the wanted serial.
+      - `saberRef` is set on identify, and exposed as `currentSaber()`.
+    - **The flows** call `reachNext` before the write or restore, then reconnect with the serial. When another saber answers, the page says "Installed on <saber>. Reconnected to <other>, which is also plugged in. …"
+    - **Changed from design D6:** the want starts before the write, because the connect event raced the flow (HW-2026-09-25c). Design D6 is updated.
+
+    Verified by four new tests in `apps/desktop/test/serialGate.test.ts`:
+    - no want
+    - only the wanted interface, once known
+    - interfaces of a board no longer wanted, and the lapse
+    - `interfacesOf` on the 1.1 instance ids
+
+    And by three new tests in `installFlow.test.ts`:
+    - the hold comes before the write, and the reconnect uses the serial
+    - the amber note when another saber answers
+    - no serial wait for a board the owner vouched for
+
+    35 tests pass across the two files. Desktop has 320 tests passing and core 204, and the type check is clean.
 
 ## 5. Checks
 
