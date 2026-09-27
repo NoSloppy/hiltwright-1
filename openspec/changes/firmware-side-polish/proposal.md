@@ -14,6 +14,7 @@ Low-severity findings from the firmware baseline. None blocks Beta 1.
 - **FW25:** Check what BC supports for special abilities, test the default-prop warning, and detect other prop features pasted styles need (alt fonts).
 - **FW34:** Bring doc 07 §7a in line with the wiring editor.
 - **FW35:** Make "strips on this wire" mean something in the build, or remove it.
+- **TI-1** (from `toolchain-integrity`, 2026-09-26): when a toolchain only needs part of the pinned set (for example the ProffieOS source re-checked, 4.7 MB), the setup panel still says "Download about 360 MB" and "one-time download". Size the figures from the parts actually missing.
 
 ## Non-goals
 
