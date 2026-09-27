@@ -5,4 +5,4 @@ export { rowToBlades, rowToConfiguration, configurationToRow, bladesToExprs, cha
 export { mask, splitArgs, splitTopLevel, parseString, quote } from './cpp';
 export { bladeRowsFor, BLADE_ID_MIN_SEPARATION, type BladeVariant } from './generate';
 export { wiringFingerprint, wiringConfirmed, withWiringConfirmation } from './wiring';
-export { generateConfig, validateModel, readGeneratedHeader, contentHash, lookFingerprint, modelLooks, lookForSlot, STARTER_STYLES, type GeneratedConfig, type SaberConfigModel, type ModelBlade, type Prop, type BoardModel, type BladeRole } from './generate';
+export { generateConfig, validateModel, commentSafe, type SlotLines, readGeneratedHeader, contentHash, lookFingerprint, modelLooks, lookForSlot, STARTER_STYLES, type GeneratedConfig, type SaberConfigModel, type ModelBlade, type Prop, type BoardModel, type BladeRole } from './generate';

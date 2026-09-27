@@ -91,6 +91,11 @@ It is used at the three sites. The manifest keeps the real names. The header's J
 - **Development run:** a thrown build (the build root made unwritable) ends "Stopped" with the reason and Save diagnostics, and the timer stops.
 - **Owner:** Build & Install to V2.2 hote2 from a development build. It finishes "Installed", and the saber reports its version as usual.
 
+### D8. Added during implementation
+- **Three-valued rule terms (D4).** `propRuleProblems` treats a term as unknown when `ProffieOS.ino` or the prop file itself could `#define` it; `ProffieOS.ino` defines `MOUNT_SD_SETTING` and others when options are set. A rule counts only when every term is known true, so a `!defined(X)` that ProffieOS would satisfy never refuses a good build.
+- **The capacity's source is logged:** "capacity reported by arduino-cli" or "from the board table", so the gated V3 test can prove where 507,904 came from.
+- **`HILTWRIGHT_BUILD_ROOT`,** a development switch that packaged builds strip, points builds elsewhere. It is used to make a build throw in the 3.2 check without touching the owner's real build folder.
+
 ## Risks / Trade-offs
 
 - [The prop-rule parser misreads a condition] → It only evaluates the three simple forms, and skips anything else. The compiler remains the final check.

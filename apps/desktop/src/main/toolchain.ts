@@ -131,6 +131,8 @@ export function toolchainPaths(root: string): ToolchainPaths {
  * wrote can never block a build (HW-2026-09-25a). One folder per saber below it.
  */
 export function userBuildRoot(): string {
+  // Dev aid: HILTWRIGHT_BUILD_ROOT puts builds elsewhere (packaged builds remove every HILTWRIGHT_ switch).
+  if (process.env.HILTWRIGHT_BUILD_ROOT) return process.env.HILTWRIGHT_BUILD_ROOT;
   if (isWin && process.env.LOCALAPPDATA) {
     const own = join(process.env.LOCALAPPDATA, 'Hiltwright', 'b');
     if (own.length <= BUILD_ROOT_MAX) return own;

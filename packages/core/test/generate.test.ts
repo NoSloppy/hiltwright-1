@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bladeTables, generateConfig, getDefine, hasDefine, parseConfig, presetArrays, readGeneratedHeader, rowToBlades, validateModel, withWiringConfirmation, type SaberConfigModel } from '../src';
+import { bladeTables, commentSafe, generateConfig, getDefine, hasDefine, parseConfig, presetArrays, readGeneratedHeader, rowToBlades, validateModel, withWiringConfirmation, type LookDef, type SaberConfigModel } from '../src';
 
 const hote2: SaberConfigModel = {
   name: 'hiltwright_hote2', board: 'V2', buttons: 2, prop: 'fett263',
@@ -154,5 +154,48 @@ describe('config-generation audit', () => {
     const { text } = generateConfig({ ...hote2, board: 'V3' });
     expect(text).toContain('#include "proffieboard_v3_config.h"');
     expect(text).not.toContain('proffieboard_v2_config.h');
+  });
+});
+
+// build-correctness FW15 and FW14: names never break the config, and each preset slot's lines are known.
+describe('names in the config', () => {
+  const nasty: LookDef = {
+    id: 'lk_nasty', name: 'Fire */ Blade', source: 'pasted', by: 'Kyber\\', header: '// Copyright 2026 someone',
+    code: 'StylePtr<Red>()', roles: ['main'], args: [], preview: '#ff0000', description: '',
+  };
+  const model: SaberConfigModel = {
+    ...hote2, prop: 'sa22c', looks: [nasty],
+    presets: hote2.presets.map((p, i) => (i === 1 ? { ...p, looks: ['lk_nasty', null, null] } : p)),
+    bladeId: { variants: [{ id: 'v1', name: 'Two\nlines\\', pixels: 140, ohms: 900 }, { id: 'v2', name: 'Plain', pixels: 96, ohms: 22000 }] },
+  };
+
+  it('FW15 a style named like code, an author ending in a backslash and a two-line blade name leave the config intact', () => {
+    expect(commentSafe('Fire */ Blade', 'block')).toBe('Fire * / Blade');
+    expect(commentSafe('Kyber\\', 'line')).toBe('Kyber');
+    expect(commentSafe('Two\nlines\\', 'line')).toBe('Two lines');
+    const { text } = generateConfig(model);
+    // Every comment the generator opens ends where it meant to: no stray end inside a name.
+    expect(text).toContain('/* Fire * / Blade */ StylePtr<Red>()');
+    expect(text).toContain('// Look "Fire */ Blade" (Kyber):');
+    for (const l of text.split('\n')) if (l.includes('//')) expect(l.endsWith('\\')).toBe(false);
+    const doc = parseConfig(text);
+    expect(presetArrays(doc)[0].presets.map((p) => p.name)).toEqual(model.presets.map((p) => p.name));
+    expect(readGeneratedHeader(text)?.looks).toContain('lk_nasty');
+  });
+
+  it("FW14 slotLines point at each preset slot's style code", () => {
+    const g = generateConfig(model);
+    const lines = g.text.split('\n');
+    expect(g.slotLines).toHaveLength(model.presets.length * model.blades.length);
+    const slot = g.slotLines.find((s) => s.preset === 1 && s.blade === 0)!;
+    expect(slot).toMatchObject({ lookId: 'lk_nasty', lookName: 'Fire */ Blade' });
+    expect(lines[slot.line - 1]).toContain('StylePtr<Red>()');
+    for (const s of g.slotLines) {
+      const code = lines.slice(s.line - 1, s.endLine).join('\n');
+      expect(code.trim().endsWith(',')).toBe(true);
+    }
+    // The line before a preset's first slot is its `{ font, track,` line.
+    const first = g.slotLines.find((s) => s.preset === 0 && s.blade === 0)!;
+    expect(lines[first.line - 2]).toContain('{ "Mara Jade Skywalker;common",');
   });
 });

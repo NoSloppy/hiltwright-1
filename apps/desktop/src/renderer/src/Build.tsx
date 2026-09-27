@@ -114,7 +114,14 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const build = useCallback(async (force = false) => {
     if (!model || !saber) return;
     setStep('building'); setElapsed(0); setNote(null); setResult(null);
-    const r = await api().build.run(saber.id, model, force);
+    let r: BuildResult;
+    try { r = await api().build.run(saber.id, model, force); } catch (err) {
+      // A build that stops unexpectedly (a file it cannot write, say) ends the step as failed, never left running.
+      const reason = String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '');
+      setStep('failed'); setNote({ tone: 'red', text: `Could not build: ${reason}` });
+      console.log(`[build] threw: ${reason}`);
+      return;
+    }
     setResult(r);
     setStep(r.ok ? 'built' : 'failed');
     if (!r.ok) setNote({ tone: 'red', text: r.problems[0] ?? 'The build failed.' });
