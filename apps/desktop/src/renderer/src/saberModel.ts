@@ -91,4 +91,13 @@ export function draftModel(info: BoardInfo, saber: SaberRecord, overrides: { bla
   };
 }
 
+/**
+ * The saber's installed firmware carries the staged presets: the same names, in the same order. Then they can be put
+ * on the saber without another install ("Use the staged presets", safe-staged-install D3).
+ */
+export function firmwareHasStaged(model: SaberConfigModel | null | undefined, firmware: SaberRecord['firmware']): boolean {
+  if (!model?.presetsFrom || !firmware) return false;
+  return firmware.presets.length === model.presets.length && firmware.presets.every((p, i) => p.name === model.presets[i].name);
+}
+
 export { queuedLookIds, withLookInSlot } from './slotModel';

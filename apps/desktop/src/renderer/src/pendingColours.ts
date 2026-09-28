@@ -3,8 +3,22 @@
 // firmware, each waiting slot is pointed at its look with its colours, confirmed by read-back, and forgotten.
 
 import { useEffect, useRef } from 'react';
-import { formatBuiltin, lookAtSlot } from '@hiltwright/core';
+import { formatBuiltin, lookAtSlot, type FirmwareManifest, type SaberConfigModel } from '@hiltwright/core';
 import type { Board } from './board';
+
+/**
+ * The colours waiting to be written: slots whose installed firmware really has the chosen look. None while the presets
+ * are still staged: until the saber reports the staged list, its preset slots are its old presets, and colours written
+ * there would be removed with them (safe-staged-install D4).
+ */
+export function waitingColours(model: SaberConfigModel, firmware: FirmwareManifest): { i: number; k: number; args: string; name: string }[] {
+  if (model.presetsFrom) return [];
+  return model.presets.flatMap((p, i) => (p.lookArgs ?? []).flatMap((args, k) => {
+    const id = p.looks?.[k];
+    // Only once the installed firmware really has that look in that slot.
+    return args && id && lookAtSlot(firmware, i, k + 1)?.id === id ? [{ i, k, args, name: p.name }] : [];
+  }));
+}
 
 export function usePendingLookColours(board: Board): void {
   const attempted = useRef<string | null>(null);
@@ -13,11 +27,7 @@ export function usePendingLookColours(board: Board): void {
     if (status !== 'connected' || busy || !info || !saber?.model || !saber.firmware) return;
     const firmware = saber.firmware;
     const model = saber.model;
-    const waiting = model.presets.flatMap((p, i) => (p.lookArgs ?? []).flatMap((args, k) => {
-      const id = p.looks?.[k];
-      // Only once the installed firmware really has that look in that slot.
-      return args && id && lookAtSlot(firmware, i, k + 1)?.id === id ? [{ i, k, args, name: p.name }] : [];
-    }));
+    const waiting = waitingColours(model, firmware);
     if (!waiting.length) return;
     // One attempt per firmware and set of colours in a session: a saber that will not confirm is not retried forever.
     const key = `${saber.id}:${firmware.hash}:${JSON.stringify(waiting)}`;

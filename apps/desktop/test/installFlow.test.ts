@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SaberConfigModel } from '@hiltwright/core';
 import type { BackupInfo, BuildResult, SaberRecord, UsbState } from '../src/shared/api';
-import { STOPPED_HINT, checkBoard, installSequence, restoreSequence, writeFromBootloader, type InstallDeps, type InstallJob, type InstallReport } from '../src/renderer/src/installFlow';
+import { STOPPED_HINT, applyStagedPresets, checkBoard, installSequence, samePresets, restoreSequence, writeFromBootloader, type InstallDeps, type InstallJob, type InstallReport } from '../src/renderer/src/installFlow';
 
 const HOTE2 = '209133815232';
 const V3 = '207A349A5430';
@@ -26,6 +26,8 @@ type Over = {
   /** What the saber reports when it is read after the reconnect. */
   comesBackAs?: { config: string | null; version: string | null };
   recordFails?: string;
+  /** Staged presets: what the new firmware has compiled in, whether the saber keeps its own after a restart, and whether the restart fails. */
+  compiled?: { font: string; track: string; name: string }[]; keepsOwn?: boolean; restartFails?: boolean;
 };
 /** The saber read after a reconnect: the record for that serial, just seen, reporting what `comesBackAs` says. */
 const readBack = (serial: string | null | undefined, over: Over): SaberRecord | null => {
@@ -38,6 +40,9 @@ function world(boards: Board[], over: Over = {}) {
   const calls: string[] = [];
   const reports: InstallReport[] = [];
   let reached: SaberRecord | null = null;
+  // The presets the saber reports, and whether its presets file has been removed.
+  let onSaber = [{ font: 'Old;common', track: '', styles: ['builtin 0 1'], name: 'Old', variation: 0 }];
+  let removed = false;
   const connectedSerial = over.connectedSerial ?? HOTE2;
   const usb = (): UsbState => {
     const boots = boards.filter((b) => b.mode === 'boot');
@@ -85,7 +90,14 @@ function world(boards: Board[], over: Over = {}) {
     confirmTarget: vi.fn(async (name: string) => { calls.push(`ask ${name}`); return over.confirm ?? true; }),
     board: {
       info: null,
-      send: vi.fn(),
+      send: vi.fn(async (cmd: string) => { calls.push(cmd); if (cmd === 'del presets.ini') removed = true; return { lines: [] }; }),
+      restartSaber: vi.fn(async () => {
+        calls.push('restart');
+        if (over.restartFails) return false;
+        if (removed && !over.keepsOwn && over.compiled) onSaber = over.compiled.map((c) => ({ ...c, styles: ['builtin 0 1'], variation: 0 }));
+        return true;
+      }),
+      currentPresets: vi.fn(() => onSaber),
       rebootToBootloader: vi.fn(async () => { calls.push('reboot'); for (const b of boards) if (b.serial === connectedSerial) b.mode = 'boot'; return true; }),
       connect: vi.fn(async (_i?: boolean, o?: { serial?: string | null }) => { calls.push(`connect ${o?.serial ?? null}`); reached = over.reached !== undefined ? over.reached : readBack(o?.serial, over); }),
       expectAfterInstall: vi.fn(),
@@ -536,5 +548,87 @@ describe('main refusing the write', () => {
     expect(f.calls).toContain(`leave ${HOTE2}`);
     expect(f.calls).not.toContain('updateSaber');
     expect(f.shown().note?.text).toBe('This is not the build just made for this saber, so nothing was written. Build again, then install. The saber is back on the firmware it had.');
+  });
+});
+
+// safe-staged-install design D1: staged presets go on only after the install is checked.
+describe('staged presets', () => {
+  const staged = [{ font: 'Mara;common', track: '', name: 'Mara Jade' }, { font: 'Valkyrie;common', track: '', name: 'Valkyrie' }];
+  const stagedModel = { ...model, presets: staged, presetsFrom: { name: 'Set A', at: '2026-09-27T10:00:00.000Z' } } as SaberConfigModel;
+  const job = (over: Partial<InstallJob> = {}) => jobFor({ model: stagedModel, ...over });
+  const staging = (f: ReturnType<typeof world>) => f.calls.filter((c) => /^(del |restart)/.test(c));
+
+  it('from running mode: nothing removed before the reboot; after the check: snapshot, both files, restart, read back, settled', async () => {
+    const f = world([hote2()], { compiled: staged });
+    await installSequence(f.deps, job());
+    expect(f.calls.indexOf('del presets.ini')).toBeGreaterThan(f.calls.indexOf(`write ${HOTE2}`));
+    expect(staging(f)).toEqual(['del presets.ini', 'del presets.tmp', 'restart']);
+    expect(f.deps.snapshots.save).toHaveBeenCalledWith('s1', 'Before install with staged presets', [expect.objectContaining({ name: 'Old' })]);
+    expect(f.extra().at(-1)).toEqual({ tone: 'green', text: 'Your staged presets are on the saber now; its previous presets are kept as a snapshot.' });
+    const models = (f.deps.board.updateSaber as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[0] as { model?: SaberConfigModel }).model);
+    // At the write the list is still staged; once the saber reports it, it is settled.
+    expect(models[0]?.presetsFrom).toBeDefined();
+    expect(models.at(-1)?.presetsFrom).toBeUndefined();
+  });
+
+  it('from a board already in its bootloader: applied the same way', async () => {
+    const f = world([hote2('boot')], { compiled: staged });
+    await installSequence(f.deps, job({ connected: false }));
+    expect(staging(f)).toEqual(['del presets.ini', 'del presets.tmp', 'restart']);
+    expect(f.extra().at(-1)?.tone).toBe('green');
+  });
+
+  it('an install that stops leaves the presets untouched: a refused board, a failed backup, a failed write', async () => {
+    const refused = world([theV3()], { connectedSerial: V3, compiled: staged });
+    await installSequence(refused.deps, jobFor({ saber: v3Rec, model: stagedModel }));
+    const backup = world([hote2()], { compiled: staged, backup: { ok: false, detail: 'x' } });
+    await installSequence(backup.deps, job());
+    const write = world([hote2()], { compiled: staged, write: async () => ({ ok: false, detail: 'x' }) });
+    await installSequence(write.deps, job());
+    for (const f of [refused, backup, write]) {
+      expect(staging(f)).toEqual([]);
+      expect(f.deps.snapshots.save).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a check that does not match, or no reading, or another saber answering: presets untouched, still staged', async () => {
+    const mismatch = world([hote2()], { compiled: staged, comesBackAs: { config: 'config/other.h', version: 'v8.10 hiltwright abc' } });
+    await installSequence(mismatch.deps, job());
+    const none = world([hote2()], { compiled: staged, reached: null });
+    await installSequence(none.deps, job());
+    const other = world([theV3(), hote2()], { compiled: staged, reached: v3Rec });
+    await installSequence(other.deps, job());
+    for (const f of [mismatch, none, other]) {
+      expect(staging(f)).toEqual([]);
+      expect(f.extra().at(-1)?.text).toMatch(/^The install could not be checked, so the saber keeps its own presets for now\. Your staged presets are still waiting/);
+    }
+  });
+
+  it('the saber still reports its own presets after the restart: stays staged, and says so', async () => {
+    const f = world([hote2()], { compiled: staged, keepsOwn: true });
+    await installSequence(f.deps, job());
+    expect(f.extra().at(-1)).toEqual({ tone: 'amber', text: 'The saber still reports its own presets after its restart. Your staged presets are still waiting; press "Use the staged presets" on Build & Install to try again.' });
+    const models = (f.deps.board.updateSaber as ReturnType<typeof vi.fn>).mock.calls.map((c) => (c[0] as { model?: SaberConfigModel }).model);
+    expect(models.every((m) => m?.presetsFrom)).toBe(true);
+  });
+
+  it('the restart fails: stays staged', async () => {
+    const f = world([hote2()], { compiled: staged, restartFails: true });
+    await installSequence(f.deps, job());
+    expect(f.extra().at(-1)?.text).toMatch(/^The saber could not be restarted to pick up the staged presets\./);
+  });
+
+  it('applied later, on its own, with no install: the same steps', async () => {
+    const f = world([hote2()], { compiled: staged });
+    const note = await applyStagedPresets(f.deps, saberRec(), stagedModel, HOTE2);
+    expect(note.tone).toBe('green');
+    expect(f.touched()).toEqual([]);
+    expect(staging(f)).toEqual(['del presets.ini', 'del presets.tmp', 'restart']);
+  });
+
+  it('samePresets compares names and fonts in order', () => {
+    expect(samePresets(staged, staged)).toBe(true);
+    expect(samePresets(staged, [...staged].reverse())).toBe(false);
+    expect(samePresets(staged, staged.slice(1))).toBe(false);
   });
 });

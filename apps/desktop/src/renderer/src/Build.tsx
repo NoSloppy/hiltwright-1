@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { voicePackFromSerial, voicePackVerdict, wiringConfirmed, withWiringConfirmation, type VoicePackStatus } from '@hiltwright/core';
-import { queuedLookIds } from './saberModel';
+import { firmwareHasStaged, queuedLookIds } from './saberModel';
 import { PROPS } from './Wiring';
 import type { Workspace } from './workspace';
 import type { BackupInfo, BuildResult, JobEvent, ToolchainStatus } from '../../shared/api';
@@ -13,7 +13,7 @@ import { Icon } from './Icon';
 import { SaveDiagnostics } from './SaveDiagnostics';
 import { readTransfer } from './transfer';
 import { toolchainBlockers } from '../../shared/toolchainChecks';
-import { BOOTLOADER_WAIT_MS, STOPPED_HINT, installSequence, restoreSequence, writeFromBootloader as writeFromBootloaderFlow, type InstallDeps, type InstallNote } from './installFlow';
+import { BOOTLOADER_WAIT_MS, STOPPED_HINT, applyStagedPresets, installSequence, restoreSequence, writeFromBootloader as writeFromBootloaderFlow, type InstallDeps, type InstallNote } from './installFlow';
 
 const api = () => window.hiltwright;
 
@@ -209,6 +209,13 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     paused.current = { kind: 'restore', backup: b };
     await restoreSequence(flowDeps(), saber, b, connectedNow);
   }, [saber, flowDeps, connectedNow]);
+  /** Put staged presets on a saber whose firmware already carries them, with no install (safe-staged-install D3). */
+  const [stagedBusy, setStagedBusy] = useState(false);
+  const useStaged = useCallback(async () => {
+    if (!saber || !model) return;
+    setStagedBusy(true); setNote(null); setNotes([]);
+    try { setNotes([await applyStagedPresets(flowDeps(), saber, model, saber.identity.usbSerial ?? null)]); } finally { setStagedBusy(false); }
+  }, [saber, model, flowDeps]);
   /** After the driver step: carry on with what was paused, the board already in its bootloader. */
   const resumeAfterDriver = useCallback(async () => {
     const p = paused.current;
@@ -237,7 +244,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     (window as unknown as { hiltwrightPretendWriting?: (pct: number) => void }).hiltwrightPretendWriting = (pct) => { setConfirmedWiring(true); setStep('writing'); setXfer(pct); };
     // Run the real install sequence against pretend flash and board calls, to see the page's words for a normal
     // install, a failed write, a slow return, a record that cannot be saved, or a slow reboot, with no board.
-    (window as unknown as { hiltwrightPretendInstall?: (fault?: 'write' | 'return' | 'record' | 'slow') => Promise<void> }).hiltwrightPretendInstall = async (fault) => {
+    (window as unknown as { hiltwrightPretendInstall?: (fault?: 'write' | 'return' | 'record' | 'slow' | 'own') => Promise<void> }).hiltwrightPretendInstall = async (fault) => {
       const { saber: s, result: r, builtModel: m, info: i } = liveRef.current;
       if (!s || !r || !m) return;
       const serial = 'PRETEND1';
@@ -253,8 +260,12 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         restore: async () => ok,
         waitForRuntime: async () => { await wait(1000); return fault !== 'return'; },
       };
+      let restarted = false;
       const pretendBoard: InstallDeps['board'] = {
         info: null, send: async () => ({}), rebootToBootloader: async () => true, connect: async () => undefined, expectAfterInstall: () => undefined, reachNext: async () => true,
+        // The saber's own presets until a restart; then the staged ones, unless it keeps its own ('own').
+        restartSaber: async () => { restarted = true; await wait(800); return true; },
+        currentPresets: () => (restarted && fault !== 'own' ? m.presets.map((q) => ({ font: q.font, track: q.track, name: q.name, styles: [], variation: 0 })) : [{ font: 'Old;common', track: '', name: 'Old', styles: [], variation: 0 }]),
         currentSaber: () => ({ ...s, lastSeen: new Date(Date.now() + 1000).toISOString(), identity: { ...s.identity, configName: `config/${m.name}.h`, version: `${r.os} hiltwright pretend` } }),
         updateSaber: async () => { if (fault === 'record') throw new Error("Error invoking remote method 'library:update': Error: EPERM: operation not permitted, rename 'C:\\Users\\owner\\AppData\\Roaming\\@hiltwright\\desktop\\library.json.tmp' -> 'C:\\Users\\owner\\AppData\\Roaming\\@hiltwright\\desktop\\library.json'"); },
       };
@@ -387,7 +398,13 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
           </div>
           <span className="hint">{PROPS.find((p) => p.value === prop)?.label}{saber?.planned ? ' · planned ahead, not connected yet' : ''}</span>
           {!confirmedWiring && <div className="note amber" style={{ padding: '8px 10px' }}><Icon name="warn" /><span>Confirm the wiring on the Wiring page before building.</span></div>}
-          {model?.presetsFrom && !saber?.planned && info && <div className="note amber" style={{ padding: '8px 10px' }}><Icon name="info" /><span>The staged presets replace the {info.presets.length} on the saber when this goes on; a snapshot is kept first.</span></div>}
+          {model?.presetsFrom && !saber?.planned && info && !firmwareHasStaged(model, saber?.firmware) && <div className="note amber" style={{ padding: '8px 10px' }}><Icon name="info" /><span>The staged presets replace the {info.presets.length} on the saber once the new firmware is on and checked; a snapshot is kept first.</span></div>}
+          {model && firmwareHasStaged(model, saber?.firmware) && (
+            <div className="note amber" style={{ padding: '8px 10px' }}><Icon name="info" /><span className="col" style={{ gap: 8 }}>
+              <span>This saber's firmware has your staged presets, but the saber still uses its own.{connectedNow ? ' Putting them on restarts the saber once; a snapshot of its own is kept first.' : ' Connect the saber to put them on.'}</span>
+              {connectedNow && <span className="row"><button type="button" className="btn sm" disabled={busy || stagedBusy} onClick={() => void useStaged()}><span className="b"><span className="i"><Icon name="presets" />{stagedBusy ? 'Putting them on…' : 'Use the staged presets'}</span></span></button></span>}
+            </span></div>
+          )}
           {preview?.errors.map((e) => <div key={e} className="note red" style={{ padding: '8px 10px' }}><Icon name="x" /><span>{e}</span></div>)}
         </div>
 

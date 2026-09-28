@@ -154,6 +154,25 @@ export function useBoard() {
     return true;
   }, [log]);
 
+  /**
+   * Restart the saber's firmware (ProffieOS `reset`) and let go of the port: it comes back reading its presets files
+   * afresh, as after an install. False when there is no saber to send it to. The caller waits and reconnects.
+   */
+  const restartSaber = useCallback(async (): Promise<boolean> => {
+    const t = transport.current;
+    if (!t) return false;
+    try { log('in', 'reset'); await client.current?.send('reset', { idleMs: 400, expectSilence: true }); } catch { /* the port vanishes as it restarts; that is success */ }
+    client.current?.close();
+    client.current = null;
+    transport.current = null;
+    await t.close();
+    setStatus('idle');
+    setPortName(null);
+    return true;
+  }, [log]);
+  /** The presets the saber reported at its last reading (read after a connect, before React has re-rendered). */
+  const currentPresets = useCallback(() => infoRef.current?.presets ?? null, []);
+
   /** Send now, outside the queue: only while the saber is first read, before anything else can be queued. */
   const sendNow = useCallback(async (command: string, opts?: Parameters<BoardClient['send']>[1]): Promise<Response> => {
     if (!client.current) throw new Error('Not connected');
@@ -206,7 +225,7 @@ export function useBoard() {
       rejected,
       timings,
     };
-    setInfo(next);
+    infoRef.current = next; setInfo(next);
     setStatus('connected');
     // A new connection starts with a clean save status: a failure from before an unplug no longer describes this saber.
     setSave({ kind: 'idle' });
@@ -551,7 +570,7 @@ export function useBoard() {
     };
   }, []);
 
-  return { status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, reachNext, currentSaber, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
+  return { status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, reachNext, currentSaber, restartSaber, currentPresets, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
 }
 
 export type Board = ReturnType<typeof useBoard>;

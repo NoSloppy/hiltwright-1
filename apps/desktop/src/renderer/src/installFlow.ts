@@ -9,6 +9,10 @@
 // Safety nets (install-safety-nets): a backup counts only when it reads back as firmware (an erased board goes on);
 // a stop before the write sends this saber's board back to its firmware; the record is written as soon as the write
 // succeeds; and the install is checked against what the saber reports once it is back.
+//
+// Staged presets (safe-staged-install): nothing is removed before the reboot. Only once the new firmware is installed
+// and checked are the saber's presets files removed and the saber restarted, and the list stops being staged only when
+// the saber then reports the staged presets.
 
 import type { PresetRecord, SaberConfigModel, VersionInfo } from '@hiltwright/core';
 import type { BackupInfo, BuildResult, FlashTarget, HiltwrightApi, SaberPatch, SaberRecord } from '../../shared/api';
@@ -50,6 +54,10 @@ export interface InstallDeps {
     reachNext(serial: string | null, hold?: boolean): Promise<boolean>;
     /** The saber on the other end now: after the reconnect, which one was reached. */
     currentSaber(): SaberRecord | null;
+    /** Restart the saber's firmware and let go of the port (staged presets are applied this way). */
+    restartSaber(): Promise<boolean>;
+    /** The presets the saber reported at its last reading. */
+    currentPresets(): PresetRecord[] | null;
     updateSaber(patch: SaberPatch, id?: string): Promise<unknown>;
   };
   report: (r: InstallReport) => void;
@@ -99,12 +107,11 @@ async function stopInBootloader(deps: InstallDeps, saber: SaberRecord, target: T
  * that appears is its own. Otherwise one already there is used when its serial is this saber's, refused when it is
  * another saber's, and asked about when it is nobody's. Null: stopped (reported), or waiting on the driver.
  */
-async function reachBootloader(deps: InstallDeps, saber: SaberRecord, connected: boolean, before?: () => Promise<void>): Promise<Target | null> {
+async function reachBootloader(deps: InstallDeps, saber: SaberRecord, connected: boolean): Promise<Target | null> {
   const { flash, board } = deps;
   const usb = await flash.usb();
   if (connected) {
     const was = usb.bootloaders.map((b) => b.serial);
-    await before?.();
     const touched = await board.rebootToBootloader();
     if (!touched) { fail(deps, 'Could not reboot the saber into bootloader mode. Hold BOOT, tap RESET, release BOOT, then press Install again.'); return null; }
     const boot = await flash.waitForBootloader(BOOTLOADER_WAIT_MS, was);
@@ -207,11 +214,10 @@ export async function writeFromBootloader(deps: InstallDeps, job: InstallJob, gi
     // A failed write leaves a partial image: the board stays in its bootloader, where a backup can be put back.
     if (!w.ok) { report({ step: 'failed', note: { tone: 'red', text: `Writing failed.${bak.file ? ` The backup from just now is at ${bak.file}.` : ''} ${w.detail}` }, notes }); return; }
     const written = Date.now();
-    // The record describes the new firmware from now on, whether or not the saber comes back in time (FW9). Once
-    // installed, the bank's presets are the saber's own; the next draft reads them back from the saber.
+    // The record describes the new firmware from now on, whether or not the saber comes back in time (FW9). Staged
+    // presets stay staged: the saber keeps its own until they are applied after the check.
     if (model && result.manifest) {
-      const { presetsFrom: _loaded, ...settled } = model;
-      try { await board.updateSaber({ model: settled, firmware: { ...result.manifest, os: result.os, at: new Date().toISOString() } }, saber.id); } catch (err) {
+      try { await board.updateSaber({ model, firmware: { ...result.manifest, os: result.os, at: new Date().toISOString() } }, saber.id); } catch (err) {
         notes.push({ tone: 'amber', text: `Installed, but Hiltwright could not update its record of the saber: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}` });
       }
     }
@@ -242,6 +248,13 @@ export async function writeFromBootloader(deps: InstallDeps, job: InstallJob, gi
           ? { tone: 'green', text: `Installed and checked: the saber reports ${check.reports}.${kept}` }
           : { tone: 'amber', text: `The firmware was written, but the saber reports ${check.reports} instead of ${expected ?? 'this build'}, ${result.os} hiltwright. If it misbehaves, put the backup from just now back from the Backups tab.${kept}` };
     report({ step: 'done', note, notes });
+    // Staged presets go on only now, on this saber, with the install checked.
+    if (model?.presetsFrom) {
+      const ours = check?.ok && !(reached && reached.id !== saber.id);
+      if (!ours) { report({ notes: [...notes, keepStaged('The install could not be checked, so the saber keeps its own presets for now.')] }); return; }
+      report({ notes: [...notes, { tone: 'amber', text: 'Putting your staged presets on the saber: it restarts once more.' }] });
+      report({ notes: [...notes, await applyStagedPresets(deps, saber, model, cameBackAs ? own : serial)] });
+    }
   } catch (err) {
     report({ step: 'failed', note: { tone: 'red', text: String(err) } });
   }
@@ -256,19 +269,57 @@ export async function installSequence(deps: InstallDeps, job: InstallJob): Promi
     // A saber whose board is known from an earlier install is never rebooted for firmware built for the other one.
     if (saber.bootloader && saber.bootloader.board !== result.board) { fail(deps, wrongBoard(saber.bootloader.board, result.board)); return; }
     report({ step: 'bootloader' });
-    // Presets loaded from a bank are compiled into this firmware; the saber only adopts compiled presets when it has
-    // no presets.ini of its own, so that file goes before the reboot, with a snapshot kept first.
-    const clearPresets = async () => {
-      if (!model?.presetsFrom || !board.info) return;
-      try { await deps.snapshots.save(saber.id, `Before bank "${model.presetsFrom.name}"`, board.info.presets); } catch { /* the snapshot is a courtesy */ }
-      await board.send('del presets.ini', { idleMs: 400 });
-      await board.send('del presets.tmp', { idleMs: 400 });
-    };
-    const target = await reachBootloader(deps, saber, !!job.connected, clearPresets);
+    // Staged presets are not touched here: they are applied after the install is checked (applyStagedPresets).
+    const target = await reachBootloader(deps, saber, !!job.connected);
     if (!target) return;
     await writeFromBootloader(deps, job, target);
   } catch (err) {
     report({ step: 'failed', note: { tone: 'red', text: String(err) } });
+  }
+}
+
+/** The staged list stays staged: why, and how to try again. */
+const keepStaged = (why: string): InstallNote => ({ tone: 'amber', text: `${why} Your staged presets are still waiting; press "Use the staged presets" on Build & Install to try again.` });
+
+/** The saber reports these presets in this order: the same names and fonts as the list. */
+export function samePresets(a: { name: string; font: string }[], b: { name: string; font: string }[]): boolean {
+  return a.length === b.length && a.every((p, i) => p.name.trim() === b[i].name.trim() && p.font.trim() === b[i].font.trim());
+}
+
+export const STAGED_ON = 'Your staged presets are on the saber now; its previous presets are kept as a snapshot.';
+
+/**
+ * Put staged presets on a saber whose firmware already carries them (safe-staged-install D1): snapshot what it has,
+ * remove its presets files, restart it so it starts with the compiled presets, and read them back. Only when the
+ * saber reports the staged list is the list settled. Anything else leaves it staged, and says why.
+ */
+export async function applyStagedPresets(deps: Pick<InstallDeps, 'flash' | 'snapshots' | 'board' | 'sleep'>, saber: SaberRecord, model: SaberConfigModel, serial: string | null): Promise<InstallNote> {
+  const { flash, board } = deps;
+  try {
+    const own = board.currentPresets();
+    if (!own) return keepStaged("The saber's presets could not be read, so they were not replaced.");
+    try { await deps.snapshots.save(saber.id, 'Before install with staged presets', own); } catch {
+      return keepStaged("A snapshot of the saber's presets could not be kept, so they were not replaced.");
+    }
+    // ProffieOS's del says nothing either way; what the saber reports after its restart is the check.
+    await board.send('del presets.ini', { idleMs: 400 });
+    await board.send('del presets.tmp', { idleMs: 400 });
+    if (!(await board.restartSaber())) return keepStaged('The saber could not be restarted to pick up the staged presets.');
+    // Let the USB device go before waiting for it to come back.
+    await deps.sleep(1500);
+    if (serial) await board.reachNext(serial);
+    if (!(await flash.waitForRuntime(RUNTIME_WAIT_MS, serial))) return keepStaged('The saber has not come back after its restart. Unplug and replug it, then press Connect.');
+    await deps.sleep(1500);
+    await board.connect(false, { serial });
+    const now = board.currentPresets();
+    if (!now || !samePresets(now, model.presets)) return keepStaged('The saber still reports its own presets after its restart.');
+    const { presetsFrom: _applied, ...settled } = model;
+    try { await board.updateSaber({ model: settled }, saber.id); } catch (err) {
+      return { tone: 'amber', text: `Your staged presets are on the saber now, but Hiltwright could not update its record of the saber: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}` };
+    }
+    return { tone: 'green', text: STAGED_ON };
+  } catch (err) {
+    return keepStaged(`Putting the staged presets on the saber stopped: ${String(err)}.`);
   }
 }
 
