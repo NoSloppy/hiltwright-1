@@ -84,4 +84,5 @@
     - **hote2's staged install from running mode:** it came back with the staged presets, shown as live, with a "Before install with staged presets" snapshot.
     - **The same from hote2's bootloader:** the same result.
     - **The V3 alone, on a fresh data folder:** the V2 build was refused and the V3 came back on its own, with its presets unchanged and the list still staged.
-- [ ] 3.4 After archive, tick roadmap task 3.18 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 3.4 After archive, tick roadmap task 3.18 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-28.** Archived to `openspec/changes/archive/2026-09-28-safe-staged-install`, with the specs synced (1 requirement in `preset-editing` replaced). Roadmap task 3.18 is ticked, and Wave C is complete.
