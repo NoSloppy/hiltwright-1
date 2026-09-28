@@ -76,8 +76,12 @@
     - **`hiltwrightPretendInstall()`:** the notes end with "Your staged presets are on the saber now; its previous presets are kept as a snapshot."
     - **`hiltwrightPretendInstall('own')`:** the notes end with "The saber still reports its own presets after its restart. Your staged presets are still waiting; press "Use the staged presets" on Build & Install to try again."
     - **With the firmware record carrying Mara Jade and Valkyrie:** "This saber's firmware has your staged presets, but the saber still uses its own. Putting them on restarts the saber once; a snapshot of its own is kept first.", with the "Use the staged presets" button enabled.
-- [ ] 3.3 Hardware check by the owner, from a development build:
+- [x] 3.3 Hardware check by the owner, from a development build:
   - **V2.2 hote2:** stage a set (or edit presets while unplugged), build, and install from running mode. The saber comes back with the staged presets, and Presets shows them as live. A "Before install with staged presets" snapshot is listed.
   - **V2.2 hote2 again,** with a staged list, installed from a board already in its bootloader (hold BOOT, tap RESET, release BOOT, then Install). Same result.
   - **V3.9, plugged in alone, on a fresh data folder:** stage a list, choose V2, confirm, build and install. The install is refused and the V3 comes back. Its presets (`list_presets`, or Presets after reconnecting) are unchanged, and the list is still staged.
+  - **Result, 2026-09-28 (owner).** All three passed:
+    - **hote2's staged install from running mode:** it came back with the staged presets, shown as live, with a "Before install with staged presets" snapshot.
+    - **The same from hote2's bootloader:** the same result.
+    - **The V3 alone, on a fresh data folder:** the V2 build was refused and the V3 came back on its own, with its presets unchanged and the list still staged.
 - [ ] 3.4 After archive, tick roadmap task 3.18 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
