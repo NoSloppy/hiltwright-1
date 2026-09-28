@@ -189,4 +189,5 @@
     - **hote2's install** finished "Installed and checked", with the saber's config and Hiltwright version.
     - **Putting the backup back on hote2** kept a new "before restore" backup on the Backups tab, and the saber ran its previous firmware.
     - **The V3 alone, on a fresh data folder** (`HILTWRIGHT_USER_DATA` set to an empty `%TEMP%\hiltwright-fresh`): a V2 build stopped at the bootloader with the V2-on-V3 words, and the V3 came back on its firmware by itself, with no RESET.
-- [ ] 5.4 After archive, tick roadmap task 3.17 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 5.4 After archive, tick roadmap task 3.17 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-27.** Archived to `openspec/changes/archive/2026-09-27-install-safety-nets`, with the specs synced (8 requirements in `firmware-install` replaced). Roadmap task 3.17 is ticked.

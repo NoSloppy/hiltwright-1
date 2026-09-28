@@ -129,7 +129,7 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 - [x] 3.14 Deliver `build-correctness`; verify it is archived
 - [x] 3.15 Deliver `wiring-validation`; verify it is archived
 - [x] 3.16 Deliver `install-target-safety`: after 3.1, reusing the board and blade layout it adds to the firmware record; verify it is archived
-- [ ] 3.17 Deliver `install-safety-nets`; verify it is archived
+- [x] 3.17 Deliver `install-safety-nets`; verify it is archived
 - [ ] 3.18 Deliver `safe-staged-install`; verify it is archived
 
 ### Wave D: the saber does what the app shows
