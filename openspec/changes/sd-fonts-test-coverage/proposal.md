@@ -23,10 +23,14 @@ Unit tests against temporary folders. Audit numbers are from `baseline-sd-fonts`
   - browsing changes nothing on the card (2.14)
 - **xenopixel-import:** the "none found" message (3.1).
 
+Two small seams, neither changing behaviour:
+- **The fonts a saber's presets need, and which are copyable.** This is worked out inside `Fonts.tsx` today. It moves to a pure `fontsForPresets` that the page calls.
+- **The Xenopixel "none found" words** move from `XenoImport.tsx` into a shared constant that the page shows.
+
 ## Non-goals
 
-- Component tests for screens; those scenarios are checked by hand in `hardware-verification-v2`.
-- Fixing what the tests expose.
+- Component tests for screens. Those scenarios are checked by hand in `hardware-verification-v2`.
+- Fixing what the tests expose. Any defect found is pinned by an expected-failure test, and filed with the change that owns it.
 
 ## Capabilities
 
@@ -36,8 +40,16 @@ None.
 
 ### Modified Capabilities
 
-None. This change adds evidence only (`skip_specs` when planned).
+None. This change adds evidence only (`skip_specs`).
 
 ## Impact
 
-`apps/desktop/test/*`, `packages/core/test/*`, and small seams in `apps/desktop/src/main/{sd,fontLibrary}.ts` if needed.
+- **Tests:**
+  - `apps/desktop/test/{fontLibrary,sdLayout,importer}.test.ts`
+  - a new `apps/desktop/test/fontLibraryMove.test.ts` for the move across drives
+  - a new `apps/desktop/test/fontNeeds.test.ts`
+- **Seams:**
+  - `apps/desktop/src/renderer/src/{Fonts.tsx,XenoImport.tsx}`
+  - a new `renderer/src/fontNeeds.ts`
+  - `shared/importWords.ts`
+- **Hardware:** none. Everything runs against temporary folders. The two scenarios the spec marks "Needs a real card" (2.8 and 2.10) keep their hand checks in `hardware-verification-v2`, and gain these folder-level tests.
