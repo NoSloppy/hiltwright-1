@@ -181,8 +181,12 @@
     - **Slow:** after 6 s in the bootloader step, "Still waiting for the saber to restart in bootloader mode. This can take up to 45 seconds."
 
     A first run showed "undefined hiltwright" and no record warning. Both came from the pretend build lacking an OS tag and a manifest, and were fixed in the development aid.
-- [ ] 5.3 Hardware check by the owner, from a development build:
+- [x] 5.3 Hardware check by the owner, from a development build:
   - **V2.2 hote2:** build and install. It finishes "Installed and checked: the saber reports config/hiltwright_hote2.h, v8.10 hiltwright …".
   - **V2.2 hote2:** put the backup from before that install back. The Backups tab then lists a new "before restore" backup, and the saber runs its previous firmware.
   - **V3.9, plugged in alone, on a fresh scratch data folder** (the owner's library already knows it is a V3, so a V2 build is refused before any reboot): choose V2, confirm, build and install. The install stops at the bootloader with the V2-on-V3 words, then the V3 comes back on its firmware by itself, with no RESET. Run by me with the owner's go-ahead, or by the owner with `HILTWRIGHT_USER_DATA`.
+  - **Result, 2026-09-27 (owner).** All three passed:
+    - **hote2's install** finished "Installed and checked", with the saber's config and Hiltwright version.
+    - **Putting the backup back on hote2** kept a new "before restore" backup on the Backups tab, and the saber ran its previous firmware.
+    - **The V3 alone, on a fresh data folder** (`HILTWRIGHT_USER_DATA` set to an empty `%TEMP%\hiltwright-fresh`): a V2 build stopped at the bootloader with the V2-on-V3 words, and the V3 came back on its firmware by itself, with no RESET.
 - [ ] 5.4 After archive, tick roadmap task 3.17 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
