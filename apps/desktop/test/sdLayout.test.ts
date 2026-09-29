@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listFonts } from '../src/main/sd';
+import { checkFontDir, copyFont, listFonts, listTracks, readVoicePack } from '../src/main/sd';
 
 /** A minimal 16-bit mono 44.1 kHz PCM wav header with no samples. */
 function wav(): Buffer {
@@ -37,5 +37,86 @@ describe('fonts on a card', () => {
     expect(foldered.effects.hum).toBeTruthy();
     expect(foldered.effects.clash?.poly).toBe(2); // 001.wav under clsh/ counts as a clash
     expect(foldered.issues.find((i) => i.kind === 'missing-hum')).toBeUndefined();
+  });
+});
+
+// Audit of baseline-sd-fonts, sd-card (sd-fonts-test-coverage). A temporary folder stands in for the card.
+describe('sd-card audit', () => {
+  /** A card with two fonts, a tracks folder and a version 2 voice pack with its menu sounds. */
+  async function card(): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), 'hw-card-'));
+    await mkdir(join(root, 'Ember'));
+    for (const n of ['hum01.wav', 'out01.wav', 'in01.wav', 'clsh01.wav', 'clsh02.wav']) await writeFile(join(root, 'Ember', n), wav());
+    for (const d of ['hum', 'clsh']) await mkdir(join(root, 'Grey', d), { recursive: true });
+    await writeFile(join(root, 'Grey', 'hum', 'hum01.wav'), wav()); await writeFile(join(root, 'Grey', 'clsh', '001.wav'), wav());
+    await mkdir(join(root, 'tracks'));
+    await writeFile(join(root, 'tracks', 'theme.wav'), Buffer.concat([wav(), Buffer.alloc(100)]));
+    await writeFile(join(root, 'tracks', 'battle.wav'), wav());
+    await mkdir(join(root, 'common'));
+    await writeFile(join(root, 'common', 'voicepack.ini'), 'voice_pack_version=2\n');
+    await writeFile(join(root, 'common', 'mnum1.wav'), wav()); await writeFile(join(root, 'common', 'mnum2.wav'), wav());
+    return root;
+  }
+  /** Every path under a folder, with its size and time, so two readings can be compared. */
+  async function tree(dir: string, rel = ''): Promise<string[]> {
+    const out: string[] = [];
+    for (const e of await readdir(join(dir, rel), { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      const st = await stat(join(dir, r));
+      out.push(`${r} ${e.isDirectory() ? 'dir' : st.size} ${st.mtimeMs}`);
+      if (e.isDirectory()) out.push(...await tree(dir, r));
+    }
+    return out.sort();
+  }
+
+  it('2.4 browsing the card: both fonts with type, count, size and status, and the tracks with their sizes', async () => {
+    const root = await card();
+    const fonts = await listFonts(root);
+    expect(fonts.map((f) => f.name)).toEqual(['Ember', 'Grey']);
+    for (const f of fonts) {
+      expect(f.report.type).toMatch(/^(polyphonic|monophonic|mixed|unknown)$/);
+      expect(f.report.files).toBeGreaterThan(0);
+      expect(f.report.bytes).toBeGreaterThan(0);
+      expect(Array.isArray(f.report.issues)).toBe(true);
+    }
+    expect(fonts[0].report.files).toBe(5);
+    expect(await listTracks(root)).toEqual([{ name: 'tracks/battle.wav', size: 44 }, { name: 'tracks/theme.wav', size: 144 }]);
+  });
+
+  it('2.7 a version 2 voice pack with its menu sounds is read as version 2 from the card', async () => {
+    expect(await readVoicePack(await card())).toEqual({ ini: true, version: 2, menuSounds: true });
+  });
+
+  it('2.8 copying a new font puts it on the card under its folder name, and leaves the original unchanged', async () => {
+    const root = await card();
+    const src = await mkdtemp(join(tmpdir(), 'hw-src-'));
+    await mkdir(join(src, 'Kyber'));
+    for (const n of ['hum01.wav', 'clsh01.wav']) await writeFile(join(src, 'Kyber', n), wav());
+    const before = await tree(src);
+    const entry = await copyFont(join(src, 'Kyber'), root);
+    expect(entry.name).toBe('Kyber');
+    expect(entry.report.files).toBe(2);
+    expect((await listFonts(root)).map((f) => f.name)).toContain('Kyber');
+    expect(await tree(src)).toEqual(before);
+  });
+
+  it('2.9 a font already on the card is not copied, and the words say it is already there', async () => {
+    const root = await card();
+    const src = await mkdtemp(join(tmpdir(), 'hw-src-'));
+    await mkdir(join(src, 'Ember')); await writeFile(join(src, 'Ember', 'hum01.wav'), Buffer.concat([wav(), Buffer.alloc(10)]));
+    const before = await tree(root);
+    await expect(copyFont(join(src, 'Ember'), root)).rejects.toThrow('Ember is already on the card');
+    expect(await tree(root)).toEqual(before);
+    expect((await readFile(join(root, 'Ember', 'hum01.wav'))).length).toBe(44);
+  });
+
+  it('2.14 browsing and checking only: nothing on the card changes', async () => {
+    const root = await card();
+    const before = await tree(root);
+    const fonts = await listFonts(root);
+    for (const f of fonts) await checkFontDir(f.path);
+    await listTracks(root);
+    await readVoicePack(root);
+    expect(await tree(root)).toEqual(before);
   });
 });

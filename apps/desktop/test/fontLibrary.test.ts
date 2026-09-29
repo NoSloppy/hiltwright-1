@@ -315,3 +315,56 @@ describe('adding fonts (SF5-SF8)', () => {
     expect(existsSync(join(lib.root, 'Obi', 'tracks', 'theme.wav'))).toBe(true);
   });
 });
+
+// Audit of baseline-sd-fonts, font-library (sd-fonts-test-coverage).
+describe('font-library audit', () => {
+  /** Every file under a folder, with its bytes, so two readings can be compared. */
+  async function contents(dir: string, rel = ''): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    for (const e of await readdir(join(dir, rel), { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) Object.assign(out, await contents(dir, r));
+      else out[r] = (await readFile(join(dir, r))).toString('base64');
+    }
+    return out;
+  }
+  /** A 16-bit 44.1 kHz PCM wav with this many channels. */
+  function wavChannels(channels: number, samples = 100): Buffer {
+    const data = samples * 2 * channels;
+    const b = Buffer.alloc(44 + data);
+    b.write('RIFF', 0); b.writeUInt32LE(36 + data, 4); b.write('WAVE', 8); b.write('fmt ', 12); b.writeUInt32LE(16, 16);
+    b.writeUInt16LE(1, 20); b.writeUInt16LE(channels, 22); b.writeUInt32LE(44100, 24); b.writeUInt32LE(44100 * 2 * channels, 28); b.writeUInt16LE(2 * channels, 32); b.writeUInt16LE(16, 34);
+    b.write('data', 36); b.writeUInt32LE(data, 40);
+    return b;
+  }
+
+  it('1.2 a font folder stays clean: naming it and giving it a maker adds nothing inside it', async () => {
+    const lib = await newLibrary();
+    const src = await mkdtemp(join(tmpdir(), 'hw-src-'));
+    await mkdir(join(src, 'Ember')); await writeFile(join(src, 'Ember', 'hum.wav'), wav(10)); await writeFile(join(src, 'Ember', 'clash1.wav'), wav());
+    await lib.importFrom(join(src, 'Ember'));
+    const before = await contents(join(lib.root, 'Ember'));
+    await lib.setMeta('Ember', { name: 'Kyber Ember', maker: 'Someone', notes: 'Warm' });
+    expect(await contents(join(lib.root, 'Ember'))).toEqual(before);
+    expect((await lib.list())[0].meta).toMatchObject({ name: 'Kyber Ember', maker: 'Someone' });
+  });
+
+  it('1.5 a package that is not a font is refused, asking whether it is a sound font package, and nothing is added', async () => {
+    const lib = await newLibrary();
+    const dir = await mkdtemp(join(tmpdir(), 'hw-zip-'));
+    const pkg = join(dir, 'Manual.zip');
+    await writeFile(pkg, zip({ 'Manual/readme.txt': Buffer.from('How to install'), 'Manual/cover.png': Buffer.from('png') }));
+    await expect(lib.importFrom(pkg)).rejects.toThrow(/Is it a sound font package\?/);
+    expect(await lib.list()).toEqual([]);
+  });
+
+  it('1.11 a stereo font shows the issue that fonts should be mono', async () => {
+    const lib = await newLibrary();
+    const src = await mkdtemp(join(tmpdir(), 'hw-src-'));
+    await mkdir(join(src, 'Wide')); await writeFile(join(src, 'Wide', 'hum.wav'), wavChannels(2)); await writeFile(join(src, 'Wide', 'clash1.wav'), wavChannels(2));
+    await lib.importFrom(join(src, 'Wide'));
+    const [font] = await lib.list();
+    const stereo = font.report.issues.find((i) => i.kind === 'stereo');
+    expect(stereo?.text).toMatch(/stereo\. Fonts should be mono\./);
+  });
+});

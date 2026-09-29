@@ -7,6 +7,7 @@ import type { CardInfo, FontEntry, LibraryFont } from '../../shared/api';
 import type { Workspace } from './workspace';
 import type { Board } from './board';
 import { XenoImport } from './XenoImport';
+import { fontsForPresets } from './fontNeeds';
 import { FEATURES } from './features';
 import { Icon } from './Icon';
 
@@ -110,10 +111,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   };
 
   // The fonts this saber's presets name, and where each one is: on the card, in the library ready to copy, or nowhere.
-  const needed = [...new Set((ws.model?.presets ?? []).map((p) => p.font.split(';')[0]?.trim() ?? '').filter((f) => f && f.toLowerCase() !== 'common'))];
-  const onCard = (f: string) => fonts.some((x) => x.name.toLowerCase() === f.toLowerCase());
-  const inLibrary = (f: string) => library.find((x) => x.folder.toLowerCase() === f.toLowerCase()) ?? null;
-  const copyable = needed.filter((f) => !onCard(f) && inLibrary(f));
+  const { needed, onCard, inLibrary, copyable } = fontsForPresets(ws.model?.presets ?? [], fonts, library);
   const copyNeeded = async (list: string[]) => {
     if (!card) return;
     setBusy(true); setMessage(null);

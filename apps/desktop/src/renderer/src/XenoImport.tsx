@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { formatBuiltin, lookAtSlot, parseBuiltin } from '@hiltwright/core';
 import type { CardInfo, XenoFontInfo } from '../../shared/api';
+import { NO_XENO_FONTS } from '../../shared/importWords';
 import type { Board } from './board';
 import { Icon } from './Icon';
 
@@ -25,7 +26,7 @@ export function XenoImport({ card, board, onChanged }: { card: CardInfo | null; 
     if (!res) return;
     setSource(res); setDone({});
     setChosen(new Set(res.fonts.map((f) => f.path)));
-    if (!res.fonts.length) setNote({ tone: 'amber', text: 'No Xenopixel font folders found there. Choose the top of the card: the folder that holds the numbered folders 1, 2, 3 and so on.' });
+    if (!res.fonts.length) setNote({ tone: 'amber', text: NO_XENO_FONTS });
   };
 
   const copy = async () => {
