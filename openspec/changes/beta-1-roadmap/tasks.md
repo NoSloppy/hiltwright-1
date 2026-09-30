@@ -135,7 +135,7 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 ### Wave D: the saber does what the app shows
 
 - [x] 3.19 Deliver `sd-fonts-test-coverage`; verify it is archived
-- [ ] 3.20 Deliver `styles-test-coverage`; verify it is archived
+- [x] 3.20 Deliver `styles-test-coverage`; verify it is archived
 - [ ] 3.21 Deliver `preset-editor-fixes`: together with 3.23; both change how queued and live styles meet in the model; verify it is archived
 - [ ] 3.22 Deliver `preset-history-restore`; verify it is archived
 - [ ] 3.23 Deliver `style-to-saber-fixes`; verify it is archived

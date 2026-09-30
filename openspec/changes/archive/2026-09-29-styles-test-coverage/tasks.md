@@ -38,4 +38,5 @@
 
 - [x] 2.1 Run `npm test` and `npm run typecheck`; verify both pass. Record any expected failures, with their owning change.
   - **Result, 2026-09-29.** From the repository root: `npm test` passes 210 core tests (six new) and 380 desktop tests (13 gated skipped), and `npm run typecheck` is clean in both workspaces. No expected failures. The one difference from the specs, the wording of 2.4, is a spec error, filed as STC-1 in `preview-honesty` (design D1).
-- [ ] 2.2 After archive, tick roadmap task 3.20 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 2.2 After archive, tick roadmap task 3.20 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-29.** Archived to `openspec/changes/archive/2026-09-29-styles-test-coverage` (no delta specs: `skip_specs`). Roadmap task 3.20 is ticked.
