@@ -249,3 +249,45 @@ describe('blade simulator', () => {
     expect(Array.from(run(a, 0, 500))).toEqual(Array.from(run(b, 0, 500)));
   });
 });
+
+// Audit of baseline-styles (styles-test-coverage).
+describe('style audit', () => {
+  /** The largest channel difference between two frames. */
+  const diff = (a: Float32Array, b: Float32Array) => { let m = 0; for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i] - b[i])); return m; };
+
+  it('1.2 every blade style answers a clash, a blast and a lockup', () => {
+    const blades = LIBRARY_LOOKS.filter((l) => l.roles.includes('main'));
+    expect(blades.length).toBeGreaterThan(20);
+    for (const l of blades) {
+      for (const effect of ['clash', 'blast', 'lockup'] as const) {
+        // Two identical simulators, one given the effect: whatever differs is the effect.
+        const hit = new BladeSim(l.id, N, 7);
+        const calm = new BladeSim(l.id, N, 7);
+        for (const s of [hit, calm]) { s.setOn(true); run(s, 0, 1500); }
+        if (effect === 'lockup') hit.setLockup('normal'); else hit.trigger(effect, 0.5);
+        const until = effect === 'lockup' ? 1800 : 1520;
+        expect(diff(run(hit, 1501, until), run(calm, 1501, until).slice()), `${l.id} ${effect}`).toBeGreaterThanOrEqual(0.15);
+      }
+    }
+  });
+
+  // style-simulator "Clash on a raised blade" says a raised blade is met nearer the hilt than a lowered one. The
+  // firmware's ResponsiveClashL, whose defaults these styles use, places a clash at Scale<BladeAngle<>, TOP, BOTTOM>
+  // with TOP = Scale<BladeAngle<0,16000>, 4000, 26000> and BOTTOM = 6000: near the hilt both raised and lowered, and
+  // in the middle when level. This pins the firmware's placement; the spec's wording is STC-1 in preview-honesty.
+  it('2.4 a clash is placed by the tilt as the firmware places it: the middle when level, near the hilt raised or lowered', () => {
+    const peak = (deg: number) => {
+      const sim = new BladeSim('hw_blade', N, 7);
+      sim.setOn(true); sim.setAngle(deg); run(sim, 0, 1500);
+      sim.trigger('clash', 0.5);
+      const f = sim.frame(1501);
+      let at = 0; for (let i = 1; i < N; i++) if (f[i * 3] > f[at * 3]) at = i;
+      return at;
+    };
+    const lowered = peak(-80); const level = peak(0); const raised = peak(80);
+    expect(level).toBeGreaterThan(50);
+    expect(raised).toBeLessThan(40);
+    expect(lowered).toBeLessThan(40);
+    expect(lowered).toBeLessThanOrEqual(raised);
+  });
+});
