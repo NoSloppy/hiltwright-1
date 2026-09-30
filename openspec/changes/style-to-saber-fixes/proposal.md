@@ -9,7 +9,7 @@ Putting a style on the working saber from Styles can land it on the wrong preset
 ## What Changes
 
 - **ST3:** "Use it in" honours a staged preset list: it stages the change instead of writing to the live saber by position.
-- **ST4:** A live "Use it in" is recorded in the saber's plan, so a later rebuild keeps it.
+- **ST4:** A live "Use it in" is recorded in the saber's plan, so a later rebuild keeps it. It uses the slot rule `withSlotChoice` from `preset-editor-fixes` (design D1, owner's decision 2026-09-29: two changes sharing one rule), so the Styles page and the Presets page record choices the same way.
 - **ST5:** The blade's existing custom colours are kept, or the owner is told they will be replaced.
 - **ST6:** Messages match the situation (offline, installed, queued), and unreachable text is removed.
 - **ST7:** A pasted style can be marked for the kinds of blade it suits.
