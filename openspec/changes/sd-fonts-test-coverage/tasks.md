@@ -57,5 +57,9 @@
 
 - [x] 3.1 Run `npm test` and `npm run typecheck`; verify both pass. Record any expected failures, with their owning change.
   - **Result, 2026-09-29.** From the repository root: `npm test` passes 204 core tests and 380 desktop tests (13 gated skipped), and `npm run typecheck` is clean in both workspaces. No expected failures: every audited scenario already behaves as the specs say, so there was nothing to file.
-- [ ] 3.2 Hardware check by the owner, from a development build, with hote2's SD card (V2.2) in a card reader. On Fonts & SD, with hote2's presets naming fonts that are in the library but not on the card, the page lists them as copyable. "Copy all N" puts them on the card, which shows the seam in 1.1 works as before. Remove the copied fonts afterwards, if they are not wanted.
+- [x] 3.2 Hardware check by the owner, from a development build, with hote2's SD card (V2.2) in a card reader. On Fonts & SD, with hote2's presets naming fonts that are in the library but not on the card, the page lists them as copyable. "Copy all N" puts them on the card, which shows the seam in 1.1 works as before. Remove the copied fonts afterwards, if they are not wanted.
+  - **Result, 2026-09-29 (owner).** Passed, with hote2's card in a card reader.
+    - **At first, nothing to copy:** every font hote2's presets use was already on the card, so the page rightly listed none as copyable.
+    - **The check:** the owner then made fonts go missing, as suggested (renaming two of the presets' font folders on the card), and the page offered them from the library and copied them.
+    - **On the way:** editing a preset while the card was out of the saber reset hote2. That is HW-2026-09-26d, now with hote2 evidence in `preset-editor-fixes`.
 - [ ] 3.3 After archive, tick roadmap task 3.19 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
