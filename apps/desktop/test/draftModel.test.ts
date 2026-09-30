@@ -5,11 +5,13 @@ import type { SaberRecord } from '../src/shared/api';
 // draftModel stamps the app version from the preload bridge; stand it in before the module loads.
 let draftModel: typeof import('../src/renderer/src/saberModel').draftModel;
 let infoFromRecord: typeof import('../src/renderer/src/saberModel').infoFromRecord;
+let matchPresets: typeof import('../src/renderer/src/saberModel').matchPresets;
+let withPresetRenamed: typeof import('../src/renderer/src/saberModel').withPresetRenamed;
 let boardCorrection: typeof import('../src/renderer/src/saberModel').boardCorrection;
 let boardSuggestion: typeof import('../src/renderer/src/saberModel').boardSuggestion;
 beforeAll(async () => {
   (globalThis as unknown as { window: unknown }).window = { hiltwright: { appVersion: 'test' } };
-  ({ draftModel, infoFromRecord, boardCorrection, boardSuggestion } = await import('../src/renderer/src/saberModel'));
+  ({ draftModel, infoFromRecord, boardCorrection, boardSuggestion, matchPresets, withPresetRenamed } = await import('../src/renderer/src/saberModel'));
 });
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
@@ -61,14 +63,14 @@ describe('drafts from what the saber reports', () => {
     expect(looksOf(draftModel(infoFromRecord(rec), rec))).toEqual(['look_b', null, 'look_a']);
   });
 
-  // Owner: preset-editor-fixes (BST-2). Looks are keyed by preset name, so equal names share the last one's looks.
-  it.fails('presets with the same name, or no name, keep their own styles', () => {
+  // BST-2, fixed by preset-editor-fixes (design D2): presets that share a name, or have none, match in order.
+  it('presets with the same name, or no name, keep their own styles', () => {
     const rec = connected([board(''), board('')], withLooks([['', 'look_1'], ['', 'look_2']]));
     expect(looksOf(draftModel(infoFromRecord(rec), rec))).toEqual(['look_1', 'look_2']);
   });
 
-  // Owner: preset-editor-fixes (BST-2). An unknown name falls back to whatever preset used to sit at that position.
-  it.fails("a preset renamed and moved on the saber does not take its new position's styles", () => {
+  // BST-2, fixed by preset-editor-fixes (design D2): an unknown name takes no styles, not its position's.
+  it("a preset renamed and moved on the saber does not take its new position's styles", () => {
     const rec = connected([board('B'), board('A renamed')], withLooks([['A', 'look_a'], ['B', 'look_b']]));
     expect(looksOf(draftModel(infoFromRecord(rec), rec))).toEqual(['look_b', null]);
   });
@@ -134,5 +136,19 @@ describe('hardware-wiring audit: the first guess', () => {
     expect(m.blades.map((b) => [b.type, b.pixels])).toEqual([['pixel', 140], ['pixel', 2], ['pixel', 1]]);
     expect(m.blades.map((b) => b.role)).toEqual(['main', 'crystal', 'accent']);
     expect(new Set(m.blades.map((b) => (b.wiring as { dataPin: string }).dataPin)).size).toBe(3);
+  });
+});
+
+// preset-editor-fixes design D2: presets matched by name, in order.
+describe('presets matched by name', () => {
+  it('names seen several times match in their order; a new name matches nothing', () => {
+    const saved = [{ name: 'A', n: 1 }, { name: 'B', n: 2 }, { name: 'A', n: 3 }, { name: '', n: 4 }];
+    expect(matchPresets(saved, [{ name: 'A' }, { name: 'A' }, { name: 'A' }, { name: 'B' }, { name: '' }, { name: 'C' }]).map((m) => m?.n ?? null)).toEqual([1, 3, null, 2, 4, null]);
+  });
+
+  it('a preset renamed in the app keeps its styles under the new name', () => {
+    const before = withLooks([['A', 'look_a'], ['B', 'look_b']]);
+    const renamed = connected([board('A new'), board('B')], withPresetRenamed(before, 0, 'A new'));
+    expect(looksOf(draftModel(infoFromRecord(renamed), renamed))).toEqual(['look_a', 'look_b']);
   });
 });

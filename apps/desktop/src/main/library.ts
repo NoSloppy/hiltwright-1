@@ -115,6 +115,7 @@ export class Library {
       if (!rec) throw new Error(`Unknown saber ${id}`);
       if (patch.model !== undefined) { if (patch.model) rec.model = patch.model; else delete rec.model; }
       if (patch.firmware !== undefined) { if (patch.firmware) rec.firmware = patch.firmware; else delete rec.firmware; }
+      if (patch.presets !== undefined) rec.presets = patch.presets;
       return rec;
     });
   }

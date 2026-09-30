@@ -32,7 +32,7 @@ import { runLog, runLogs } from './log';
 import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
 import type { FontLibraryStatus, JobEvent } from '../shared/api';
 import type { FirmwareManifest } from '@hiltwright/core';
-import type { SaberIdentity } from '../shared/api';
+import type { SaberIdentity, SaberPatch } from '../shared/api';
 
 function str(v: unknown, max = 200): string {
   if (typeof v !== 'string' || v.length > max) throw new Error('Expected a short string');
@@ -93,12 +93,13 @@ export function registerIpc(): void {
   handle('library:remove', (_e, id: unknown) => library.remove(str(id, 40)));
   handle('library:update', (_e, id: unknown, patch: unknown) => {
     const p = (patch ?? {}) as Record<string, unknown>;
-    const out: { model?: SaberConfigModel | null; firmware?: FirmwareManifest | null } = {};
+    const out: SaberPatch = {};
     if ('model' in p) out.model = p.model === null ? null : model(p.model);
     if ('firmware' in p) {
       if (p.firmware === null) out.firmware = null;
       else out.firmware = cleanFirmware(p.firmware);
     }
+    if ('presets' in p) out.presets = presets(p.presets);
     return library.update(str(id, 40), out);
   });
 

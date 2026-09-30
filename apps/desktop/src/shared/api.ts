@@ -55,7 +55,8 @@ export interface SaberRecord {
   bootloader?: { serial: string | null; flashBytes: number; board: 'V2' | 'V3'; at: string };
 }
 
-export interface SaberPatch { model?: SaberConfigModel | null; firmware?: FirmwareManifest | null }
+/** A change to a remembered saber. `presets`: its presets as last read, kept up to date by live edits (preset-editor-fixes D5). */
+export interface SaberPatch { model?: SaberConfigModel | null; firmware?: FirmwareManifest | null; presets?: PresetRecord[] }
 
 export interface SnapshotMeta {
   file: string;

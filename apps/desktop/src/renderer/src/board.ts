@@ -10,7 +10,7 @@ import {
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
 import { PROFFIE_FILTER, WebSerialTransport, describePort, grantedProffiePorts } from './serial';
 import { setConnectionSnapshot } from './support';
-import { connectGate, runOperation, serialQueue, type SaveState } from './boardOps';
+import { connectGate, runOperation, sdFailureIn, serialQueue, type SaveState } from './boardOps';
 
 export interface BoardInfo {
   version: VersionInfo | null;
@@ -24,6 +24,8 @@ export interface BoardInfo {
   bladeConfig: number | null;
   rejected: string[];
   timings: Record<string, number>;
+  /** The saber said it cannot read its SD card, while being read or since (preset-editor-fixes D6). */
+  sdMissing: boolean;
 }
 
 export interface ConsoleLine { kind: 'in' | 'out' | 'event'; text: string; at: number }
@@ -60,6 +62,8 @@ export function useBoard() {
   const [enqueue] = useState(serialQueue);
   // While the saber is first read, silence ends the reading (NotAnswering) instead of letting the saber go.
   const identifying = useRef(false);
+  // Set by any line the saber sends saying it cannot read its card; a new reading starts it again (design D6).
+  const sdSeen = useRef(false);
   const silentWhileIdentifying = useRef(false);
   // The saber just installed and the config its new firmware reports: an identify matches it even without a USB serial
   // (two boards plugged in). Forgotten once it has matched, or after 5 minutes.
@@ -187,6 +191,7 @@ export function useBoard() {
   /** Read everything the board can tell us, then match or create the saber in the library. */
   const identify = useCallback(async () => {
     setStatus('reading');
+    sdSeen.current = false;
     const timings: Record<string, number> = {};
     const rejected: string[] = [];
     const time = async (cmd: string, opts?: Parameters<BoardClient['send']>[1]) => {
@@ -224,6 +229,7 @@ export function useBoard() {
       bladeConfig: scanInfo.bladeConfig,
       rejected,
       timings,
+      sdMissing: sdSeen.current,
     };
     infoRef.current = next; setInfo(next);
     setStatus('connected');
@@ -273,7 +279,16 @@ export function useBoard() {
     transport.current = t;
     // The run log gets the whole conversation, including the probe, polls and helper commands the console leaves out.
     client.current = new BoardClient(t, {
-      onEvent: (l) => log('event', l), onTraffic: (d, text) => console.log(`[board] ${d === 'sent' ? '>' : '<'} ${text}`),
+      onEvent: (l) => log('event', l),
+      onTraffic: (d, text) => {
+        console.log(`[board] ${d === 'sent' ? '>' : '<'} ${text}`);
+        // A card pulled while connected: the page goes read-only as soon as the saber says so.
+        if (d === 'heard' && sdFailureIn([text]) && !sdSeen.current) {
+          sdSeen.current = true;
+          console.log('[board] the saber cannot read its SD card');
+          if (infoRef.current && !identifying.current) { infoRef.current = { ...infoRef.current, sdMissing: true }; setInfo((i) => (i ? { ...i, sdMissing: true } : i)); }
+        }
+      },
       // Nothing at all back, nudges included: while being read the reading stops; once connected, the saber is let go.
       onSilent: (r) => {
         console.log(`[board] silent: ${r.command} (${r.ms} ms, nothing heard)`);
@@ -378,9 +393,30 @@ export function useBoard() {
     try { await api().snapshots.save(s.id, label, i.presets); await refreshSnapshots(s.id); } catch (err) { console.log(`[snapshots] save failed: ${String(err)}`); }
   }, [refreshSnapshots]);
 
-  /** Run a board operation in its turn, with busy state, snapshot and save-state bookkeeping (boardOps.ts). */
-  const run = useCallback((label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot = true): Promise<void> => {
-    return enqueue(() => runOperation({ client: () => client.current, setBusy, setSave, log, snapshot }, label, op, withSnapshot));
+  /**
+   * The saber's presets as just confirmed become its presets as last read, so a rename or font change made live is
+   * what the saber shows once unplugged (preset-editor-fixes D5, F38).
+   */
+  const rememberPresets = useCallback(async () => {
+    const i = infoRef.current;
+    const s = saberRef.current;
+    if (!i || !s) return;
+    try {
+      const rec = await api().library.update(s.id, { presets: i.presets });
+      if (saberRef.current?.id === rec.id) { saberRef.current = rec; setSaber(rec); }
+      await refreshLibrary();
+    } catch (err) { console.log(`[library] presets not remembered: ${String(err)}`); }
+  }, [refreshLibrary]);
+
+  /**
+   * Run a board operation in its turn, with busy state, snapshot and save-state bookkeeping (boardOps.ts). Resolves to
+   * whether the saber confirmed it; with `remember`, a confirmed operation's presets are stored on the saber's record.
+   */
+  const run = useCallback((label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot = true, remember = false): Promise<boolean> => {
+    return enqueue(() => runOperation({ client: () => client.current, setBusy, setSave, log, snapshot }, label, op, withSnapshot)).then((ok) => {
+      if (ok && remember) void rememberPresets();
+      return ok;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -412,7 +448,7 @@ export function useBoard() {
 
   const editPreset = useCallback((patch: PresetPatch, label: string) => {
     const i = infoRef.current;
-    if (!i || i.currentPreset == null || isEmptyPatch(patch)) return Promise.resolve();
+    if (!i || i.currentPreset == null || isEmptyPatch(patch)) return Promise.resolve(false);
     const index = i.currentPreset;
     return run(label, async (c) => {
       // Style writes are re-applied by re-selecting the preset, otherwise the blade keeps the old colours until
@@ -421,16 +457,16 @@ export function useBoard() {
       if (r.preset) replacePreset(index, r.preset);
       if (r.applied === false) setPendingApply(index);
       return { ...r, note: r.applied === false ? 'applies when you retract the blade' : undefined };
-    });
+    }, true, true);
   }, [run, replacePreset]);
 
-  const movePreset = useCallback((to: number) => run(`Move to position ${to + 1}`, async (c) => { applyList(await moveCurrentPreset(c, to)); return { ok: true }; }), [run, applyList]);
+  const movePreset = useCallback((to: number) => run(`Move to position ${to + 1}`, async (c) => { applyList(await moveCurrentPreset(c, to)); return { ok: true }; }, true, true), [run, applyList]);
   const duplicatePreset = useCallback(() => {
     const i = infoRef.current;
     const pos = (i?.currentPreset ?? 0) + 1;
-    return run('Duplicate preset', async (c) => { applyList(await duplicateCurrentPreset(c, pos)); return { ok: true }; });
+    return run('Duplicate preset', async (c) => { applyList(await duplicateCurrentPreset(c, pos)); return { ok: true }; }, true, true);
   }, [run, applyList]);
-  const deletePreset = useCallback(() => run('Delete preset', async (c) => { applyList(await deleteCurrentPreset(c)); return { ok: true }; }), [run, applyList]);
+  const deletePreset = useCallback(() => run('Delete preset', async (c) => { applyList(await deleteCurrentPreset(c)); return { ok: true }; }, true, true), [run, applyList]);
 
   /** Put the current preset back the way a snapshot had it, with the fewest commands. */
   const restoreSnapshot = useCallback(async (meta: SnapshotMeta) => {
@@ -451,7 +487,6 @@ export function useBoard() {
   /** The current preset as of this instant (state in closures can be a render behind after a queued write). */
   /** Write blade styles to preset `index`, selecting it first when it is not the current one. Resolves to whether the saber confirmed. */
   const setPresetStyles = useCallback((index: number, styles: Record<number, string>, label: string): Promise<boolean> => {
-    let confirmed = false;
     return run(label, async (c) => {
       if (infoRef.current?.currentPreset !== index) {
         const s = await selectPreset(c, index);
@@ -462,9 +497,8 @@ export function useBoard() {
       const r = await editCurrentPreset(c, { styles }, undefined, { applyIndex: index });
       if (r.preset) replacePreset(index, r.preset);
       if (r.applied === false) setPendingApply(index);
-      confirmed = r.ok;
       return { ...r, note: r.applied === false ? 'applies when you retract the blade' : undefined };
-    }).then(() => confirmed);
+    }, true, true);
   }, [run, replacePreset]);
 
   const currentPresetNow = useCallback((): PresetRecord | null => {

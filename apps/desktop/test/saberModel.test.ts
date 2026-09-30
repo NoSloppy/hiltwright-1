@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { STARTER_LOOKS, generateConfig, lookFingerprint, type LookDef, type ModelBlade, type SaberConfigModel } from '@hiltwright/core';
-import { installedLookIds, queuedLookIds, withLookInSlot } from '../src/renderer/src/slotModel';
+import { installedLookIds, queuedLookIds, withLookInSlot, withSlotChoice } from '../src/renderer/src/slotModel';
 import type { SaberRecord } from '../src/shared/api';
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
@@ -82,5 +82,35 @@ describe('a style edited since the install', () => {
   it('shows on the saber only for the installed version', () => {
     expect([...installedLookIds(installed(mine), () => mine)]).toEqual(['look_mine']);
     expect([...installedLookIds(installed(mine), () => edited)]).toEqual([]);
+  });
+});
+
+// preset-editor-fixes D1: the one rule for what a slot holds, live or queued (F37).
+describe('the slot holds the latest choice', () => {
+  const firmware = (ids: string[]): SaberRecord['firmware'] => ({ hash: 'h', os: 'v8.10', at: '2026-09-29T00:00:00Z', looks: ids.map((id) => ({ id, name: id, args: [] })), presets: [] });
+
+  it('a look with colours still to write, a look written live with none, and no style at all', () => {
+    const queued = withSlotChoice(model, 0, 1, fire, '0,65535,0');
+    expect(queued.presets[0]).toMatchObject({ looks: ['hw_fire', null], lookArgs: ['0,65535,0', null] });
+    const live = withSlotChoice(queued, 0, 1, heart, null);
+    expect(live.presets[0].looks).toEqual(['hw_heartbeat', null]);
+    expect(live.presets[0].lookArgs).toBeUndefined();
+    const none = withSlotChoice(live, 0, 1, null, 'ignored');
+    expect(none.presets[0].looks).toBeUndefined();
+    expect(none.presets[0].lookArgs).toBeUndefined();
+  });
+
+  it('F37 a queued style replaced live by one the firmware has: nothing is queued for the next build', () => {
+    const queued = withSlotChoice(model, 0, 1, fire, null);
+    expect(queuedLookIds(queued, firmware(['hw_heartbeat']))).toEqual(['hw_fire']);
+    const chosenLive = withSlotChoice(queued, 0, 1, heart, null);
+    expect(queuedLookIds(chosenLive, firmware(['hw_heartbeat']))).toEqual([]);
+    expect(generateConfig(chosenLive).manifest.presets[0].looks[0]).toBe('hw_heartbeat');
+  });
+
+  it("a style of the owner's own is added to the model once", () => {
+    const mine: LookDef = { id: 'look_mine', name: 'Mine', source: 'built', by: 'you', code: 'StylePtr<Red>()', header: null, roles: ['main'], args: [], preview: '#ff0000', description: '' };
+    const a = withSlotChoice(withSlotChoice(model, 0, 1, mine, null), 1, 1, mine, null);
+    expect(a.looks?.filter((l) => l.id === 'look_mine')).toHaveLength(1);
   });
 });

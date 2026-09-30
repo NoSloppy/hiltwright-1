@@ -1,6 +1,11 @@
 // Rules of the board session, kept apart from React and Web Serial so they can be tested under node
 // (test/boardOps.test.ts). useBoard (board.ts) uses each.
 
+import { NO_SD_CARD, sdFailureIn } from '@hiltwright/core';
+
+/** Whether the saber said it cannot read its SD card (preset-editor-fixes D6); the rule lives with `editCurrentPreset`. */
+export { NO_SD_CARD, sdFailureIn };
+
 /**
  * One connection attempt at a time. After a reflash, the install flow and the Web Serial 'connect' event both try to
  * open the port; one is enough. The check and the claim happen together, with no await between them.
@@ -45,15 +50,16 @@ export const DISCONNECTED_DURING = 'Not saved: the saber was disconnected during
  * Run one board operation with busy state, snapshot and save-state bookkeeping. An operation whose turn comes after
  * the saber has gone (unplugged while it waited in the queue) is reported as not sent, never dropped silently; one
  * that was under way when the connection went says that, rather than whatever its last command made of the silence.
+ * Returns whether the saber confirmed the operation, so the caller can act on success only (preset-editor-fixes D5).
  */
-export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C) => Promise<OpResult>, withSnapshot: boolean): Promise<void> {
+export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C) => Promise<OpResult>, withSnapshot: boolean): Promise<boolean> {
   const { setBusy, setSave, log, snapshot } = deps;
   const client = deps.client();
   if (!client) {
     setSave({ kind: 'failed', what: label, error: 'Not sent: the saber is not connected.' });
     log('out', `✗ ${label}: not sent, the saber is not connected`);
     console.log(`[board] NOT SENT: ${label} · the saber is not connected`);
-    return;
+    return false;
   }
   setBusy(true);
   setSave({ kind: 'writing', what: label });
@@ -63,7 +69,8 @@ export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C)
     log('in', label);
     const r = await op(client);
     const gone = deps.client() !== client;
-    if (!r.ok && gone) {
+    // A saber without a card may reset when asked to save: the card is the reason, not the lost connection.
+    if (!r.ok && gone && r.error !== NO_SD_CARD) {
       setSave({ kind: 'failed', what: label, error: DISCONNECTED_DURING });
       log('out', `✗ ${label}: disconnected during the change`);
       console.log(`[board] FAILED: ${label} · disconnected during the change (${r.error ?? 'no detail'})`);
@@ -71,6 +78,7 @@ export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C)
       setSave({ kind: 'saved', what: r.note ? `${label} · ${r.note}` : label, ms: r.ms ?? Date.now() - started, at: Date.now() });
       log('out', `✓ ${label}`);
       console.log(`[board] ok: ${label} · ${r.ms ?? Date.now() - started} ms`);
+      return true;
     } else {
       setSave({ kind: 'failed', what: label, error: r.error ?? 'unknown' });
       log('out', `✗ ${label}: ${r.error}`);
@@ -83,4 +91,5 @@ export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C)
   } finally {
     setBusy(false);
   }
+  return false;
 }

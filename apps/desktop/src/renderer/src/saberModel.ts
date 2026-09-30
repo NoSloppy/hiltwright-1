@@ -23,7 +23,7 @@ export function infoFromRecord(rec: SaberRecord): BoardInfo {
   return {
     version: { version: rec.identity.version ?? '', config: rec.identity.configName, prop: rec.identity.prop, buttons: rec.identity.buttons, installed: rec.identity.installed, major: null },
     battery: null, volume: null, currentPreset: null, presets: rec.presets, fonts: rec.fonts, tracks: rec.tracks,
-    pixelBlades: rec.identity.pixelBlades, bladeConfig: rec.identity.bladeConfig, rejected: [], timings: {},
+    pixelBlades: rec.identity.pixelBlades, bladeConfig: rec.identity.bladeConfig, rejected: [], timings: {}, sdMissing: false,
   };
 }
 
@@ -58,6 +58,27 @@ export function boardSuggestion(saber: SaberRecord): BoardModel | null {
 }
 
 /**
+ * For each of the saber's presets, the saved preset it continues, or null (preset-editor-fixes D2, BST-2). Presets
+ * match by name; presets that share a name, or have none, match in their order. A name not seen before matches
+ * nothing: it never takes the styles of whatever preset used to sit at its position.
+ */
+export function matchPresets<T extends { name: string }>(saved: T[], current: { name: string }[]): (T | null)[] {
+  const byName = new Map<string, T[]>();
+  for (const p of saved) byName.set(p.name, [...(byName.get(p.name) ?? []), p]);
+  const used = new Map<string, number>();
+  return current.map((p) => {
+    const k = used.get(p.name) ?? 0;
+    used.set(p.name, k + 1);
+    return byName.get(p.name)?.[k] ?? null;
+  });
+}
+
+/** A copy of the model with preset `index` renamed: a rename made in the app keeps the preset's chosen styles. */
+export function withPresetRenamed(model: SaberConfigModel, index: number, name: string): SaberConfigModel {
+  return { ...model, presets: model.presets.map((p, i) => (i === index ? { ...p, name } : p)) };
+}
+
+/**
  * The model to build now: the saved one where it exists (wiring, prop, looks), always with the presets the board
  * currently has. Slot looks are carried over by preset name, so reordering or renaming on the saber does not lose
  * a chosen look.
@@ -66,8 +87,7 @@ export function draftModel(info: BoardInfo, saber: SaberRecord, overrides: { bla
   const saved = saber.model;
   const known = knownBoard(saber);
   const blades = overrides.blades ?? saved?.blades ?? guessBlades(info.pixelBlades.length ? info.pixelBlades : [132]);
-  const byName = new Map((saved?.presets ?? []).map((p) => [p.name, p.looks ?? []]));
-  const argsByName = new Map((saved?.presets ?? []).map((p) => [p.name, p.lookArgs ?? []]));
+  const matched = matchPresets(saved?.presets ?? [], info.presets);
   return {
     name: saved?.name ?? configNameFor(saber),
     // Not known: V2 only keeps the pin lists showing; without `boardFrom` nothing is built until the owner chooses.
@@ -78,8 +98,8 @@ export function draftModel(info: BoardInfo, saber: SaberRecord, overrides: { bla
     blades,
     // Presets loaded from a bank stay as loaded until they have been installed; otherwise the saber's own are the truth.
     presets: saved?.presetsFrom ? saved.presets.map((p) => ({ ...p, ...(p.looks ? { looks: blades.map((_b, k) => p.looks?.[k] ?? null) } : {}), ...(p.lookArgs ? { lookArgs: blades.map((_b, k) => p.lookArgs?.[k] ?? null) } : {}) })) : info.presets.map((p, i) => {
-      const looks = byName.get(p.name) ?? saved?.presets[i]?.looks ?? [];
-      const lookArgs = argsByName.get(p.name) ?? saved?.presets[i]?.lookArgs ?? [];
+      const looks = matched[i]?.looks ?? [];
+      const lookArgs = matched[i]?.lookArgs ?? [];
       return { font: p.font, track: p.track, name: p.name, ...(looks.some(Boolean) ? { looks: blades.map((_b, k) => looks[k] ?? null) } : {}), ...(lookArgs.some(Boolean) ? { lookArgs: blades.map((_b, k) => lookArgs[k] ?? null) } : {}) };
     }),
     looks: saved?.looks ?? [],

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { BoardClient, diffPreset, editCurrentPreset, parsePresetBlocks, selectPreset, splitLines, type PresetRecord, type Transport } from '../src';
+import { BoardClient, NO_SD_CARD, diffPreset, editCurrentPreset, parsePresetBlocks, sdFailureIn, selectPreset, splitLines, type PresetRecord, type Transport } from '../src';
 
 const transcript = (name: string) => readFileSync(new URL(`./transcripts/${name}`, import.meta.url), 'latin1');
 
@@ -30,6 +30,8 @@ class FakeBoard implements Transport {
   style1 = 'builtin 2 1';
   on = false;
   saveDelay = 1200;
+  /** No readable SD card: ProffieOS says so where it would save (seen on hote2, HW-2026-09-26d). */
+  noCard = false;
   private pendingSave: number | null = null;
   constructor(private timers: FakeTimers) {}
   private emit(text: string, delay = 10) { this.timers.after(delay, () => this.cb?.(text)); }
@@ -37,6 +39,7 @@ class FakeBoard implements Transport {
   write(text: string) {
     const cmd = text.trim();
     this.sent.push(cmd);
+    if (this.noCard && cmd.startsWith('set_')) { this.emit('Failed to mount SD card.\r\n'); return; }
     if (cmd.startsWith('set_font ')) {
       this.font = cmd.slice(9);
       this.pendingSave = this.timers.now + this.saveDelay; // nothing is printed now
@@ -121,6 +124,18 @@ describe('editCurrentPreset', () => {
     expect(r.ok).toBe(true);
     expect(r.applied).toBe(false);
     expect(board.sent).toEqual(['set_style1 builtin 2 1 0,65535,0', 'show_current_preset', 'get_on']);
+  });
+
+  it('preset-editor-fixes D6: a saber with no readable card says so, and the change is reported as not saved', async () => {
+    const { timers, board, client } = setup();
+    board.noCard = true;
+    const p = editCurrentPreset(client, { font: 'TeensySF;common' }, () => timers.now);
+    await timers.run(20000);
+    const r = await p;
+    expect(r).toMatchObject({ ok: false, error: NO_SD_CARD, readbacks: 0 });
+    expect(board.sent).toEqual(['set_font TeensySF;common']);
+    expect(sdFailureIn(['Failed to mount SD card.'])).toBe(true);
+    expect(sdFailureIn(['Creating file presets.tmp iteration = 2'])).toBe(false);
   });
 
   it('a patch with nothing in it sends nothing', async () => {

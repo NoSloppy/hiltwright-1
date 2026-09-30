@@ -83,6 +83,17 @@ describe('saber library', () => {
     expect(readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toEqual([]);
   });
 
+  it('preset-editor-fixes D5 (F38): presets changed live are remembered as last read, and the rest of the record kept', async () => {
+    const lib = new Library(file);
+    const s = await connect(lib, hote2, ['Mara', 'Valkyrie']);
+    await lib.update(s.id, { model });
+    await lib.update(s.id, { presets: [preset('Mara Jade'), preset('Valkyrie', 'Grey;Extra;common')] });
+    const [back] = await new Library(file).list();
+    expect(back.presets.map((p) => [p.name, p.font])).toEqual([['Mara Jade', 'GeneralPrincess;common'], ['Valkyrie', 'Grey;Extra;common']]);
+    expect(back.model).toEqual(model);
+    expect(back.identity).toEqual(hote2);
+  });
+
   it('1.4 with no serial, a board is matched only when config, install stamp and blade layout all agree', async () => {
     const lib = new Library(file);
     const first = await connect(lib, noSerial());

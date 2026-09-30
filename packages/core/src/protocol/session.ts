@@ -84,6 +84,18 @@ export interface EditOptions {
   applyIndex?: number;
 }
 
+/**
+ * ProffieOS says this when it cannot read its SD card (none in the saber, or unreadable). Preset changes and the
+ * current preset are saved on the card, so without one they cannot be saved, and may even reset the board
+ * (preset-editor-fixes, HW-2026-09-26d).
+ */
+export function sdFailureIn(lines: string[]): boolean {
+  return lines.some((l) => /Failed to mount SD card/i.test(l));
+}
+
+/** Why a preset change was not saved when the saber reported it cannot read its card. Reconnecting does not help. */
+export const NO_SD_CARD = 'Not saved: the saber has no readable SD card, and preset changes are saved on the card.';
+
 /** Apply a patch to the board's *current* preset. Silence is not success: the result is what the read-back says. */
 export async function editCurrentPreset(client: BoardClient, patch: PresetPatch, now: () => number = () => Date.now(), opts: EditOptions = {}): Promise<EditResult> {
   const started = now();
@@ -93,7 +105,10 @@ export async function editCurrentPreset(client: BoardClient, patch: PresetPatch,
   if (patch.name !== undefined) cmds.push(presetCommands.setName(patch.name));
   if (patch.styles) for (const [k, v] of Object.entries(patch.styles)) cmds.push(presetCommands.setStyle(Number(k), v));
   if (!cmds.length) return { ok: true, preset: null, readbacks: 0, ms: 0 };
-  for (const c of cmds) await client.send(c, { idleMs: 400, timeoutMs: 8000 });
+  // Every line the saber sends back is kept: a card it cannot read shows up here, not as silence.
+  const heard: string[] = [];
+  for (const c of cmds) heard.push(...(await client.send(c, { idleMs: 400, timeoutMs: 8000 })).lines);
+  if (sdFailureIn(heard)) return { ok: false, preset: null, readbacks: 0, ms: now() - started, error: NO_SD_CARD };
   let readbacks = 0;
   // Up to three read-backs: the first often returns only the "Creating file" notice while the SD write runs.
   for (let i = 0; i < 3; i++) {
@@ -115,6 +130,7 @@ export async function editCurrentPreset(client: BoardClient, patch: PresetPatch,
   }
   // Nothing came back three times. Tell a dead link apart from a refused write: a live board answers get_preset at once.
   const alive = await client.send(presetCommands.getCurrent(), { idleMs: 400, timeoutMs: 4000 });
+  if (sdFailureIn(alive.lines)) return { ok: false, preset: null, readbacks, ms: now() - started, error: NO_SD_CARD };
   const dead = alive.lines.filter((l) => !isNoise(l)).length === 0;
   return { ok: false, preset: null, readbacks, ms: now() - started, error: dead ? 'The saber stopped answering. Unplug and replug it, then press Connect.' : 'The saber did not confirm the change.' };
 }

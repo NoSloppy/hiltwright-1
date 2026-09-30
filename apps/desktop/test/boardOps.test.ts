@@ -1,7 +1,7 @@
 // board-connection 3.3 and 3.14 (baseline audit), on the rules useBoard uses.
 
 import { describe, expect, it } from 'vitest';
-import { connectGate, runOperation, serialQueue, type OpDeps, type SaveState } from '../src/renderer/src/boardOps';
+import { NO_SD_CARD, connectGate, runOperation, sdFailureIn, serialQueue, type OpDeps, type SaveState } from '../src/renderer/src/boardOps';
 
 const later = () => { let done!: () => void; const p = new Promise<void>((r) => { done = r; }); return { p, done }; };
 
@@ -68,7 +68,7 @@ describe('running a board operation', () => {
   it('an edit whose turn comes after the saber was unplugged is reported as not sent', async () => {
     const { d, saves, busy } = deps(null);
     let ran = false;
-    await runOperation(d, 'Set font', async () => { ran = true; return { ok: true }; }, true);
+    expect(await runOperation(d, 'Set font', async () => { ran = true; return { ok: true }; }, true)).toBe(false);
     expect(ran).toBe(false);
     expect(saves).toEqual([{ kind: 'failed', what: 'Set font', error: 'Not sent: the saber is not connected.' }]);
     expect(busy).toEqual([]);
@@ -77,7 +77,7 @@ describe('running a board operation', () => {
   it('with a saber, runs the operation on its client and reports it saved', async () => {
     const { d, saves, busy } = deps({ name: 'hote2' });
     let on = '';
-    await runOperation(d, 'Set font', async (c) => { on = c.name; return { ok: true, ms: 12, note: 'checked' }; }, false);
+    expect(await runOperation(d, 'Set font', async (c) => { on = c.name; return { ok: true, ms: 12, note: 'checked' }; }, false)).toBe(true);
     expect(on).toBe('hote2');
     expect(saves[0]).toEqual({ kind: 'writing', what: 'Set font' });
     expect(saves[1]).toMatchObject({ kind: 'saved', what: 'Set font · checked', ms: 12 });
@@ -92,10 +92,28 @@ describe('running a board operation', () => {
     expect(saves.at(-1)).toEqual({ kind: 'failed', what: 'Font → Ben_Solo', error: 'Not saved: the saber was disconnected during the change.' });
   });
 
+  it('preset-editor-fixes D6: a saber that reset for want of a card is reported as having no card, not as unplugged', async () => {
+    let connected: { name: string } | null = { name: 'hote2' };
+    const saves: SaveState[] = [];
+    const d: OpDeps<{ name: string }> = { client: () => connected, setBusy: () => undefined, setSave: (s) => saves.push(s), log: () => undefined, snapshot: async () => undefined };
+    expect(await runOperation(d, 'Font → Ben_Solo', async () => { connected = null; return { ok: false, error: NO_SD_CARD }; }, false)).toBe(false);
+    expect(saves.at(-1)).toEqual({ kind: 'failed', what: 'Font → Ben_Solo', error: NO_SD_CARD });
+  });
+
   it('an operation that throws is reported as failed and clears busy', async () => {
     const { d, saves, busy } = deps({ name: 'hote2' });
-    await runOperation(d, 'Rename', async () => { throw new Error('Port closed'); }, false);
+    expect(await runOperation(d, 'Rename', async () => { throw new Error('Port closed'); }, false)).toBe(false);
     expect(saves.at(-1)).toEqual({ kind: 'failed', what: 'Rename', error: 'Error: Port closed' });
     expect(busy).toEqual([true, false]);
+  });
+});
+
+// preset-editor-fixes D6: what the saber says when it cannot read its card (hote2 with its card in the reader).
+describe('no readable SD card', () => {
+  it('is found in any line the saber sends, and only there', () => {
+    expect(sdFailureIn(['Failed to mount SD card.'])).toBe(true);
+    expect(sdFailureIn(['0', 'failed to mount sd card.'])).toBe(true);
+    expect(sdFailureIn(['Creating file presets.tmp iteration = 2', 'Whut? :set_foo'])).toBe(false);
+    expect(sdFailureIn([])).toBe(false);
   });
 });
