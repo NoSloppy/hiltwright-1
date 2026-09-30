@@ -62,4 +62,5 @@
     - **At first, nothing to copy:** every font hote2's presets use was already on the card, so the page rightly listed none as copyable.
     - **The check:** the owner then ran it and reported it passed. How the missing fonts were set up was not recorded.
     - **On the way:** editing a preset while the card was out of the saber reset hote2. That is HW-2026-09-26d, now with hote2 evidence in `preset-editor-fixes`.
-- [ ] 3.3 After archive, tick roadmap task 3.19 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 3.3 After archive, tick roadmap task 3.19 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+  - **Result, 2026-09-29.** Archived to `openspec/changes/archive/2026-09-29-sd-fonts-test-coverage` (no delta specs: `skip_specs`). Roadmap task 3.19 is ticked.
