@@ -20,6 +20,12 @@ Several small defects make the Presets page say one thing while the saber or the
   - **What happened:** a preset edit (`set_font BEN_SOLO`) fails with "The saber stopped answering. Unplug and replug it, then press Connect." The board printed "Failed to mount SD card." after the write and before almost every command. The three read-backs got no preset block, so `editCurrentPreset`'s dead-link probe blamed the connection.
   - **Why it matters:** reconnecting cannot help, because preset changes are saved on the card.
   - **The fix:** recognise the SD failure, both at connect (the board reports it during reading) and on an edit. Say there is no readable SD card in the saber, so preset changes cannot be saved until one is in, and do not offer live edits in that state.
+  - **Seen again on the V2.2 hote2, 2026-09-29** (during `sd-fonts-test-coverage` 3.2, with its card in a card reader; run log `%TEMP%\hiltwright-fresh3\logs\hiltwright-20260929-175152.log`):
+    - The board printed "Failed to mount SD card." about once a second from the moment it was read.
+    - `set_font Darth;common` went silent for 8 s, and the app let the saber go. A second try ended with the saber resetting ("port lost"), and the owner saw it go dark and reboot. A third went silent again.
+    - Each time the page said "Font → Darth failed: Not saved: the saber was disconnected during the change."
+    - It also reported a battery of 1.04 V, then 0.13 V (4.04 V the day before), so it was running on USB power alone.
+    - **So without a card, an edit can do more than fail: it can reset the saber.** Live edits must be withheld, not just explained.
 
 ## Non-goals
 
