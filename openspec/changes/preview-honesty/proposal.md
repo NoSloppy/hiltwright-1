@@ -19,6 +19,12 @@
 - **ST22:** The 2D preview uses the working saber's prop, and plays preon and post-off.
 - **ST23:** A test runs each built-in style's C++ through the style evaluator and compares it with its hand-written simulation, so the two cannot drift.
 - A side-by-side pass against a real blade belongs to `hardware-verification-v2`.
+- **STC-1** (found while planning `styles-test-coverage`, 2026-09-29): the `style-simulator` scenario "Clash on a raised blade" says the clash lands "nearer the hilt than it would on a lowered blade". That is the opposite of the firmware.
+  - ProffieOS's `ResponsiveClashL`, whose defaults the Hiltwright blade styles use, places a clash at `Scale<BladeAngle<>, TOP, BOTTOM>` (`proffieCatalogue.ts`), where:
+    - TOP = `Scale<BladeAngle<0,16000>, Int<4000>, Int<26000>>`
+    - BOTTOM = `Int<6000>`
+  - That gives about 0.12 of the blade pointing down, the middle when level, and about 0.18 pointing up. The simulator (`hitPos` in `packages/core/src/sim.ts`) matches it: on 132 LEDs the peak is at LED 26 pointing down, 64 level, and 29 pointing up.
+  - **The fix:** correct the scenario. A level blade is met in the middle, and a raised or lowered one near the hilt, as the style places it. `styles-test-coverage` pins the firmware's placement in the meantime.
 
 ## Non-goals
 
