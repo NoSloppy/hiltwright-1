@@ -2,29 +2,36 @@
 
 ## 1. The protocol
 
-- [ ] 1.1 In `packages/core/src/protocol/client.ts`, add `firstSeq` and `firstKick` to `ClientOptions`, and expose the client's `seq` and `kicks` (design D4). Verify in `packages/core/test/tagged.test.ts`:
+- [x] 1.1 In `packages/core/src/protocol/client.ts`, add `firstSeq` and `firstKick` to `ClientOptions`, and expose the client's `seq` and `kicks` (design D4). Verify in `packages/core/test/tagged.test.ts`:
   - a client started with `firstSeq: 12` sends `h12| …` first
   - a late `Whut? :h11x|` arriving while `h12` waits is shown as an event and does not end `h12`
 
   Then `npm test`.
-- [ ] 1.2 In `packages/core/src/protocol/responses.ts`, add `parseBatteryVoltage(lines)` for the bare number `battery_voltage` prints, tagged (`1,4,h2|0.03`) or not (design D1). Verify in `packages/core/test/protocol.test.ts`:
+  - **Result, 2026-10-25.** `ClientOptions.firstSeq` and `firstKick`, with getters `lastSeq` and `lastKick`. A new test in `packages/core/test/tagged.test.ts` passes: a client started at 12 sends `h12| get_preset`, and the end marker `Whut? :h11x|` arriving meanwhile is shown as a late line and does not end it.
+
+- [x] 1.2 In `packages/core/src/protocol/responses.ts`, add `parseBatteryVoltage(lines)` for the bare number `battery_voltage` prints, tagged (`1,4,h2|0.03`) or not (design D1). Verify in `packages/core/test/protocol.test.ts`:
   - `0.03`
   - `3.92`
   - a status line before the number
   - no number gives null
-- [ ] 1.3 In `packages/core/src/protocol/session.ts`, add `patchShown(preset, patch)`: true when every field the patch sets matches the preset, styles by blade (design D5). Verify in `packages/core/test/session.test.ts`:
+  - **Result, 2026-10-25.** `parseBatteryVoltage(lines)` in `responses.ts`, exported. `protocol.test.ts` covers `0.03`, `3.92`, a status line first and no number. `tagged.test.ts` adds a tagged `battery_voltage` answer (`1,4,h1|0.03`). 46 tests pass in the two files.
+
+- [x] 1.3 In `packages/core/src/protocol/session.ts`, add `patchShown(preset, patch)`: true when every field the patch sets matches the preset, styles by blade (design D5). Verify in `packages/core/test/session.test.ts`:
   - font
   - name
   - one blade's style among three
   - an empty patch
   - a mismatch on one field of two
+  - **Result, 2026-10-25.** `editCurrentPreset`'s private read-back rule `matches` is now the exported `patchShown`, so the write and the stall use one rule. Two tests in `session.test.ts` cover font, name, one blade of three, an empty patch, and a mismatch beside a match (10 in the file).
 
 ## 2. A quiet, light connect
 
-- [ ] 2.1 In `boardOps.ts`, add `readBattery(send)`: `battery_voltage`, falling back to `battery` when it is rejected, with `battery_voltage` then left out of the rejected list. Use it in `identify` (design D1). Verify in `apps/desktop/test/boardOps.test.ts` with a fake `send`:
+- [x] 2.1 In `boardOps.ts`, add `readBattery(send)`: `battery_voltage`, falling back to `battery` when it is rejected, with `battery_voltage` then left out of the rejected list. Use it in `identify` (design D1). Verify in `apps/desktop/test/boardOps.test.ts` with a fake `send`:
   - a firmware that answers `battery_voltage`: one command sent, the number read
   - a firmware that rejects it: `battery` sent next, the voltage read, nothing listed as rejected
-- [ ] 2.2 In `boardOps.ts`, add `storedLayout(records, serial, version)`. In `identify`, ask for the USB serials before the blade step, and send `scanid` only when `storedLayout` returns null (design D2). Verify in `apps/desktop/test/boardOps.test.ts`:
+  - **Result, 2026-10-25.** `readBattery(send)` in `boardOps.ts` sends `battery_voltage`, and `battery` only when that is rejected. `rejected` lists `battery` only when neither works. `identify` uses it, with its own timing wrapper not counting the quiet command as rejected. Three tests in `boardOps.test.ts`: quiet answer, fallback, neither.
+
+- [x] 2.2 In `boardOps.ts`, add `storedLayout(records, serial, version)`. In `identify`, ask for the USB serials before the blade step, and send `scanid` only when `storedLayout` returns null (design D2). Verify in `apps/desktop/test/boardOps.test.ts`:
   - the serial's record with the same config and install stamp gives its layout
   - a new install stamp gives null
   - no serial with one matching record gives its layout
@@ -32,21 +39,26 @@
   - a stored empty layout gives null
 
   Then `npm test` and `npm run typecheck`.
+  - **Result, 2026-10-25.** `storedLayout(records, serial, version)` in `boardOps.ts`. `identify` now looks up the USB serial and the library before the blade step, and sends `scanid` only when the result is null. It logs `blade layout [...]: stored for this build` otherwise. Six tests in `boardOps.test.ts`: same build by serial, new stamp, unknown serial with another board on the same build, one and two candidates without a serial, empty layout and no stamp. `npm run typecheck` passes; `npm test` 615 passed (gated skipped).
 
 ## 3. Recovering from a stall
 
-- [ ] 3.1 In `boardOps.ts`, add `createRecovery({ reopen, reread, log })`: one recovery at a time, `start()` joining one under way, `wait()` resolving to `recovered`, `lost` or null when none happened (design D3). Verify in `apps/desktop/test/boardOps.test.ts`:
+- [x] 3.1 In `boardOps.ts`, add `createRecovery({ reopen, reread, log })`: one recovery at a time, `start()` joining one under way, `wait()` resolving to `recovered`, `lost` or null when none happened (design D3). Verify in `apps/desktop/test/boardOps.test.ts`:
   - reopen and reread succeed → `recovered`
   - reopen throws → `lost`
   - reread silent → `lost`
   - two starts → one reopen
   - `wait()` with no stall → null
-- [ ] 3.2 In `boardOps.ts`, add the list checks `duplicateShown`, `deleteShown` and `moveShown`. Give `runOperation` the recovery and an optional `confirm`, and judge a stalled operation by it (design D5). Verify in `apps/desktop/test/boardOps.test.ts`:
+  - **Result, 2026-10-25.** `createRecovery({ reopen, reread, log })` in `boardOps.ts`, with `count`, `active`, `start(why)` and `since(n)` (null when no stall began after `n`, which replaces the planned `wait()`). Five tests in `boardOps.test.ts`: recovered, reopen fails, silent again, two starts one reopen, `since`.
+
+- [x] 3.2 In `boardOps.ts`, add the list checks `duplicateShown`, `deleteShown` and `moveShown`. Give `runOperation` the recovery and an optional `confirm`, and judge a stalled operation by it (design D5). Verify in `apps/desktop/test/boardOps.test.ts`:
   - a stalled selection whose preset is now current is saved, labelled "after a pause"
   - a stalled edit the saber does not show fails as "Not made…", and the operation runs once
   - a stall ending `lost` reports "disconnected during the change"
   - an operation queued behind the stall runs after `wait()` resolves, on the new client
   - the three list checks, each true and false
+  - **Result, 2026-10-25.** `NOT_MADE_AFTER_PAUSE`, `duplicateShown`, `deleteShown` and `moveShown` in `boardOps.ts`. `runOperation` takes `recovery` in its deps and an optional `confirm`, and judges a turn that met a stall. Eight tests: saved after a pause, not made and run once, lost, queued op on the new client, no stall unchanged, and the three list checks. 33 in the file.
+
 - [ ] 3.3 In `board.ts`, wire it up (design D3, D4, D7):
   - `onSilent` while connected starts the recovery
   - `reopen` closes and reopens the same port, making a new client that carries on the old one's `seq` and `kicks`
@@ -58,6 +70,7 @@
   Add a development aid `hiltwrightStallBoard()` that mutes the board until the next open. Verify:
   - `npm run typecheck` and `npm test`
   - one development run on hote2 using that aid, confirmed first to be hote2 by its PnP serial and with the owner's go-ahead: a preset selection made while stalled is reconnected and reported saved, and the run log shows the paused and reconnected lines
+  - **Result, 2026-10-25.** Code in place, not yet verified on hardware. `board.ts` has `makeClient`, `reopenRef` (closes the old client and transport at once, reopens the same port, carries on `seq` and `kicks`) and `rereadRef` (probe, `get_preset`, `list_presets`, then apply and remember). `onSilent` starts the recovery; `sendNow` waits for it; every preset operation passes its `confirm`. `pauses` is in the connection snapshot and the diagnostics file (`supportBundle.test.ts` checks the line). `hiltwrightStallBoard()` is in development builds. `npm run typecheck` passes; `npm test` 628 passed (gated skipped). Still to do: the hote2 development run with the owner's go-ahead.
 
 ## 4. The no-battery notice
 

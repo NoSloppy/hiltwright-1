@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { BoardClient, parsePresetBlocks, splitLines, type Transport } from '../src';
+import { BoardClient, parseBatteryVoltage, parsePresetBlocks, splitLines, type Transport } from '../src';
 
 const transcript = (name: string) => readFileSync(new URL(`./transcripts/os8/${name}`, import.meta.url), 'latin1');
 
@@ -53,6 +53,7 @@ class TaggedBoard implements Transport {
       if (inner === 'version') this.emit(this.tagLines(tag, 'v8.10 hiltwright ce12a06\nconfig/hiltwright_hote2.h\nprop: SaberFett263Buttons\nbuttons: 2\ninstalled: Sep 13 2026 10:25:36\n'));
       else if (inner === 'show_current_preset') this.emit(this.tagLines(tag, 'FONT=GeneralPrincess;common\nTRACK=tracks/General.wav\nSTYLE1=builtin 2 1\nSTYLE2=builtin 2 2\nSTYLE3=builtin 2 3\nNAME=Preset: 3\nVARIATION=0\n'));
       else if (inner === 'get_preset') this.emit(this.tagLines(tag, '2\n'));
+      else if (inner === 'battery_voltage') this.emit(this.tagLines(tag, '0.03\n'));
       else if (inner.startsWith('set_style1 ')) this.emit('Creating file presets.tmp iteration = 9\r\n'); // STDERR, untagged
       else this.emit(`Whut? :${tag}|\r\n`); // unknown inner command, including the hw_end sentinel
     }
@@ -212,6 +213,40 @@ describe('tagged framing (OS 8.10)', () => {
     expect(r.lines).toHaveLength(8);
     // Three and a half seconds of steady output with gaps shorter than the kick interval: no kick was needed.
     expect(sent.filter((c) => /^k\d+\| /.test(c))).toEqual([]);
+  });
+
+  it('a client for a port opened again carries on the old tags, so a stale end marker does not end a new command', async () => {
+    const timers = new FakeTimers();
+    const board = new TaggedBoard(timers);
+    const events: string[] = [];
+    const client = new BoardClient(board, { now: () => timers.now, setTimer: (fn, ms) => timers.after(ms, fn), clearTimer: (h) => timers.cancel(h), onEvent: (l) => events.push(l), firstSeq: 12, firstKick: 19 });
+    expect(client.lastSeq).toBe(11);
+    expect(client.lastKick).toBe(18);
+    const d = client.detectTagging();
+    await timers.run(2000);
+    await d;
+    const p = client.send('get_preset');
+    // What hote2 printed after the reopen on 2026-10-25: the rest of a stalled reply, ending with the old marker.
+    timers.after(1, () => (board as unknown as { cb: (c: string) => void }).cb('Whut? :h11x|\r\n'));
+    await timers.run(4000);
+    const r = await p;
+    expect(board.sent).toContain('h12| get_preset');
+    expect(r.lines).toEqual(['2']);
+    expect(r.timedOut).toBe(false);
+    expect(events).toContain('(late) Whut? :h11x|');
+    expect(client.lastSeq).toBe(12);
+  });
+
+  it('the quiet battery reading parses from its tagged answer', async () => {
+    const { timers, board, client } = setup();
+    const d = client.detectTagging();
+    await timers.run(2000);
+    await d;
+    const p = client.send('battery_voltage');
+    await timers.run(4000);
+    const r = await p;
+    expect(board.sent).toContain('h1| battery_voltage');
+    expect(parseBatteryVoltage(r.lines)).toBe(0.03);
   });
 
   it('an OS 7 board that rejects the probe stays untagged', async () => {

@@ -4,7 +4,7 @@
 
 import type { ConnectionSnapshot } from '../../shared/api';
 
-let connection: Omit<ConnectionSnapshot, 'saberId'> = { status: 'idle', error: null, port: null, board: null };
+let connection: Omit<ConnectionSnapshot, 'saberId'> = { status: 'idle', error: null, port: null, board: null, pauses: 0 };
 let workingSaberId: string | null = null;
 
 export function setConnectionSnapshot(next: Omit<ConnectionSnapshot, 'saberId'>): void {

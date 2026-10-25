@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  BoardClient, LineBuffer, emitPresetsIni, formatBuiltin, isNoise, isPresetBlockEnd, parseBattery, parseBuiltin, parseId, parseInteger,
+  BoardClient, LineBuffer, emitPresetsIni, formatBuiltin, isNoise, isPresetBlockEnd, parseBattery, parseBatteryVoltage, parseBuiltin, parseId, parseInteger,
   parseList, parsePresetBlocks, parsePresetsIni, parseScanId, parseVersion, presetCommands, splitLines, wasRejected, type Response, type Transport,
 } from '../src';
 
@@ -97,6 +97,11 @@ describe('recorded OS 7.8 transcripts', () => {
   });
   it('battery and volume', () => {
     expect(parseBattery(lines('02-battery.txt'))).toBe(3.5);
+    // `battery_voltage` prints the number alone (usb-power-connect D1).
+    expect(parseBatteryVoltage(['0.03'])).toBe(0.03);
+    expect(parseBatteryVoltage(['3.92'])).toBe(3.92);
+    expect(parseBatteryVoltage(['Unmounting SD Card.', '3.92'])).toBe(3.92);
+    expect(parseBatteryVoltage(['Battery voltage: 3.92', 'Whut? :battery_voltage'])).toBeNull();
     expect(parseInteger(lines('03-get_volume.txt'))).toBe(1400);
     expect(parseInteger(lines('16-get_preset.txt'))).toBe(0);
   });

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { BoardClient, NO_SD_CARD, diffPreset, editCurrentPreset, parsePresetBlocks, sdFailureIn, selectPreset, splitLines, type PresetRecord, type Transport } from '../src';
+import { BoardClient, NO_SD_CARD, diffPreset, editCurrentPreset, parsePresetBlocks, patchShown, sdFailureIn, selectPreset, splitLines, type PresetRecord, type Transport } from '../src';
 
 const transcript = (name: string) => readFileSync(new URL(`./transcripts/${name}`, import.meta.url), 'latin1');
 
@@ -165,5 +165,21 @@ describe('diffPreset', () => {
     edited.styles[0] = 'builtin 2 1 65535,0,0';
     expect(diffPreset(edited, presets[2])).toEqual({ font: 'GeneralPrincess;common', styles: { 1: 'builtin 2 1' } });
     expect(diffPreset(presets[2], presets[2])).toEqual({});
+  });
+});
+
+describe('patchShown', () => {
+  const { presets } = parsePresetBlocks(splitLines(transcript('04-list_presets.txt')));
+  const p = presets[2];
+  it('is true when the preset shows every field the patch sets', () => {
+    expect(patchShown(p, { font: p.font })).toBe(true);
+    expect(patchShown(p, { name: p.name })).toBe(true);
+    expect(patchShown(p, { styles: { 2: p.styles[1] } })).toBe(true);
+    expect(patchShown(p, {})).toBe(true);
+  });
+  it('is false when one field differs, even if another matches', () => {
+    expect(patchShown(p, { font: 'TeensySF;common' })).toBe(false);
+    expect(patchShown(p, { name: p.name, font: 'TeensySF;common' })).toBe(false);
+    expect(patchShown(p, { styles: { 2: 'builtin 9 9' } })).toBe(false);
   });
 });

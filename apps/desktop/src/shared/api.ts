@@ -201,6 +201,8 @@ export interface ConnectionSnapshot {
     version: string | null; config: string | null; prop: string | null; buttons: number | null;
     battery: number | null; volume: number | null; presets: number; fonts: number; tracks: number; blades: number[];
   } | null;
+  /** Times this connection's link stalled and the port was opened again (usb-power-connect D7). */
+  pauses: number;
   /** The saber every page is about (the connected one, or the one chosen in the Armory). */
   saberId: string | null;
 }

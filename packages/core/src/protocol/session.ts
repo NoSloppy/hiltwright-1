@@ -67,7 +67,11 @@ export async function selectPreset(client: BoardClient, index: number): Promise<
   return { preset, index: cur };
 }
 
-function matches(p: PresetRecord, patch: PresetPatch): boolean {
+/**
+ * Whether the preset shows every field the patch sets: the read-back rule for a write, and how a change that met a
+ * stalled link is judged once the saber is read again (usb-power-connect D5).
+ */
+export function patchShown(p: PresetRecord, patch: PresetPatch): boolean {
   if (patch.font !== undefined && p.font !== patch.font) return false;
   if (patch.track !== undefined && p.track !== patch.track) return false;
   if (patch.name !== undefined && p.name !== patch.name) return false;
@@ -114,7 +118,7 @@ export async function editCurrentPreset(client: BoardClient, patch: PresetPatch,
   for (let i = 0; i < 3; i++) {
     const r = await readCurrentPreset(client, 1);
     readbacks += r.readbacks;
-    if (r.preset && matches(r.preset, patch)) {
+    if (r.preset && patchShown(r.preset, patch)) {
       let applied: boolean | undefined;
       if (patch.styles && opts.applyIndex != null) {
         // Re-selecting the preset while the blade is on is what overloads a V2 running a heavy style; with the

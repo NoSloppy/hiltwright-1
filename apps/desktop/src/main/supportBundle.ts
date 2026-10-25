@@ -85,6 +85,7 @@ function connectionLines(c: ConnectionSnapshot): string[] {
   const out = [`Status: ${c.status === 'connected' ? 'connected' : `no saber connected (${c.status})`}`];
   if (c.error) out.push(`Last error: ${c.error}`);
   if (c.port) out.push(`Port: ${c.port}`);
+  if (c.pauses) out.push(`Link pauses this connection: ${c.pauses} (each time the saber stopped answering mid-command and the port was opened again)`);
   const b = c.board;
   if (b) {
     out.push(
@@ -187,6 +188,7 @@ export function cleanSnapshot(v: unknown): ConnectionSnapshot {
       presets: n(b.presets) ?? 0, fonts: n(b.fonts) ?? 0, tracks: n(b.tracks) ?? 0,
       blades: Array.isArray(b.blades) ? b.blades.map(Number).filter(Number.isFinite).slice(0, 16) : [],
     } : null,
+    pauses: n(o.pauses) ?? 0,
     saberId: s(o.saberId, 40),
   };
 }

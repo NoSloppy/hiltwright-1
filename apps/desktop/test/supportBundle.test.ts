@@ -29,7 +29,7 @@ const base = (over: Partial<BundleInput> = {}): BundleInput => ({
   about: { app: '0.1.0', packaged: true, os: 'Windows 11 Pro 10.0.26200', arch: 'x64', electron: '37.2.0', chrome: '138.0' },
   toolchain: { root: 'C:\\Users\\Al\\AppData\\Local\\Hiltwright\\tc', cli: true, cliVersion: '1.3.1', core: true, gcc: true, dfuUtil: 'x', proffieOS: true, proffieOSVersion: 'v8.10', ready: true, freeBytes: 50 * 1048576, pathTooLong: false, versions: { cli: '1.3.1', core: '4.6', proffieOS: 'v8.10' }, open: false },
   usb: { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: null, bootloaderProblem: null, bootloaders: [], runtimeSerials: ['209133815232'], runtimeNoSerial: 0 },
-  connection: { status: 'connected', error: null, port: '1209:6668', board: { version: 'v8.10', config: 'hote2.h', prop: 'Fett263', buttons: 2, battery: 3.9, volume: 1800, presets: 13, fonts: 18, tracks: 22, blades: [132, 1, 2] }, saberId: 'ea8dbea42e78' },
+  connection: { status: 'connected', error: null, port: '1209:6668', board: { version: 'v8.10', config: 'hote2.h', prop: 'Fett263', buttons: 2, battery: 3.9, volume: 1800, presets: 13, fonts: 18, tracks: 22, blades: [132, 1, 2] }, pauses: 2, saberId: 'ea8dbea42e78' },
   saber,
   lastBuild: { at: '2026-09-25T15:59:00Z', saberId: 'ea8dbea42e78', ok: false, cached: false, ms: 61000, textBytes: 225000, flashBytes: 262144, flashPct: 86, warnings: ['Blade 2 has no style'], problems: ['The firmware is too big for this board.'] },
   currentLog: { name: 'hiltwright-20260925-155500.log', text: '15:55 [board] > hwt| version\n15:55 [board] < 1,24,hwt|v8.10' },
@@ -45,6 +45,7 @@ describe('the diagnostics file', () => {
     expect(t).toContain('Windows: Windows 11 Pro 10.0.26200');
     expect(t).toContain('ProffieOS: v8.10');
     expect(t).toContain('Status: connected');
+    expect(t).toContain('Link pauses this connection: 2');
     expect(t).toContain('Name: hote2');
     expect(t).toContain('wiring confirmed');
     expect(t).toContain('1. Kylo | font Kylo;common | track tracks/kylo.wav');
@@ -55,7 +56,7 @@ describe('the diagnostics file', () => {
   });
 
   it('says so when no saber is connected and nothing was built', () => {
-    const t = composeBundle(base({ connection: { status: 'idle', error: null, port: null, board: null, saberId: null }, saber: null, lastBuild: null, previousLog: null }), redact);
+    const t = composeBundle(base({ connection: { status: 'idle', error: null, port: null, board: null, pauses: 0, saberId: null }, saber: null, lastBuild: null, previousLog: null }), redact);
     expect(t).toContain('no saber connected');
     expect(t).toContain('No saber chosen.');
     expect(t).toContain('No build in this run.');
@@ -123,7 +124,7 @@ describe("the page's snapshot", () => {
   });
 
   it('turns anything else into an unknown, empty snapshot', () => {
-    expect(cleanSnapshot('junk')).toEqual({ status: 'unknown', error: null, port: null, board: null, saberId: null });
+    expect(cleanSnapshot('junk')).toEqual({ status: 'unknown', error: null, port: null, board: null, pauses: 0, saberId: null });
     expect(cleanSnapshot(null).board).toBeNull();
   });
 });

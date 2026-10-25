@@ -36,6 +36,18 @@ export function parseVersion(lines: string[]): VersionInfo | null {
   return info;
 }
 
+/**
+ * `battery_voltage` prints the voltage alone, where `battery` also says it aloud (usb-power-connect D1). The number
+ * is the first line that is only a number; status lines the board prints around it are skipped.
+ */
+export function parseBatteryVoltage(lines: string[]): number | null {
+  for (const l of lines) {
+    const m = /^\s*(\d+(?:\.\d+)?)\s*$/.exec(l);
+    if (m) return Number(m[1]);
+  }
+  return null;
+}
+
 export function parseBattery(lines: string[]): number | null {
   for (const l of lines) {
     const m = /^Battery voltage:\s*([\d.]+)/.exec(l);

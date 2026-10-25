@@ -13,6 +13,8 @@ export class WebSerialTransport implements Transport {
   private closed = false;
   /** Development aid (hiltwrightMuteBoard): read as usual but hand nothing on, so the app meets a silent saber. */
   static muted = false;
+  /** Development aid (hiltwrightStallBoard): like `muted`, but only until a port is opened again, as a stalled link is. */
+  static stalled = false;
   private readonly onClose: (reason: string) => void;
 
   constructor(readonly port: SerialPort, onClose: (reason: string) => void = () => {}) {
@@ -45,6 +47,7 @@ export class WebSerialTransport implements Transport {
       }
     }
     if (lastErr) throw lastErr;
+    WebSerialTransport.stalled = false;
     // ProffieOS treats a console with DTR asserted as attached; the spike used the same signals.
     await this.port.setSignals({ dataTerminalReady: true, requestToSend: true });
     this.writer = this.port.writable!.getWriter();
@@ -65,7 +68,7 @@ export class WebSerialTransport implements Transport {
         for (;;) {
           const { value, done } = await reader.read();
           if (done) { ended = true; break; }
-          if (value?.length && !WebSerialTransport.muted) {
+          if (value?.length && !WebSerialTransport.muted && !WebSerialTransport.stalled) {
             const text = this.decoder.decode(value, { stream: true });
             for (const l of this.listeners) l(text);
           }

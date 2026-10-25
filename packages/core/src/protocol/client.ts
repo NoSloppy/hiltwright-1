@@ -65,6 +65,12 @@ export interface ClientOptions {
   silentMs?: number;
   /** Called for each command that timed out silent (see Response.silent), unless it expected silence. */
   onSilent?: (response: Response) => void;
+  /**
+   * The number of the first tag (`h<n>`) and kick (`k<n>`) this client sends. A client made for a port opened again
+   * carries on from the old one's `lastSeq` and `lastKick`, so a stale answer still on its way never matches a new tag.
+   */
+  firstSeq?: number;
+  firstKick?: number;
   onEvent?: (line: string) => void;
   /** Every line written to the board ('sent', kicks and sentinels included) and every line it sends ('heard'), raw. */
   onTraffic?: (direction: 'sent' | 'heard', text: string) => void;
@@ -122,6 +128,8 @@ export class BoardClient {
     this.maxKicks = opts.maxKicks ?? 30;
     this.silentMs = opts.silentMs ?? 10000;
     this.onSilent = opts.onSilent ?? (() => {});
+    this.seq = Math.max(0, (opts.firstSeq ?? 1) - 1);
+    this.kicks = Math.max(0, (opts.firstKick ?? 1) - 1);
     this.onEvent = opts.onEvent ?? (() => {});
     this.onTraffic = opts.onTraffic ?? null;
     this.now = opts.now ?? (() => Date.now());
@@ -144,6 +152,14 @@ export class BoardClient {
     Promise.resolve()
       .then(() => this.transport.write(text))
       .catch((err) => { this.onEvent(`(write failed: ${String(err)})`); this.current?.resolve(false); });
+  }
+
+  /** The number of the last tag and the last kick sent (0 before the first). */
+  get lastSeq(): number {
+    return this.seq;
+  }
+  get lastKick(): number {
+    return this.kicks;
   }
 
   /** Whether commands are being tagged (OS 8 framing). */

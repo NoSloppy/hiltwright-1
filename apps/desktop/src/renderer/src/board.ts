@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  BoardClient, deleteCurrentPreset, diffPreset, duplicateCurrentPreset, editCurrentPreset, formatBuiltin, isEmptyPatch, isPresetBlockEnd, listPresets, parseBuiltin,
-  moveCurrentPreset, parseBattery, parseInteger, parseList, parsePresetBlocks, parseScanId, parseVersion, presetCommands, selectPreset, wasRejected,
+  BoardClient, currentPresetIndex, deleteCurrentPreset, diffPreset, duplicateCurrentPreset, editCurrentPreset, formatBuiltin, isEmptyPatch, isPresetBlockEnd, listPresets, parseBuiltin, patchShown,
+  moveCurrentPreset, parseInteger, parseList, parsePresetBlocks, parseScanId, parseVersion, presetCommands, selectPreset, wasRejected,
   type ListResult, type PresetPatch, type PresetRecord, type Response, type VersionInfo,
   type SaberConfigModel,
 } from '@hiltwright/core';
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
 import { PROFFIE_FILTER, WebSerialTransport, describePort, grantedProffiePorts } from './serial';
 import { setConnectionSnapshot } from './support';
-import { connectGate, runOperation, sdFailureIn, serialQueue, type SaveState } from './boardOps';
+import { connectGate, createRecovery, deleteShown, duplicateShown, moveShown, readBattery, runOperation, sdFailureIn, serialQueue, storedLayout, type SaveState } from './boardOps';
 
 export interface BoardInfo {
   version: VersionInfo | null;
@@ -72,6 +72,12 @@ export function useBoard() {
   // The one board to reach next, by USB serial: the saber an install or restore is bringing back. Main lets only that
   // board through meanwhile, so the port opened is it, and the saber read is known by that serial.
   const wanted = useRef<string | null>(null);
+  // A stalled link gets one reopen of its port (usb-power-connect D3). `pauses` counts them for this connection.
+  const [pauses, setPauses] = useState(0);
+  const silentInRecovery = useRef(false);
+  const reopenRef = useRef<() => Promise<void>>(async () => { throw new Error('not connected'); });
+  const rereadRef = useRef<() => Promise<boolean>>(async () => false);
+  const [recovery] = useState(() => createRecovery({ reopen: () => reopenRef.current(), reread: () => rereadRef.current(), log: (l) => console.log(`[board] ${l}`) }));
   infoRef.current = info;
   saberRef.current = saber;
 
@@ -91,8 +97,9 @@ export function useBoard() {
         version: v?.version ?? null, config: v?.config ?? null, prop: v?.prop ?? null, buttons: v?.buttons ?? null,
         battery: info.battery, volume: info.volume, presets: info.presets.length, fonts: info.fonts.length, tracks: info.tracks.length, blades: info.pixelBlades,
       } : null,
+      pauses,
     });
-  }, [status, error, portName, info]);
+  }, [status, error, portName, info, pauses]);
 
   // The connected saber's own record is refreshed too: main may have changed it (a saved style reaching its plan), and
   // every page works from `saber` while it is plugged in.
@@ -181,8 +188,11 @@ export function useBoard() {
   const sendNow = useCallback(async (command: string, opts?: Parameters<BoardClient['send']>[1]): Promise<Response> => {
     if (!client.current) throw new Error('Not connected');
     log('in', command);
+    const stalls = recovery.count;
     const r = await client.current.send(command, opts);
     for (const l of r.lines) log('out', l);
+    // A stall in this turn: the next command in the queue waits for the reopen, and goes to the new client (D3).
+    if (r.silent || recovery.count !== stalls) await recovery.since(stalls);
     return r;
   }, [log]);
   /** Send a command in its turn, after any edit already under way (the console, Try it, page checks). */
@@ -194,11 +204,11 @@ export function useBoard() {
     sdSeen.current = false;
     const timings: Record<string, number> = {};
     const rejected: string[] = [];
-    const time = async (cmd: string, opts?: Parameters<BoardClient['send']>[1]) => {
+    const time = async (cmd: string, opts?: Parameters<BoardClient['send']>[1], track = true) => {
       const r = await sendNow(cmd, opts);
       if (silentWhileIdentifying.current) throw new NotAnswering(`no answer to ${cmd}`);
       timings[cmd] = r.ms;
-      if (wasRejected(r.lines)) rejected.push(cmd);
+      if (track && wasRejected(r.lines)) rejected.push(cmd);
       return r;
     };
     // OS 8 boards frame answers per command (`tag| command`); once detected every later command uses it.
@@ -209,17 +219,30 @@ export function useBoard() {
     log('event', tagged ? 'Tagged responses: yes (OS 8 framing)' : 'Tagged responses: no (untagged, idle-terminated)');
     console.log(`[board] tagged=${tagged} probe=${timings.tagging} ms`);
     const v = await time('version', { until: (l) => /^installed:/.test(l) });
-    const b = await time('battery', { until: (l) => /^Battery voltage:/.test(l) });
+    // Quietly: `battery` would have the saber say its voltage aloud on every connect (usb-power-connect D1).
+    const battery = await readBattery((cmd, opts) => time(cmd, opts, false));
+    rejected.push(...battery.rejected);
     const vol = await time('get_volume', { until: (l) => /^-?\d+$/.test(l.trim()) });
     const cur = await time(presetCommands.getCurrent(), { until: (l) => /^-?\d+$/.test(l.trim()) });
     const lp = await time(presetCommands.list(), { idleMs: 700, timeoutMs: 15000 });
     const fonts = await time('list_fonts', { idleMs: 700, timeoutMs: 15000 });
     const tracks = await time('list_tracks', { idleMs: 700, timeoutMs: 15000 });
-    const scan = await time('scanid', { idleMs: 1200, timeoutMs: 15000 });
-    const scanInfo = parseScanId([...scan.lines, ...scan.events]);
+    const version = parseVersion(v.lines);
+    // Which board this is, before the blade step: its stored layout is reused when the build is one already read.
+    let usbSerial: string | null = null;
+    try { const serials = await api().usb.proffieSerials(); usbSerial = wanted.current && serials.includes(wanted.current) ? wanted.current : serials.length === 1 ? serials[0] : null; } catch { /* not available on this platform */ }
+    let records: SaberRecord[] = [];
+    try { records = await api().library.list(); } catch { /* read afresh below */ }
+    // `scanid` makes the saber detect its blades and rescan its font, so only a build not read before is asked (D2).
+    let scanInfo = storedLayout(records, usbSerial, version);
+    if (scanInfo) console.log(`[board] blade layout ${JSON.stringify(scanInfo.pixelBlades)}: stored for this build`);
+    else {
+      const scan = await time('scanid', { idleMs: 1200, timeoutMs: 15000 });
+      scanInfo = parseScanId([...scan.lines, ...scan.events]);
+    }
     const next: BoardInfo = {
-      version: parseVersion(v.lines),
-      battery: parseBattery(b.lines),
+      version,
+      battery: battery.volts,
       volume: parseInteger(vol.lines),
       currentPreset: parseInteger(cur.lines),
       presets: parsePresetBlocks(lp.lines).presets,
@@ -238,8 +261,6 @@ export function useBoard() {
     console.log(`[board] version=${next.version?.version ?? '?'} config=${next.version?.config ?? '?'} prop=${next.version?.prop ?? '?'} buttons=${next.version?.buttons ?? '?'} battery=${next.battery ?? '?'} volume=${next.volume ?? '?'} current=${next.currentPreset ?? '?'} presets=${next.presets.length} fonts=${next.fonts.length} tracks=${next.tracks.length} blades=${JSON.stringify(next.pixelBlades)} timings=${JSON.stringify(timings)}`);
 
     // Remember the saber.
-    let usbSerial: string | null = null;
-    try { const serials = await api().usb.proffieSerials(); usbSerial = wanted.current && serials.includes(wanted.current) ? wanted.current : serials.length === 1 ? serials[0] : null; } catch { /* not available on this platform */ }
     const identity: SaberIdentity = {
       usbSerial, configName: next.version?.config ?? null, version: next.version?.version ?? null, prop: next.version?.prop ?? null,
       buttons: next.version?.buttons ?? null, installed: next.version?.installed ?? null, pixelBlades: next.pixelBlades, bladeConfig: next.bladeConfig,
@@ -277,25 +298,8 @@ export function useBoard() {
       return;
     }
     transport.current = t;
-    // The run log gets the whole conversation, including the probe, polls and helper commands the console leaves out.
-    client.current = new BoardClient(t, {
-      onEvent: (l) => log('event', l),
-      onTraffic: (d, text) => {
-        console.log(`[board] ${d === 'sent' ? '>' : '<'} ${text}`);
-        // A card pulled while connected: the page goes read-only as soon as the saber says so.
-        if (d === 'heard' && sdFailureIn([text]) && !sdSeen.current) {
-          sdSeen.current = true;
-          console.log('[board] the saber cannot read its SD card');
-          if (infoRef.current && !identifying.current) { infoRef.current = { ...infoRef.current, sdMissing: true }; setInfo((i) => (i ? { ...i, sdMissing: true } : i)); }
-        }
-      },
-      // Nothing at all back, nudges included: while being read the reading stops; once connected, the saber is let go.
-      onSilent: (r) => {
-        console.log(`[board] silent: ${r.command} (${r.ms} ms, nothing heard)`);
-        if (identifying.current) { silentWhileIdentifying.current = true; return; }
-        void disconnect(STOPPED_ANSWERING);
-      },
-    });
+    client.current = makeClient(t);
+    setPauses(0);
     setPortName(describePort(port));
     console.log('[board] port opened', describePort(port));
     identifying.current = true;
@@ -311,6 +315,67 @@ export function useBoard() {
       identifying.current = false;
     }
   }, [disconnect, identify, log, lost]);
+
+  /** A client on this transport. After a reopen it carries on the old client's tag and kick numbers (D4). */
+  function makeClient(t: WebSerialTransport, carry?: { firstSeq: number; firstKick: number }): BoardClient {
+    // The run log gets the whole conversation, including the probe, polls and helper commands the console leaves out.
+    return new BoardClient(t, {
+      ...carry,
+      onEvent: (l) => log('event', l),
+      onTraffic: (d, text) => {
+        console.log(`[board] ${d === 'sent' ? '>' : '<'} ${text}`);
+        // A card pulled while connected: the page goes read-only as soon as the saber says so.
+        if (d === 'heard' && sdFailureIn([text]) && !sdSeen.current) {
+          sdSeen.current = true;
+          console.log('[board] the saber cannot read its SD card');
+          if (infoRef.current && !identifying.current) { infoRef.current = { ...infoRef.current, sdMissing: true }; setInfo((i) => (i ? { ...i, sdMissing: true } : i)); }
+        }
+      },
+      // Nothing at all back, nudges included: while being read the reading stops. Once connected, the port is opened
+      // again once and the saber read again; only if that fails is it let go (usb-power-connect D3).
+      onSilent: (r) => {
+        console.log(`[board] silent: ${r.command} (${r.ms} ms, nothing heard)`);
+        if (identifying.current) { silentWhileIdentifying.current = true; return; }
+        if (recovery.active) { silentInRecovery.current = true; return; }
+        setPauses((n) => n + 1);
+        void recovery.start(r.command).then((outcome) => {
+          if (outcome === 'lost') void disconnect(STOPPED_ANSWERING);
+        });
+      },
+    });
+  }
+
+  // The reopen: the old client and transport go at once, so the stalled operation's next commands end straight away
+  // instead of reaching the board. Then the same port is opened again, as the Connect button does.
+  reopenRef.current = async () => {
+    const old = client.current;
+    const t = transport.current;
+    if (!old || !t) throw new Error('not connected');
+    const carry = { firstSeq: old.lastSeq + 1, firstKick: old.lastKick + 1 };
+    old.close();
+    client.current = null;
+    transport.current = null;
+    await t.close();
+    await new Promise((r) => setTimeout(r, 300));
+    const next = new WebSerialTransport(t.port, lost);
+    await next.open();
+    transport.current = next;
+    client.current = makeClient(next, carry);
+  };
+  // The reading again: the tag probe, the current preset and the list, which is what the stalled change is judged by.
+  rereadRef.current = async () => {
+    const c = client.current;
+    if (!c) return false;
+    silentInRecovery.current = false;
+    const tagged = await c.detectTagging();
+    if (silentInRecovery.current || !tagged) return false;
+    const current = await currentPresetIndex(c);
+    const presets = await listPresets(c);
+    if (silentInRecovery.current || !presets.length) return false;
+    applyList({ presets, current });
+    void rememberPresets();
+    return true;
+  };
 
   const connectOnce = useCallback(async (interactive: boolean) => {
     let ports = await grantedProffiePorts();
@@ -368,6 +433,9 @@ export function useBoard() {
     navigator.serial?.addEventListener('disconnect', onDisconnect);
     // Development aid: hiltwrightMuteBoard() makes the app hear nothing from the saber, to check the silent-saber handling.
     if (import.meta.env.DEV) (window as unknown as { hiltwrightMuteBoard?: (on?: boolean) => string }).hiltwrightMuteBoard = (on = true) => { WebSerialTransport.muted = on; console.log(`[board] muted: ${on}`); return on ? 'muted' : 'unmuted'; };
+    // Development aid: hiltwrightStallBoard() makes the app hear nothing until the port is next opened, as a stalled
+    // link behaves, to check the reopen (usb-power-connect 3.3).
+    if (import.meta.env.DEV) (window as unknown as { hiltwrightStallBoard?: () => string }).hiltwrightStallBoard = () => { WebSerialTransport.stalled = true; console.log('[board] stalled until the next open'); return 'stalled'; };
     return () => { navigator.serial?.removeEventListener('connect', onConnect); navigator.serial?.removeEventListener('disconnect', onDisconnect); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -412,8 +480,9 @@ export function useBoard() {
    * Run a board operation in its turn, with busy state, snapshot and save-state bookkeeping (boardOps.ts). Resolves to
    * whether the saber confirmed it; with `remember`, a confirmed operation's presets are stored on the saber's record.
    */
-  const run = useCallback((label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot = true, remember = false): Promise<boolean> => {
-    return enqueue(() => runOperation({ client: () => client.current, setBusy, setSave, log, snapshot }, label, op, withSnapshot)).then((ok) => {
+  const run = useCallback((label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot = true, remember = false, confirm?: () => boolean): Promise<boolean> => {
+    // `confirm`: whether the saber, read again after a stall, shows this change (usb-power-connect D5).
+    return enqueue(() => runOperation({ client: () => client.current, setBusy, setSave, log, snapshot, recovery }, label, op, withSnapshot, confirm)).then((ok) => {
       if (ok && remember) void rememberPresets();
       return ok;
     });
@@ -426,7 +495,7 @@ export function useBoard() {
     setInfo((i) => (i ? { ...i, currentPreset: r.index ?? index } : i));
     if (r.preset && r.index != null) replacePreset(r.index, r.preset);
     return { ok: r.preset !== null, error: r.preset ? undefined : 'No read-back after selecting.' };
-  }, false), [run, replacePreset]);
+  }, false, false, () => infoRef.current?.currentPreset === index), [run, replacePreset]);
 
   // A style write made while the blade was on is applied (preset re-selected) once the blade is off, so the owner
   // never has to switch presets to see a colour. Polled every 3 s while something is pending.
@@ -439,7 +508,7 @@ export function useBoard() {
         if (!r.lines.some((l) => l.trim() === '0')) return;
         const index = pendingApply;
         setPendingApply(null);
-        void run('Apply colours', async (cl) => { const s = await selectPreset(cl, index); return { ok: s.preset !== null, error: s.preset ? undefined : 'No read-back after re-selecting.' }; }, false);
+        void run('Apply colours', async (cl) => { const s = await selectPreset(cl, index); return { ok: s.preset !== null, error: s.preset ? undefined : 'No read-back after re-selecting.' }; }, false, false, () => infoRef.current?.currentPreset === index);
       });
     }, 3000);
     return () => clearInterval(t);
@@ -457,16 +526,24 @@ export function useBoard() {
       if (r.preset) replacePreset(index, r.preset);
       if (r.applied === false) setPendingApply(index);
       return { ...r, note: r.applied === false ? 'applies when you retract the blade' : undefined };
-    }, true, true);
+    }, true, true, () => { const p = infoRef.current?.presets[index]; return !!p && patchShown(p, patch); });
   }, [run, replacePreset]);
 
-  const movePreset = useCallback((to: number) => run(`Move to position ${to + 1}`, async (c) => { applyList(await moveCurrentPreset(c, to)); return { ok: true }; }, true, true), [run, applyList]);
+  // The list as it was when each list operation's turn came, for judging it after a stall (D5).
+  const movePreset = useCallback((to: number) => {
+    let before: PresetRecord[] = []; let from = -1;
+    return run(`Move to position ${to + 1}`, async (c) => { before = infoRef.current?.presets ?? []; from = infoRef.current?.currentPreset ?? -1; applyList(await moveCurrentPreset(c, to)); return { ok: true }; }, true, true, () => moveShown(before, infoRef.current?.presets ?? [], from, to));
+  }, [run, applyList]);
   const duplicatePreset = useCallback(() => {
     const i = infoRef.current;
     const pos = (i?.currentPreset ?? 0) + 1;
-    return run('Duplicate preset', async (c) => { applyList(await duplicateCurrentPreset(c, pos)); return { ok: true }; }, true, true);
+    let before: PresetRecord[] = [];
+    return run('Duplicate preset', async (c) => { before = infoRef.current?.presets ?? []; applyList(await duplicateCurrentPreset(c, pos)); return { ok: true }; }, true, true, () => duplicateShown(before, infoRef.current?.presets ?? [], pos));
   }, [run, applyList]);
-  const deletePreset = useCallback(() => run('Delete preset', async (c) => { applyList(await deleteCurrentPreset(c)); return { ok: true }; }, true, true), [run, applyList]);
+  const deletePreset = useCallback(() => {
+    let before: PresetRecord[] = [];
+    return run('Delete preset', async (c) => { before = infoRef.current?.presets ?? []; applyList(await deleteCurrentPreset(c)); return { ok: true }; }, true, true, () => deleteShown(before, infoRef.current?.presets ?? []));
+  }, [run, applyList]);
 
   /** Put the current preset back the way a snapshot had it, with the fewest commands. */
   const restoreSnapshot = useCallback(async (meta: SnapshotMeta) => {
@@ -498,7 +575,7 @@ export function useBoard() {
       if (r.preset) replacePreset(index, r.preset);
       if (r.applied === false) setPendingApply(index);
       return { ...r, note: r.applied === false ? 'applies when you retract the blade' : undefined };
-    }, true, true);
+    }, true, true, () => { const p = infoRef.current?.presets[index]; return !!p && patchShown(p, { styles }); });
   }, [run, replacePreset]);
 
   const currentPresetNow = useCallback((): PresetRecord | null => {
