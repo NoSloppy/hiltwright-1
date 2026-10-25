@@ -18,9 +18,8 @@ Connecting also makes the saber talk and re-initialise:
 
 - **A quiet, light connect:**
   - The battery is read with `battery_voltage`, which prints only the number. Firmware that answers `Whut?` gets `battery` as before.
-  - LED counts come from `get_max_blade_length <n>` for each blade. Nothing is re-initialised.
-  - `scanid` is sent only when the owner asks for a Blade ID measurement on the Wiring page.
-- **Recovery from a stalled link:** when the saber goes silent in the middle of a command, the app reopens the port once, as the Connect button does, and reads the saber again.
+  - The blade layout is read with `scanid` once per firmware build: on the first connect after an install, or when the app cannot be sure which saber record the board is. Otherwise the layout stored for that board and build is used, and nothing is re-initialised. The layout is part of how the app recognises a saber it has seen, so it keeps coming from `scanid`. `get_max_blade_length` would also count plain LEDs, so a saber could stop matching its own record.
+- **Recovery from a stalled link:** when a connected saber goes silent in the middle of a command, the app reopens the port once, as the Connect button does, and reads the saber again. A saber silent while it is first read is handled as today.
   - If the command took effect, the app says so.
   - If it did not, the change is reported as not made, and nothing is sent a second time without the owner.
   - Only a second silence, or a port that does not reopen, reports the saber as lost.
@@ -41,10 +40,8 @@ None.
 
 ### Modified Capabilities
 
-- `board-connection`: the connect sequence reads the battery and LED counts without speech or re-initialisation; one silent stall is recovered by reopening the port; the saber is reported lost only after a second silence or a failed reopen.
-- `diagnostics`: a reading under 2 V is shown as no battery, with the USB-power notice.
-- `blade-id`: `scanid` runs only for a requested Blade ID measurement.
+- `board-connection`: connecting reads the battery without speech, and the blade layout once per firmware build; a stall once connected is recovered by reopening the port, and the saber is reported lost only when that fails; a reading under 2 V is shown as no battery, with the USB-power notice.
 
 ## Impact
 
-`apps/desktop/src/renderer/src/{serial,board,boardOps,App,Wiring}.ts|tsx`, `packages/core/src/protocol/{session,responses}.ts`, and the transcript tests in `packages/core/test/transcripts/os8` (new: `battery_voltage`, `get_max_blade_length`). Hardware check on V2.2 hote2 with no battery: repeated connects make no speech and no font rescan, preset selections after 30 s idle recover from a stall without an error, and the no-battery notice shows. Then the same on the V3, recording whether it stalls at all.
+`apps/desktop/src/renderer/src/{serial,board,boardOps,App}.ts|tsx`, `packages/core/src/protocol/{session,responses}.ts`, and the transcript tests in `packages/core/test/transcripts/os8` (new: `battery_voltage`). Hardware check on V2.2 hote2 with no battery: repeated connects make no spoken voltage and no blade re-detection, preset selections after 30 s idle recover from a stall without an error, and the no-battery notice shows. Then the same on the V3, recording whether it stalls at all.
