@@ -9,6 +9,7 @@ The SD card is where a saber's fonts and presets live. Copying to it can leave b
 ## What Changes
 
 - **SF24:** While the saber's card is shared with the computer, every operation that would make the saber write to its card (preset edits, adding presets) is blocked, with a note to give the card back first.
+  - Reproduced on hote2, 2026-10-25: the card was shared from before the run (no `sd 1` in that run's log), so the app did not know. The saber stopped answering at `set_style1`, and the app had to give it up. hote2 has also frozen with its card not shared (`cat common/voicepack.ini` three times, and `set_preset 2`), so sharing may not be the whole cause. The block is needed either way, because writing to a card Windows has mounted can damage it. The app must therefore find out at connect, not only remember its own `sd 1`. A bare `sd` answers `SD Access ON|OFF` on builds with `MOUNT_SD_SETTING`, which every Fett263 build has. Other signs in that run: 0 fonts, 0 tracks, and "Font directory not found" for every folder, `common` included.
 - **SF25:** Giving the card back checks the saber's answer. A disconnect while shared is handled: the drive is ejected if still mounted, and the owner is told.
 - **SF26:** "Replace on card" really replaces, clearing the old font folder first, and asks for confirmation.
 - **SF27:** Copies go through a temporary folder and are renamed into place only when complete. A failed copy leaves nothing behind. Free space is checked first. Long copies show progress.
