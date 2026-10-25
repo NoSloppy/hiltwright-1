@@ -136,10 +136,11 @@ Each "Deliver" task means: complete the change's specs, design and tasks with `/
 
 - [x] 3.19 Deliver `sd-fonts-test-coverage`; verify it is archived
 - [x] 3.20 Deliver `styles-test-coverage`; verify it is archived
-- [ ] 3.21 Deliver `preset-editor-fixes`: together with 3.23; both change how queued and live styles meet in the model; verify it is archived
-- [ ] 3.22 Deliver `preset-history-restore`; verify it is archived
+- [x] 3.21 Deliver `preset-editor-fixes`: together with 3.23; both change how queued and live styles meet in the model; verify it is archived
+- [ ] 3.24 Deliver `card-safety`: blocks preset writes while the card is shared. Moved up by the owner on 2026-10-25, to run straight after 3.21: on hote2 a style write to a card shared over USB froze the saber (SF24). 3.22 and 3.23 then follow its block for any write they add; verify it is archived
+- [ ] 3.24a Deliver `usb-power-connect`: filed by the owner 2026-10-25 after the hote2 checks. With no battery (common for installers), preset selections stalled the link about half the time. Covers a quiet, light connect (no spoken voltage, no `scanid`), reconnecting once after a stall, and a no-battery notice. Straight after 3.24; verify it is archived
 - [ ] 3.23 Deliver `style-to-saber-fixes`; verify it is archived
-- [ ] 3.24 Deliver `card-safety`: blocks preset writes while the card is shared, so after 3.21-3.22; verify it is archived
+- [ ] 3.22 Deliver `preset-history-restore`: a restore writes presets, so it goes through 3.24's shared-card block; verify it is archived
 - [ ] 3.25 Deliver `font-check-alignment`; verify it is archived
 - [ ] 3.26 Deliver `preview-honesty`; verify it is archived
 - [ ] 3.27 Deliver `editor-output-safety`; verify it is archived
