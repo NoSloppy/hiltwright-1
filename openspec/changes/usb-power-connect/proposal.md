@@ -1,6 +1,6 @@
 # Proposal
 
-**Milestone:** M2 (Beta 1 blocker). Filed by the owner on 2026-10-25, from the `preset-editor-fixes` hardware check on hote2. Delivered straight after `card-safety` (roadmap 3.24a).
+**Milestone:** M2 (Beta 1 blocker). Filed by the owner on 2026-10-25, from the `preset-editor-fixes` hardware check on hote2. First in wave D after `preset-editor-fixes`, ahead of `card-safety` (roadmap 3.24a). The owner set that order on 2026-10-25.
 
 ## Why
 
