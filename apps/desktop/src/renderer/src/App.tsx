@@ -23,6 +23,7 @@ import { FontLibrary } from './FontLibrary';
 import { Contributors } from './Contributors';
 import { flowStatus, nextStep, useWorkspace, type Workspace } from './workspace';
 import type { SaberRecord } from '../../shared/api';
+import { batteryLabel, noBattery } from './battery';
 // three.js is only needed in the demo room, so it loads when that page is first opened.
 const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
 
@@ -125,7 +126,7 @@ export function App() {
         </div>
         <div className="row" style={{ gap: 12 }}>
           <StatusChip status={status} port={board.portName} />
-          <span className="chip"><Icon name="battery" />{info?.battery != null ? `${info.battery.toFixed(2)} V` : '—'}</span>
+          <span className="chip" title={noBattery(info?.battery ?? null) ? 'The battery reads under 2 V: none is connected, and the saber runs on USB power.' : undefined}><Icon name="battery" />{batteryLabel(info?.battery ?? null)}</span>
           {connected
             ? <button type="button" className="btn sm" onClick={() => void board.disconnect()}><span className="b"><span className="i">Disconnect</span></span></button>
             : <button type="button" className="btn sm pri" onClick={() => void board.connect(true)} disabled={status === 'connecting' || status === 'reading'}><span className="b"><span className="i"><Icon name="usb" />Connect</span></span></button>}
@@ -216,6 +217,7 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
             {!ws.live && (status === 'no-port' || status === 'error' || status === 'idle') && <button type="button" className="btn pri" onClick={() => void board.connect(true)}><span className="b"><span className="i"><Icon name="usb" />Connect</span></span></button>}
             {ws.live && <button type="button" className="btn sm ghost" onClick={() => void board.identify()}><span className="b"><span className="i"><Icon name="undo" />Read again</span></span></button>}
           </div>
+          {ws.live && board.info && noBattery(board.info.battery) && <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="battery" /><span>No battery detected: {cur?.name ?? 'this saber'} is running on USB power alone. It may pause for a moment when it plays sound or reads its card. If it does, Hiltwright reconnects to it on its own.</span></div>}
           {ws.live && board.info && board.info.rejected.length > 0 && <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="warn" /><span>This firmware does not know {board.info.rejected.join(', ')}. Hiltwright adapts to what the board supports.</span></div>}
           {adoptable && !adopting && (
             <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="info" /><span>Is this a saber you set up ahead? {plans.map((p) => <button key={p.id} type="button" className="holo" style={{ marginRight: 10 }} onClick={() => setAdopting(p)}>It is "{p.name}"</button>)}Its wiring, presets and styles move onto this saber, ready to install.</span></div>

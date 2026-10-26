@@ -74,10 +74,11 @@
 
 ## 4. The no-battery notice
 
-- [ ] 4.1 Add `apps/desktop/src/renderer/src/battery.ts` with `NO_BATTERY_BELOW_V` and `batteryLabel(v)`. Use it for the header chip, and show the USB-power note in the Armory's connection panel under 2 V (design D6). Verify:
+- [x] 4.1 Add `apps/desktop/src/renderer/src/battery.ts` with `NO_BATTERY_BELOW_V` and `batteryLabel(v)`. Use it for the header chip, and show the USB-power note in the Armory's connection panel under 2 V (design D6). Verify:
   - `apps/desktop/test/battery.test.ts`: 0.03, 1.48, 2.0, 3.9, null
   - `npm run typecheck`
   - the wording of the note matches the spec
+  - **Result, 2026-10-26.** `battery.ts` has `NO_BATTERY_BELOW_V = 2`, `noBattery(v)` and `batteryLabel(v)`. The header chip shows the label, with a tooltip under 2 V. The Armory's connection panel shows the amber note under 2 V: "No battery detected: <saber> is running on USB power alone. It may pause for a moment when it plays sound or reads its card. If it does, Hiltwright reconnects to it on its own." `apps/desktop/test/battery.test.ts` passes (3 tests: 0.03, 1.48, 2.0, 3.9, null). `npm run typecheck` passes. On screen it is seen in 5.2.
 
 ## 5. Checks
 
