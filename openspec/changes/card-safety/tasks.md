@@ -172,6 +172,11 @@
     - **Replace from Fonts & SD** passed (owner).
     - **The font library offered no replace,** and its Copy copied without asking. That copy was correct: the library's `Ben-2` beside the card's `Ben` is a different folder. Replace is now offered when the folder names match (2.5).
     - **The font library showed "No card"** while Fonts & SD had `H:`. Most likely its single drive lookup came back empty, timed out while the shared card was being read. Fixed in 2.5: it looks again on share and give-back, says when it is looking, and the lookup is logged with 15 s to answer.
+  - **Run 7, 2026-11-14** (log `hiltwright-20261114-151125.log`):
+    - **Library replace** passed (owner).
+    - **Interrupted copy** passed (owner). At 15:13:29 the font library's copy of `Crait` failed into `H:\.hiltwright-copy-Crait` when the card was pulled. Put back and copied again, it worked, with `Crait` listed once.
+    - **Found:** the page showed Windows' raw error ("UNKNOWN: unknown error, copyfile …"). A failed copy now reads "The copy of <font> stopped part way: the card could not be written to (<code>). Nothing was left on the card under <font>. Check the card is in, then copy it again." The full error goes to the log, and `cardCopy.test.ts` checks the wording (commit c063985).
+    - **Still to do:** the speed check.
 
   Record each result here.
 - [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.
