@@ -7,7 +7,7 @@ import { cp, mkdir, open, readFile, readdir, rename, rm, rmdir, stat } from 'nod
 import { statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { checkFont, classifySound, parseWavHeader, type FontFile, type FontReport } from '@hiltwright/core';
-import { copyFont, looksLikeFont, readFontSounds, type FontEntry, type FontSounds } from './sd';
+import { copyFont, looksLikeFont, readFontSounds, type CopyOptions, type FontEntry, type FontSounds } from './sd';
 import { extractZip, listZip } from './unzip';
 import { JsonStore } from './jsonStore';
 
@@ -378,9 +378,9 @@ export class FontLibrary {
     return readFontSounds(this.folderPath(folder), onFile);
   }
 
-  async copyToCard(folder: string, cardRoot: string, replace: boolean): Promise<FontEntry> {
+  async copyToCard(folder: string, cardRoot: string, options: CopyOptions | boolean): Promise<FontEntry> {
     await this.ready();
-    return copyFont(this.folderPath(folder), cardRoot, replace);
+    return copyFont(this.folderPath(folder), cardRoot, options);
   }
 
   private async freeName(want: string): Promise<string> {

@@ -2,7 +2,7 @@
 
 ## 1. Copies onto the card (main)
 
-- [ ] 1.1 Rewrite `copyFont(src, root, { replace, onProgress, freeBytes })` in `apps/desktop/src/main/sd.ts` (design D5), and pass the options through `fontLibrary.copyToCard`. Verify in a new `apps/desktop/test/cardCopy.test.ts`, against a temporary folder standing in for a card:
+- [x] 1.1 Rewrite `copyFont(src, root, { replace, onProgress, freeBytes })` in `apps/desktop/src/main/sd.ts` (design D5), and pass the options through `fontLibrary.copyToCard`. Verify in a new `apps/desktop/test/cardCopy.test.ts`, against a temporary folder standing in for a card:
   - a new font lands whole, and the source is unchanged
   - an existing font is refused without `replace`
   - a replace leaves only the new files, and `Vader` beside it untouched
@@ -13,7 +13,16 @@
   - progress counts reach the total
 
   Then `npm test`.
-- [ ] 1.2 Send `sd:copy:progress { name, done, total }` from the `sd:copyFont` and `fontlib:copyToCard` handlers, and expose it in the preload as `sd.onCopyProgress`. Verify with `npm run typecheck`, and with an IPC test beside the existing ones in `apps/desktop/test/ipcLog.test.ts` if the handlers can be reached there; otherwise check it in 4.1's hardware run.
+  - **Result, 2026-11-14.** `copyFont(src, root, options)` in `main/sd.ts`, with the boolean `replace` still accepted:
+    - it refuses a name with `;` or `,`, and clears leftovers
+    - it checks the space with `fs.statfs`, or `freeBytes` in tests
+    - it copies file by file into `.hiltwright-copy-<name>` with progress, then renames into place
+    - a replace swaps the old folder through `.hiltwright-old-<name>`, and puts it back if the swap fails
+
+    `fontLibrary.copyToCard` passes the options through. `apps/desktop/test/cardCopy.test.ts` has the 9 listed cases, all passing. The 6 existing `sdLayout.test.ts` tests still pass.
+
+- [x] 1.2 Send `sd:copy:progress { name, done, total }` from the `sd:copyFont` and `fontlib:copyToCard` handlers, and expose it in the preload as `sd.onCopyProgress`. Verify with `npm run typecheck`, and with an IPC test beside the existing ones in `apps/desktop/test/ipcLog.test.ts` if the handlers can be reached there; otherwise check it in 4.1's hardware run.
+  - **Result, 2026-11-14.** `sd:copyFont` and `fontlib:copyToCard` pass `onProgress`, which sends `sd:copy:progress { name, done, total }`. The preload exposes `sd.onCopyProgress(cb)`, which returns its unsubscribe. `npm run typecheck` passes. The handlers need Electron, and `ipcLog.test.ts` tests only the logging wrapper, so the events are checked on screen in 4.1. The progress counts are unit-tested in 1.1.
 
 ## 2. Which card (main and renderer)
 

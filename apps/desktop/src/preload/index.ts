@@ -48,6 +48,7 @@ const api: HiltwrightApi = {
     voicePack: (root) => ipcRenderer.invoke('sd:voicePack', root),
     pickFont: () => ipcRenderer.invoke('sd:pickFont'),
     copyFont: (src, root, replace) => ipcRenderer.invoke('sd:copyFont', src, root, replace),
+    onCopyProgress: (cb) => { const h = (_e: unknown, p: { name: string; done: number; total: number }) => cb(p); ipcRenderer.on('sd:copy:progress', h); return () => ipcRenderer.off('sd:copy:progress', h); },
   },
   fontLibrary: {
     status: () => ipcRenderer.invoke('fontlib:status'),

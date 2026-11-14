@@ -2,8 +2,8 @@
 // The card is any mounted volume with the ProffieOS layout (font folders with hum sounds, a tracks folder, presets.ini).
 
 import { execFile } from 'node:child_process';
-import { cp, open, readFile, readdir, stat } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { copyFile, mkdir, open, readFile, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
+import { basename, dirname, join, relative } from 'node:path';
 import { checkFont, classifySound, hasMenuSounds, parseVoicePackIni, parseWavHeader, type FontFile, type FontReport, type VoicePackStatus } from '@hiltwright/core';
 
 export interface CardInfo {
@@ -212,13 +212,104 @@ export async function listTracks(root: string): Promise<{ name: string; size: nu
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Copy a font folder onto the card. Refuses to overwrite an existing folder unless `replace` is set. */
-export async function copyFont(src: string, root: string, replace = false): Promise<FontEntry> {
+export interface CopyOptions {
+  /** Replace a font of the same name: the owner has confirmed. Without it an existing font is refused. */
+  replace?: boolean;
+  /** Called after each file, with the files copied so far and the total. */
+  onProgress?: (done: number, total: number) => void;
+  /** The card's free space, for tests. Read from the card itself when not given. */
+  freeBytes?: number | null;
+  /** How one file is copied, for tests that make a copy fail part way. */
+  copyOne?: (from: string, to: string) => Promise<void>;
+}
+
+const COPYING = '.hiltwright-copy-';
+const OLD = '.hiltwright-old-';
+const mbText = (b: number) => `${Math.max(1, Math.round(b / 1e6))} MB`;
+
+/** Every file under `dir`, with its size, relative to `dir`. */
+async function filesUnder(dir: string): Promise<{ rel: string; size: number }[]> {
+  const out: { rel: string; size: number }[] = [];
+  const walk = async (d: string) => {
+    for (const e of await readdir(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) await walk(p);
+      else if (e.isFile()) out.push({ rel: relative(dir, p), size: (await stat(p)).size });
+    }
+  };
+  await walk(dir);
+  return out;
+}
+
+async function cardFree(root: string): Promise<number | null> {
+  try { const s = await statfs(root); return Number(s.bavail) * Number(s.bsize); } catch { return null; }
+}
+
+/**
+ * What an earlier copy left behind (card-safety D5): an unfinished copy is removed; a replace cut short between its
+ * two renames has its old font put back, or removed once the new one is in place.
+ */
+async function clearLeftovers(root: string): Promise<void> {
+  let names: string[] = [];
+  try { names = await readdir(root); } catch { return; }
+  for (const n of names) {
+    if (n.startsWith(COPYING)) await rm(join(root, n), { recursive: true, force: true });
+    else if (n.startsWith(OLD)) {
+      const font = join(root, n.slice(OLD.length));
+      if (await exists(font)) await rm(join(root, n), { recursive: true, force: true });
+      else await rename(join(root, n), font);
+    }
+  }
+}
+
+/**
+ * Copy a font folder onto the card, all or nothing (card-safety D5). The font appears under its name only once every
+ * file is there: the copy goes into a hidden folder on the card and is renamed into place. A replace keeps the old
+ * font until the new copy is complete, then swaps it out, so old and new files never mix. The space is checked first.
+ */
+export async function copyFont(src: string, root: string, options: CopyOptions | boolean = {}): Promise<FontEntry> {
+  const o: CopyOptions = typeof options === 'boolean' ? { replace: options } : options;
   const name = basename(src);
   if (!/^[^\\/:*?"<>|]+$/.test(name)) throw new Error('Font folder name is not valid on an SD card');
+  if (/[;,]/.test(name)) throw new Error(`"${name}" has a ; or , in its name, which ProffieOS reads as a break between font folders. Rename the folder first.`);
+  await clearLeftovers(root);
   const dst = join(root, name);
-  if (!replace && await exists(dst)) throw new Error(`${name} is already on the card`);
-  await cp(src, dst, { recursive: true, force: replace, errorOnExist: !replace });
+  if (!o.replace && await exists(dst)) throw new Error(`${name} is already on the card`);
+  const files = await filesUnder(src);
+  const bytes = files.reduce((a, f) => a + f.size, 0);
+  const free = o.freeBytes !== undefined ? o.freeBytes : await cardFree(root);
+  if (free != null && bytes + Math.max(1e6, bytes * 0.02) > free) throw new Error(`${name} needs ${mbText(bytes)} and the card has ${mbText(free)} free.`);
+  const tmp = join(root, `${COPYING}${name}`);
+  const copyOne = o.copyOne ?? ((from: string, to: string) => copyFile(from, to));
+  try {
+    await mkdir(tmp, { recursive: true });
+    let done = 0;
+    for (const f of files) {
+      const to = join(tmp, f.rel);
+      await mkdir(dirname(to), { recursive: true });
+      await copyOne(join(src, f.rel), to);
+      o.onProgress?.(++done, files.length);
+    }
+  } catch (err) {
+    await rm(tmp, { recursive: true, force: true }).catch(() => undefined);
+    throw err;
+  }
+  if (!o.replace) {
+    if (await exists(dst)) { await rm(tmp, { recursive: true, force: true }); throw new Error(`${name} is already on the card`); }
+    await rename(tmp, dst);
+  } else {
+    const old = join(root, `${OLD}${name}`);
+    const had = await exists(dst);
+    if (had) await rename(dst, old);
+    try {
+      await rename(tmp, dst);
+    } catch (err) {
+      if (had) await rename(old, dst).catch(() => undefined);
+      await rm(tmp, { recursive: true, force: true }).catch(() => undefined);
+      throw err;
+    }
+    if (had) await rm(old, { recursive: true, force: true });
+  }
   return checkFontDir(dst);
 }
 

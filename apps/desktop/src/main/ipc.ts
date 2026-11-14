@@ -218,7 +218,7 @@ export function registerIpc(): void {
   fontHandle('fontlib:remove', (_e, f: unknown) => fontLib.remove(folder(f)));
   fontHandle('fontlib:readSound', (_e, f: unknown, rel: unknown) => fontLib.readSound(folder(f), str(rel, 400)));
   fontHandle('fontlib:readFont', (e, f: unknown) => fontLib.readFont(folder(f), (file, done, total) => e.sender.send('sd:readFont:progress', { file, done, total })));
-  fontHandle('fontlib:copyToCard', (_e, f: unknown, r: unknown, replace: unknown) => fontLib.copyToCard(folder(f), root(r), replace === true));
+  fontHandle('fontlib:copyToCard', (e, f: unknown, r: unknown, replace: unknown) => { const name = basename(folder(f)); return fontLib.copyToCard(folder(f), root(r), { replace: replace === true, onProgress: (done, total) => e.sender.send('sd:copy:progress', { name, done, total }) }); });
   fontHandle('fontlib:open', async (_e, f: unknown) => { await shell.openPath(f == null ? fontLib.root : join(fontLib.root, basename(folder(f)))); });
   // Adding: the owner picks .zip packages or folders; only paths the dialog returned are ever read.
   const importPicked = async (paths: string[]): Promise<ImportResult> => {
@@ -322,10 +322,12 @@ export function registerIpc(): void {
     pickedFonts.add(entry.path);
     return entry;
   });
-  handle('sd:copyFont', (_e, src: unknown, r: unknown, replace: unknown) => {
+  handle('sd:copyFont', (e, src: unknown, r: unknown, replace: unknown) => {
     const s = str(src, 1000);
     if (!pickedFonts.has(s)) throw new Error('Pick the font folder first');
-    return copyFont(s, root(r), replace === true);
+    // Progress goes to the page as each file lands (card-safety D5).
+    const name = basename(s);
+    return copyFont(s, root(r), { replace: replace === true, onProgress: (done, total) => e.sender.send('sd:copy:progress', { name, done, total }) });
   });
 
   // Import from a Xenopixel card. The owner picks the folder; only fonts found by that scan can be imported.

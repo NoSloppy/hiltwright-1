@@ -267,6 +267,8 @@ export interface HiltwrightApi {
     /** Ask the user for a font folder on this computer and check it without copying. */
     pickFont(): Promise<FontEntry | null>;
     copyFont(src: string, root: string, replace: boolean): Promise<FontEntry>;
+    /** Files copied so far for a copy onto the card, from Fonts & SD or the font library (card-safety D5). */
+    onCopyProgress(cb: (p: { name: string; done: number; total: number }) => void): () => void;
   };
   /** Sound fonts the owner added to this computer, in a folder they can move (default userData/fonts). */
   fontLibrary: {
