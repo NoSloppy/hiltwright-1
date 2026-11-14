@@ -126,6 +126,10 @@
     - Shared again at 14:31:46.
     - The first give-back stopped the reading (`sd:listFonts failed: Stopped…` at 14:32:17), but Windows had not let go after 8 s. The owner's second click at 14:32:31 ejected at once, `sd 0` answered `SD Access OFF`, and Presets was live again.
     - Fixed: the eject now tries up to three times by itself before reporting.
+  - **Run 3, 2026-11-14 14:36** (log `hiltwright-20261114-143634.log`), with a second card in the reader (`H:`, 4 fonts):
+    - The first cycle still reported "not released" at 14:37:41, apparently before the retry was loaded, and ejected on the next click.
+    - The second cycle was one click: share at 14:38:00 (`SD Access ON`), give back at 14:38:30, the reading stopped, then `ejected (try 2)`, `SD Access OFF`, and back to `H:`. The owner confirmed one click.
+    - In neither cycle did reading the shared card's fonts finish in about 30 s.
 
   Record each result here.
 - [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.
