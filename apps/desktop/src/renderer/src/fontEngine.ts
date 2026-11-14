@@ -50,7 +50,7 @@ export interface AudioBackend {
 }
 
 const EFFECT_ALIASES: Record<string, string[]> = {
-  hum: ['hum', 'humm'], out: ['out', 'poweron'], in: ['in', 'poweroff', 'pwroff'], clash: ['clsh', 'clash'], blast: ['blst', 'blaster'],
+  out: ['out', 'poweron'], in: ['in', 'poweroff', 'pwroff'], clash: ['clsh', 'clash'], blast: ['blst', 'blaster'],
   stab: ['stab', 'clsh', 'clash'], force: ['force'], font: ['font', 'boot'], boot: ['boot'],
   swingl: ['swingl', 'lswing'], swingh: ['swingh', 'hswing'],
   preon: ['preon'], pstoff: ['pstoff'], fastout: ['fastout'],
@@ -59,15 +59,38 @@ const EFFECT_ALIASES: Record<string, string[]> = {
 /** Sort a font's file names into effects: `clsh03.wav` and `clsh/003.wav` are both the third clash. */
 export function groupSounds(names: string[]): Record<string, string[]> {
   const out: Record<string, string[]> = {};
+  const keys = new Map<string, [number, number]>();
   for (const n of names) {
-    const m = /^(?:([a-z]+)\/)?(?:\d+\/)?([a-z]+)?(\d*)\.wav$/i.exec(n.replace(/\\/g, '/'));
+    const m = /^(?:([a-z]+)\/)?(?:(\d+)\/)?([a-z]+)?(\d*)\.wav$/i.exec(n.replace(/\\/g, '/'));
     if (!m) continue;
-    const effect = (m[2] && !/^\d+$/.test(m[2]) ? m[2] : m[1])?.toLowerCase();
+    const effect = (m[3] && !/^\d+$/.test(m[3]) ? m[3] : m[1])?.toLowerCase();
     if (!effect) continue;
+    // Effect::Scan numbers a file by the digits after the name (or the folder's number, with `NNN` sub files after it).
+    // A file with no number is the one after the last numbered file (Effect::GetName, n = max_file_ + 1).
+    const [first, second] = m[2] ? [m[2], m[4]] : [m[4], ''];
     (out[effect] ??= []).push(n);
+    keys.set(n, [first === '' ? Infinity : Number(first), second === '' ? 0 : Number(second)]);
   }
-  for (const k of Object.keys(out)) out[k].sort();
+  // ProffieOS picks file n of an effect by number, so tr2 comes before tr10; a text sort would put tr10 first.
+  const text = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  for (const k of Object.keys(out)) out[k].sort((a, b) => { const x = keys.get(a)!; const y = keys.get(b)!; return x[0] === y[0] ? x[1] - y[1] || text(a, b) : x[0] < y[0] ? -1 : 1; });
   return out;
+}
+
+/** A config.ini value by its name in any letter case, as ConfigFile::SetVariable compares names (config_file.h, strcasecmp). */
+function iniValue(map: Record<string, string>, key: string): string | undefined {
+  const k = Object.keys(map).find((x) => x.toLowerCase() === key.toLowerCase());
+  return k == null ? undefined : map[k];
+}
+
+/**
+ * The names to look for an effect's sounds under, in the order the firmware prefers them. The hum is `humm` when the
+ * font has one, else `hum` (hybrid_font.h getHum), except in a monophonic-hum font, where the firmware plays the
+ * `hum` files explicitly (SB_On: PlayMonophonic(&SFX_poweron, &SFX_hum)).
+ */
+export function effectAliases(effect: string, has: (effect: string) => boolean): string[] {
+  if (effect === 'hum') return fontKind(has).monophonicHum ? ['hum'] : ['humm', 'hum'];
+  return EFFECT_ALIASES[effect] ?? [effect];
 }
 
 function num(map: Record<string, string>, key: string, def: number): number { const v = Number(map[key]); return Number.isFinite(v) ? v : def; }
@@ -275,6 +298,7 @@ export class FontEngine {
   private humDelayMs = -1;
   private humStartBeforeEndMs = 0;
   private readonly ini: Record<string, string>;
+  private readonly humAliases: string[];
   private readonly ready: Promise<void>;
   readonly name: string;
   /** Effects replace the hum, as in a monophonic font (hybrid_font.h guess_monophonic_). */
@@ -291,6 +315,7 @@ export class FontEngine {
     this.random = opts.random ?? Math.random;
     this.groups = groupSounds(Object.keys(font.files));
     const has = (e: string) => !!this.groups[e]?.length;
+    this.humAliases = effectAliases('hum', has);
     this.monophonic = fontKind(has).guessMonophonic;
     // prop_base.h SetPreset: lswing (plecter naming) always means SmoothSwing V2; swingl does unless smoothsw.ini
     // says Version=0.
@@ -302,7 +327,8 @@ export class FontEngine {
     this.plainCfg = plainSwingConfig(font.ini);
     this.plain = { swinging: false, player: null, lastSpeed: null };
     this.humDelayMs = num(font.ini, 'ProffieOSHumDelay', -1);
-    this.humStartBeforeEndMs = num(font.ini, 'humstart', 0);
+    // FontConfigFile: CONFIG_VARIABLE2(humStart, 100), found in any letter case.
+    this.humStartBeforeEndMs = numAnyCase(font.ini, 'humStart', 100);
     this.hum = this.audio.createVoice(); this.lock = this.audio.createVoice();
     this.swingA = this.audio.createVoice(0); this.swingB = this.audio.createVoice(0);
     for (let i = 0; i < 6; i++) this.fx.push(this.audio.createVoice());
@@ -329,32 +355,34 @@ export class FontEngine {
 
   /**
    * A sound for `effect`, and which file it was. After `prev`, the same-numbered file when the font's config.ini
-   * pairs `prev` with it (`SFX.preon.paired=1`) and both have as many files, as Effect::GetFollowing does. `exact`
+   * pairs `prev` with it (`ProffieOS.SFX.preon.paired=1`) and both have as many files, as Effect::GetFollowing does. `exact`
    * takes the effect by its firmware name alone, without falling back to the other naming.
    */
   private choose(effect: string, prev?: { alias: string; index: number } | null, exact = false): Chosen | null {
-    for (const alias of exact ? [effect] : EFFECT_ALIASES[effect] ?? [effect]) {
+    for (const alias of exact ? [effect] : this.aliases(effect)) {
       const list = this.groups[alias];
       if (!list?.length) continue;
-      const paired = prev && Number(this.ini[`SFX.${prev.alias}.paired`]) > 0.5 && this.groups[prev.alias]?.length === list.length;
+      // FontConfigFile::iterateVariables names it `ProffieOS.SFX.<effect>.paired`; Effect::GetFollowing keeps the number.
+      const paired = prev && Number(iniValue(this.ini, `ProffieOS.SFX.${prev.alias}.paired`)) > 0.5 && this.groups[prev.alias]?.length === list.length;
       const index = paired ? prev.index : this.rand(list.length);
       const buf = this.buffers.get(list[index]);
       if (buf) return { buf, alias, index };
     }
     return null;
   }
+  private aliases(effect: string): string[] { return effect === 'hum' ? this.humAliases : EFFECT_ALIASES[effect] ?? [effect]; }
   private pick(effect: string): Clip | null {
-    for (const alias of EFFECT_ALIASES[effect] ?? [effect]) {
+    for (const alias of this.aliases(effect)) {
       const list = this.groups[alias];
       if (list?.length) { const b = this.buffers.get(list[this.rand(list.length)]); if (b) return b; }
     }
     return null;
   }
   private pickIndexed(effect: string, index: number): Clip | null {
-    for (const alias of EFFECT_ALIASES[effect] ?? [effect]) { const list = this.groups[alias]; if (list?.length) return this.buffers.get(list[index % list.length]) ?? null; }
+    for (const alias of this.aliases(effect)) { const list = this.groups[alias]; if (list?.length) return this.buffers.get(list[index % list.length]) ?? null; }
     return null;
   }
-  private count(effect: string): number { for (const alias of EFFECT_ALIASES[effect] ?? [effect]) { const list = this.groups[alias]; if (list?.length) return list.length; } return 0; }
+  private count(effect: string): number { for (const alias of this.aliases(effect)) { const list = this.groups[alias]; if (list?.length) return list.length; } return 0; }
   private has = (effect: string): boolean => !!this.groups[effect]?.length;
   private freeFx(): Voice { return this.fx.find((v) => !v.playing && v !== this.outV && v !== this.pstoffV) ?? this.fx[0]; }
   private freeFxExcept(not: Voice): Voice { return this.fx.find((v) => !v.playing && v !== not) ?? this.fx.find((v) => v !== not) ?? this.fx[0]; }
@@ -421,10 +449,11 @@ export class FontEngine {
       // sound ends. With a `humm` file the fade lasts the whole ignition sound instead.
       const outMs = out ? out.duration * 1000 : 0;
       let delay = 0;
-      if (this.groups.humm && out) delay = 0;
+      const humm = this.humAliases[0] === 'humm' && this.has('humm');
+      if (humm && out) delay = 0;
       else if (this.humDelayMs >= 0) delay = this.humDelayMs;
       else if (this.humStartBeforeEndMs > 0 && out) { const d = outMs - this.humStartBeforeEndMs; if (d > 0 && d < 30000) delay = d; }
-      const fade = this.groups.humm && out ? out.duration : 0.2;
+      const fade = humm && out ? out.duration : 0.2;
       this.humStartMs = this.audio.nowMs();
       this.hum.setVolume(0, 0.001);
       this.hum.play(hum, { loop: true });

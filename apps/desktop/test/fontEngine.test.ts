@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  FontEngine, fontKind, groupSounds, lockupSounds, plainSwingConfig, plainSwingStep,
+  FontEngine, effectAliases, fontKind, groupSounds, lockupSounds, plainSwingConfig, plainSwingStep,
   type AudioBackend, type Clip, type PlayOptions, type Voice,
 } from '../src/renderer/src/fontEngine';
 
@@ -15,7 +15,8 @@ class FakeVoice implements Voice {
   history: string[] = [];
   constructor(readonly id: number, volume: number) { this.volume = volume; }
   play(clip: Clip, opts: PlayOptions = {}): void { this.stop(); this.clip = clip as FakeClip; this.opts = opts; this.fadedOver = null; this.history.push(this.clip.name); }
-  fadeInAt(): void { this.volume = 0; }
+  fadeIn: { after: number; seconds: number } | null = null;
+  fadeInAt(after: number, seconds: number): void { this.volume = 0; this.fadeIn = { after, seconds }; }
   setVolume(v: number): void { this.volume = Math.max(0, v); }
   get playing(): boolean { return this.clip !== null; }
   stop(): void { this.clip = null; this.opts = {}; }
@@ -307,7 +308,7 @@ describe('plain swings (no SmoothSwing), as hybrid_font.h StartSwing', () => {
   it('in the engine: a swing plays each time the blade passes the swing speed', () => {
     const { engine, backend } = makeFont([...POLY, 'swng01.wav']);
     engine.ignite();
-    backend.ms = 1000; // the hum has faded in
+    backend.ms = 1200; // the hum has faded in (humStart 100 ms before the end of the 1 s out, then 0.2 s)
     engine.motion(300, 1 / 60);
     const [v] = backend.playing('swng01.wav');
     expect(v.volume).toBe(2);
@@ -352,7 +353,7 @@ describe('SmoothSwing V2', () => {
     expect(low).toHaveLength(1); expect(high).toHaveLength(1);
     expect(low[0].opts.loop && high[0].opts.loop).toBe(true);
     expect(backend.played()).not.toContain('swingl1.wav');
-    backend.ms = 1000;
+    backend.ms = 1200; // the hum has faded in
     engine.motion(450, 1 / 60); // full strength
     expect(low[0].volume + high[0].volume).toBeCloseTo(3); // MaxSwingVolume
     expect(backend.playing('hum.wav')[0].volume).toBeCloseTo(0.25); // MaximumHumDucking 75
@@ -366,5 +367,55 @@ describe('SmoothSwing V2', () => {
     expect(engine.hasSmoothSwing).toBe(true);
     engine.ignite();
     expect(backend.played()).toEqual(expect.arrayContaining(['lswing1.wav', 'hswing1.wav']));
+  });
+});
+
+describe('four details of hybrid_font.h, as ProffieOS has them', () => {
+  const ignited = (files: Record<string, number> | string[], ini: Record<string, string> = {}) => {
+    const { engine, backend } = makeFont(files, { ini });
+    engine.ignite();
+    const hum = backend.voices.find((v) => v.opts.loop && v.fadeIn);
+    return { engine, backend, hum };
+  };
+
+  // FontConfigFile: CONFIG_VARIABLE2(humStart, 100); ConfigFile::SetVariable matches names with strcasecmp.
+  it('humStart is 100 ms before the end of the ignition sound unless config.ini says otherwise, in any letter case', () => {
+    const files = { 'hum.wav': 1, 'out01.wav': 2, 'in01.wav': 1 };
+    expect(ignited(files).hum!.fadeIn!.after).toBeCloseTo(1.9);
+    expect(ignited(files, { humStart: '500' }).hum!.fadeIn!.after).toBeCloseTo(1.5);
+    expect(ignited(files, { HUMSTART: '500' }).hum!.fadeIn!.after).toBeCloseTo(1.5);
+    expect(ignited(files, { humstart: '0' }).hum!.fadeIn!.after).toBe(0);
+  });
+
+  // FontConfigFile::iterateVariables registers `ProffieOS.SFX.<name>.paired`; Effect::FileID::GetFollowing uses it.
+  it('pairs files by number with the key ProffieOS.SFX.<effect>.paired, in any letter case', () => {
+    const files = ['hum.wav', 'preon1.wav', 'preon2.wav', 'out1.wav', 'out2.wav', 'in01.wav'];
+    const run = (ini: Record<string, string>) => {
+      const rolls = [0.99, 0, 0, 0]; // preon picks the second file; unpaired, out would pick the first
+      const { engine, backend } = makeFont(files, { ini, random: () => rolls.shift() ?? 0 });
+      engine.preon();
+      return backend.played().filter((n) => n.startsWith('preon') || n.startsWith('out'));
+    };
+    expect(run({ 'ProffieOS.SFX.preon.paired': '1' })).toEqual(['preon2.wav', 'out2.wav']);
+    expect(run({ 'proffieos.sfx.preon.PAIRED': '1' })).toEqual(['preon2.wav', 'out2.wav']);
+    // The shorter spelling is not a key the firmware knows, and nothing is paired without a key.
+    expect(run({ 'SFX.preon.paired': '1' })).toEqual(['preon2.wav', 'out1.wav']);
+    expect(run({})).toEqual(['preon2.wav', 'out1.wav']);
+  });
+
+  // getHum(): SFX_humm ? &SFX_humm : &SFX_hum. A monophonic-hum font plays SFX_hum explicitly (SB_On).
+  it('prefers humm to hum, but a font whose hum is part of its poweron plays hum', () => {
+    const has = (names: string[]) => { const g = groupSounds(names); return (e: string) => !!g[e]; };
+    expect(effectAliases('hum', has(['hum.wav', 'humm.wav', 'out01.wav', 'in01.wav']))).toEqual(['humm', 'hum']);
+    expect(effectAliases('hum', has(['hum.wav', 'poweron.wav', 'poweroff.wav']))).toEqual(['hum']);
+    const { backend } = ignited({ 'hum.wav': 1, 'humm.wav': 1, 'out01.wav': 2, 'in01.wav': 1 });
+    expect(backend.playing('humm.wav')[0]?.opts.loop).toBe(true);
+    expect(backend.playing('hum.wav')).toEqual([]);
+  });
+
+  // Effect::GetName counts files by number (strtol), so tr10 is after tr2, and a file without a number is last.
+  it('puts numbered files in number order, not text order', () => {
+    expect(groupSounds(['tr10.wav', 'tr2.wav', 'tr1.wav', 'tr.wav']).tr).toEqual(['tr1.wav', 'tr2.wav', 'tr10.wav', 'tr.wav']);
+    expect(groupSounds(['tr/010.wav', 'tr/002.wav']).tr).toEqual(['tr/002.wav', 'tr/010.wav']);
   });
 });
