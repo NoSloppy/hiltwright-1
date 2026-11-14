@@ -58,7 +58,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   // The Fett263 prop needs a voice pack on the card. The saber can tell us over serial: no card reader needed.
   const [voice, setVoice] = useState<VoicePackStatus | null>(null);
   useEffect(() => {
-    if (board.status !== 'connected') return;
+    // Not while the card is shared: the saber would be reading a card this computer has (card-safety D2).
+    if (board.status !== 'connected' || board.card.shared) return;
     let live = true;
     void (async () => {
       try {
@@ -70,7 +71,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board.status, board.saber?.id]);
+  }, [board.status, board.saber?.id, board.card.shared]);
   // Poll USB while disconnected so an install can proceed from a board that is already in its bootloader.
   const [inBootloader, setInBootloader] = useState(false);
   useEffect(() => {
@@ -81,7 +82,9 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     const t = setInterval(tick, 2000);
     return () => { live = false; clearInterval(t); };
   }, [status]);
-  const canInstall = status === 'connected' || inBootloader;
+  // A shared card is given back first: an install restarts the saber with this computer still holding its card.
+  const cardShared = status === 'connected' && board.card.shared;
+  const canInstall = (status === 'connected' || inBootloader) && !cardShared;
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => { void api().toolchain.status().then(setTool); }, []);
@@ -472,6 +475,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
               <button type="button" className="btn ghost" onClick={() => setArmed(false)}><span className="b"><span className="i">Cancel</span></span></button>
             </div>
           )}
+          {cardShared && <div className="note amber"><Icon name="warn" /><span>{saber.name}'s card is shared with this computer. Give it back on Fonts &amp; SD first: installing restarts the saber, and this computer must not be holding its card when it does. Putting back a backup waits for the same.</span></div>}
           {step !== 'driver' && !busy && !(built && !confirmedWiring) && <span className="hint">{stale ? 'The setup changed after this build. Build again to install it.' : !built ? (confirmedWiring ? 'Build first.' : 'Build first. The wiring also needs confirming before anything is written.') : !canInstall ? (offline ? 'Plug the saber in to install. Everything up to here works without it.' : 'Reconnect the saber to install.') : inBootloader ? 'The board is in bootloader mode and ready to write.' : 'The whole flash is read to a backup file before anything is written.'}</span>}
         </div>
 

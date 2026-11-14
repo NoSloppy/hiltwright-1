@@ -45,6 +45,8 @@ export interface OpDeps<C> {
   snapshot: (label: string) => Promise<void>;
   /** The stall recovery, when the session has one: an operation whose turn met a stall waits for it and is judged. */
   recovery?: Pick<Recovery, 'count' | 'since'>;
+  /** Why nothing may be sent right now (the saber's card is shared, card-safety D2), or null. */
+  refuse?: () => string | null;
 }
 
 /** Why a change did not reach the saber when the connection went away while it was being written. */
@@ -61,6 +63,13 @@ export const NOT_MADE_AFTER_PAUSE = 'Not made: the saber paused and did not take
 export async function runOperation<C>(deps: OpDeps<C>, label: string, op: (c: C) => Promise<OpResult>, withSnapshot: boolean, confirm?: () => boolean): Promise<boolean> {
   const { setBusy, setSave, log, snapshot, recovery } = deps;
   const client = deps.client();
+  const refused = deps.refuse?.() ?? null;
+  if (refused) {
+    setSave({ kind: 'failed', what: label, error: refused });
+    log('out', `✗ ${label}: not sent, ${refused}`);
+    console.log(`[board] NOT SENT: ${label} · ${refused}`);
+    return false;
+  }
   if (!client) {
     setSave({ kind: 'failed', what: label, error: 'Not sent: the saber is not connected.' });
     log('out', `✗ ${label}: not sent, the saber is not connected`);
@@ -223,4 +232,17 @@ export function deleteShown(before: PresetRecord[], after: PresetRecord[]): bool
 /** The preset that was at `from` now at `to`. */
 export function moveShown(before: PresetRecord[], after: PresetRecord[], from: number, to: number): boolean {
   return after.length === before.length && samePreset(after[to], before[from]);
+}
+
+/**
+ * Whether the saber's card is shared with the computer, from its answer to `sd` (bare, `sd 0` or `sd 1`): true for
+ * `SD Access ON`, false for `SD Access OFF`, null for anything else, such as firmware without `MOUNT_SD_SETTING`
+ * answering `Whut?` (card-safety D1).
+ */
+export function parseSdAccess(lines: string[]): boolean | null {
+  for (const l of lines) {
+    const m = /SD Access (ON|OFF)\b/.exec(l);
+    if (m) return m[1] === 'ON';
+  }
+  return null;
 }

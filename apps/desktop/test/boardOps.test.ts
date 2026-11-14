@@ -1,7 +1,7 @@
 // board-connection 3.3 and 3.14 (baseline audit), on the rules useBoard uses.
 
 import { describe, expect, it } from 'vitest';
-import { NOT_MADE_AFTER_PAUSE, DISCONNECTED_DURING, NO_SD_CARD, connectGate, createRecovery, deleteShown, duplicateShown, moveShown, readBattery, runOperation, storedLayout, sdFailureIn, serialQueue, type OpDeps, type SaveState } from '../src/renderer/src/boardOps';
+import { NOT_MADE_AFTER_PAUSE, DISCONNECTED_DURING, NO_SD_CARD, connectGate, createRecovery, deleteShown, duplicateShown, moveShown, parseSdAccess, readBattery, runOperation, storedLayout, sdFailureIn, serialQueue, type OpDeps, type SaveState } from '../src/renderer/src/boardOps';
 import type { PresetRecord } from '@hiltwright/core';
 
 const later = () => { let done!: () => void; const p = new Promise<void>((r) => { done = r; }); return { p, done }; };
@@ -275,5 +275,29 @@ describe('the list checks used after a stall', () => {
   it('move: the preset now at its new place', () => {
     expect(moveShown(list, [p('B'), p('A'), p('C')], 1, 0)).toBe(true);
     expect(moveShown(list, list, 1, 0)).toBe(false);
+  });
+});
+
+describe('the shared card (card-safety D1, D2)', () => {
+  it("reads the saber's answer to sd", () => {
+    expect(parseSdAccess(['SD Access ON'])).toBe(true);
+    expect(parseSdAccess(['Unmounting SD Card.', 'SD Access OFF'])).toBe(false);
+    expect(parseSdAccess(['Whut? :sd'])).toBeNull();
+    expect(parseSdAccess([])).toBeNull();
+  });
+  it('a refused operation is not run, sends nothing, and fails with the reason', async () => {
+    const saves: SaveState[] = [];
+    const sent: string[] = [];
+    const reason = "Not sent: hotetest's card is shared with this computer. Give it back on Fonts & SD first.";
+    const d: OpDeps<{ name: string }> = { client: () => ({ name: 'c' }), setBusy: () => undefined, setSave: (s) => saves.push(s), log: (_k, t) => sent.push(t), snapshot: async () => { sent.push('snapshot'); }, refuse: () => reason };
+    let ran = false;
+    expect(await runOperation(d, 'Select preset 2', async () => { ran = true; return { ok: true }; }, true)).toBe(false);
+    expect(ran).toBe(false);
+    expect(sent.includes('snapshot')).toBe(false);
+    expect(saves).toEqual([{ kind: 'failed', what: 'Select preset 2', error: reason }]);
+  });
+  it('with nothing to refuse, the operation runs as before', async () => {
+    const d: OpDeps<{ name: string }> = { client: () => ({ name: 'c' }), setBusy: () => undefined, setSave: () => undefined, log: () => undefined, snapshot: async () => undefined, refuse: () => null };
+    expect(await runOperation(d, 'Select preset 2', async () => ({ ok: true }), false)).toBe(true);
   });
 });

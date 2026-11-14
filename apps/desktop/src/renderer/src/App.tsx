@@ -52,10 +52,11 @@ export function App() {
   const real = useBoard();
   usePendingLookColours(real);
   // Dev aid: hiltwrightGoto('fake:presets') shows the connected pages from the remembered saber, with no board, for
-  // layout screenshots. Nothing is sent anywhere; never available in a packaged app.
-  const [fake, setFake] = useState(false);
+  // layout screenshots; 'fake-shared:presets' does the same with its card shared (card-safety 3.4). Nothing is sent
+  // anywhere; never available in a packaged app.
+  const [fake, setFake] = useState<false | 'plain' | 'shared'>(false);
   const lib0 = real.library[0];
-  const board: typeof real = fake && import.meta.env.DEV && lib0 ? { ...real, status: 'connected', portName: 'FAKE', saber: lib0, info: { ...infoFromRecord(lib0), currentPreset: 0, battery: 3.91, volume: 1800 } } : real;
+  const board: typeof real = fake && import.meta.env.DEV && lib0 ? { ...real, status: 'connected', portName: 'FAKE', saber: lib0, info: { ...infoFromRecord(lib0), currentPreset: 0, battery: 3.91, volume: 1800 }, card: { shared: fake === 'shared', root: fake === 'shared' ? 'H:\\' : null } } : real;
   const ws = useWorkspace(board);
   const [page, setPageNow] = useState<Page>('armory');
   // A page with unsaved work (the Style editor) can hold navigation: it gets a proceed callback, and calls it once the
@@ -80,7 +81,7 @@ export function App() {
   const connected = status === 'connected';
   const configName = info?.version?.config?.replace(/^config\//, '').replace(/\.h$/, '') ?? null;
   // Dev aid: lets main switch pages for screenshots.
-  useEffect(() => { if (!import.meta.env.DEV) return; (window as unknown as { hiltwrightGoto?: (p: string) => void }).hiltwrightGoto = (p) => { setFake(p.startsWith('fake:')); setPage(p.replace('fake:', '') as Page); }; }, []);
+  useEffect(() => { if (!import.meta.env.DEV) return; (window as unknown as { hiltwrightGoto?: (p: string) => void }).hiltwrightGoto = (p) => { setFake(p.startsWith('fake-shared:') ? 'shared' : p.startsWith('fake:') ? 'plain' : false); setPage(p.replace(/^fake(-shared)?:/, '') as Page); }; }, []);
   // Dev aid: hiltwrightFault() makes the current page throw while rendering, to check the fault screen and its log line.
   // The fault belongs to the page it was raised on, so moving to another page shows that page normally.
   const [faultPage, setFaultPage] = useState<Page | null>(null);

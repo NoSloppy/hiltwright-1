@@ -34,6 +34,9 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
   const isLive = live && !staged && !!info;
   // Plugged in, and the saber said it cannot read its card: nothing is sent, and nothing is staged instead (design D6).
   const noCard = live && !!info?.sdMissing;
+  // Shared with this computer: the saber saves presets on that card, so nothing is sent until it is back (card-safety D2).
+  const sharedCard = live && board.card.shared;
+  const locked = noCard || sharedCard;
   const [ix, setIx] = useState(0);
   const [saved, setSaved] = useState<LookDef[]>([]);
   const [sets, setSets] = useState<PresetBank[]>([]);
@@ -93,7 +96,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
     await ws.saveModel(next);
   };
   const editPreset = async (patch: Partial<ModelPreset>, label: string) => {
-    if (noCard) return;
+    if (locked) return;
     if (isLive) {
       // The model as it was when the owner acted: a draft rebuilt meanwhile from the read-back loses nothing.
       const snapshot = model;
@@ -105,7 +108,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
     await stage((m) => { Object.assign(m.presets[curIx], patch); });
   };
   const setLook = async (blade: number, look: LookDef | null, args: string | null) => {
-    if (noCard) return;
+    if (locked) return;
     const snapshot = model;
     if (isLive && look && compiled.has(look.id) && saber.firmware) {
       const slots = lookSlots(saber.firmware, look.id);
@@ -157,7 +160,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
     await stage((m) => { const [p] = m.presets.splice(curIx, 1); m.presets.splice(to, 0, p); });
     setIx(to);
   };
-  const select = (i: number) => { if (noCard) return; if (isLive) void board.choosePreset(i); else setIx(i); };
+  const select = (i: number) => { if (locked) return; if (isLive) void board.choosePreset(i); else setIx(i); };
 
   // ---- preset sets ----
   const saveAsSet = async () => {
@@ -177,7 +180,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
   const trackChoices = [...new Set(['', ...tracks, ...(cur ? [cur.track] : [])])];
   const cf = cur ? splitFont(cur.font) : { folder: '', extra: [], common: true };
   // Read-only without a card: every control is off, as while a write is under way.
-  const busy = board.busy || noCard;
+  const busy = board.busy || locked;
   // The preset's font as the library knows it, and whether the saber's card has it (as last read).
   const libFont = library.find((f) => f.folder.toLowerCase() === cf.folder.toLowerCase()) ?? null;
   const cardFonts = info.fonts.length ? new Set(info.fonts) : null;
@@ -192,6 +195,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
       {staged && (
         <div className="note amber"><Icon name="info" /><span>{live ? `These ${presets.length} presets are staged (${model.presetsFrom!.name}, ${when(model.presetsFrom!.at)}) and will replace the ${info.presets.length} on ${saber.name} at the next install; a snapshot of the saber's own is kept first. ` : `These presets are staged (${model.presetsFrom!.name}, ${when(model.presetsFrom!.at)}) and go on with the next install. `}{live && <button type="button" className="holo" onClick={() => void dropStaged()}>Discard them and show the saber's own</button>}</span></div>
       )}
+      {sharedCard && !noCard && <div className="note amber"><Icon name="warn" /><span className="col" style={{ gap: 8 }}><span>{saber.name}'s card is shared with this computer. Give it back on Fonts & SD first. Preset changes, and the preset in use, are saved on the card, so nothing is sent from here while it is shared.</span><span><button type="button" className="btn sm" onClick={() => go('fonts')}><span className="b"><span className="i"><Icon name="sd" />Go to Fonts &amp; SD</span></span></button></span></span></div>}
       {noCard && <div className="note red"><Icon name="info" /><span>{saber.name} has no readable SD card. Preset changes, and the preset in use, are saved on the card, so nothing can be changed here until it is back in. Put the card back, then reconnect.</span></div>}
       {!live && !staged && !saber.planned && <div className="note"><Icon name="info" /><span>{saber.name} is not plugged in. These are its presets as last read; changes are staged and go on with the next install.</span></div>}
       {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : 'info'} /><span>{note.text}</span></div>}
@@ -224,7 +228,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
         <section className="panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }} aria-label="Preset editor">
           <div className="ph" style={{ flexWrap: 'wrap', rowGap: 8 }}><h2 className="ellip" style={{ minWidth: 0 }}>{cur ? clean(cur.name) || 'Unnamed' : 'No preset'}</h2>
             {/* A change that failed as the saber went away stays visible once the page shows the stored presets. */}
-            <div className="row" style={{ gap: 8, minWidth: 0, maxWidth: '100%', flex: '0 1 auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>{noCard ? <span className="chip err"><Icon name="x" />No SD card</span> : isLive ? <SaveChip save={board.save} /> : <>{board.save.kind === 'failed' && <SaveChip save={board.save} />}{staged ? <span className="chip warn"><span className="dot" />Staged for install</span> : <span className="chip"><span className="dot" />Not plugged in</span>}</>}</div>
+            <div className="row" style={{ gap: 8, minWidth: 0, maxWidth: '100%', flex: '0 1 auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>{noCard ? <span className="chip err"><Icon name="x" />No SD card</span> : sharedCard ? <span className="chip warn"><Icon name="sd" />Card shared</span> : isLive ? <SaveChip save={board.save} /> : <>{board.save.kind === 'failed' && <SaveChip save={board.save} />}{staged ? <span className="chip warn"><span className="dot" />Staged for install</span> : <span className="chip"><span className="dot" />Not plugged in</span>}</>}</div>
           </div>
           {cur && (
             <div className="pb col" style={{ gap: 16, overflowY: 'auto', overflowX: 'hidden' }}>

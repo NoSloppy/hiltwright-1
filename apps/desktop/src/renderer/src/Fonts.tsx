@@ -11,6 +11,7 @@ import { fontsForPresets } from './fontNeeds';
 import { FEATURES } from './features';
 import { Icon } from './Icon';
 import { chooseCard } from './cardChoice';
+import { parseSdAccess } from './boardOps';
 
 const api = () => window.hiltwright;
 
@@ -36,10 +37,20 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   // the card over when asked ('sd 1'): the blade goes off, idle sounds stop, the card is released and Windows
   // mounts it as a drive. 'sd 0' takes it back. While the host has it, the saber cannot play from it.
   const live = board.status === 'connected' && !!board.info;
-  const [usb, setUsb] = useState<'idle' | 'mounting' | 'mounted' | 'ejecting' | 'unsupported'>('idle');
+  // Whether the card is shared lives with the board session, so every page knows (card-safety D1); this page only
+  // tracks the share or give-back under way.
+  const [usb, setUsb] = useState<'idle' | 'mounting' | 'ejecting' | 'unsupported'>('idle');
   const [usbNote, setUsbNote] = useState<string | null>(null);
-  const [usbRoot, setUsbRoot] = useState<string | null>(null);
-  useEffect(() => { if (!live) { setUsb('idle'); setUsbRoot(null); } }, [live]);
+  const shared = live && board.card.shared;
+  const usbRoot = shared ? board.card.root : null;
+  // A shared card whose drive the app cannot name: the owner ejects it in Windows, then confirms (design D4).
+  const [ownerEjects, setOwnerEjects] = useState(false);
+  useEffect(() => { if (!live) { setUsb('idle'); setOwnerEjects(false); } }, [live]);
+  // Files copied so far, while a copy is under way (D5).
+  const [progress, setProgress] = useState<{ name: string; done: number; total: number } | null>(null);
+  useEffect(() => api().sd.onCopyProgress(setProgress), []);
+  // Replace takes two clicks (D6).
+  const [confirmReplace, setConfirmReplace] = useState(false);
   // Which card is shown and copied to (card-safety D3): the owner's pick, the saber's own while it shares it, or the
   // only one. Read through refs so a scan started before a render uses the latest of each.
   const [chosen, setChosen] = useState<string | null>(null);
@@ -58,19 +69,36 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     for (let i = 0; i < 40; i++) {
       await new Promise((res) => setTimeout(res, 500));
       const now = (await api().sd.locate()).find((c) => !before.has(c.root));
-      if (now) { setUsbRoot(now.root); pickRef.current = { ...pickRef.current, sharedRoot: now.root, chosen: null }; setChosen(null); setUsb('mounted'); await scan(); return; }
+      if (now) { board.cardShared(now.root); pickRef.current = { ...pickRef.current, sharedRoot: now.root, chosen: null }; setChosen(null); setUsb('idle'); await scan(); return; }
     }
     setUsb('idle'); setUsbNote('The saber said yes but no drive appeared in 20 seconds. If the blade was on or a sound was playing, wait for it to go quiet and try again.');
-    try { await board.send('sd 0', { idleMs: 500 }); } catch { /* best effort */ }
+    // It said yes, so it counts as shared until it says it has the card back.
+    board.cardShared(null);
+    try { if (parseSdAccess((await board.send('sd 0', { idleMs: 500 })).lines) === false) board.cardGivenBack(); } catch { /* best effort */ }
   };
   const ejectUsb = async () => {
-    setUsb('ejecting'); setUsbNote(null);
-    if (usbRoot) {
-      const e = await api().sd.eject(usbRoot);
-      if (!e.ok) { setUsb('mounted'); setUsbNote(e.detail); return; }
+    setUsbNote(null);
+    // The drive comes first: Windows lets go of it, then the saber takes its card back (D4).
+    let root = usbRoot;
+    if (!root) {
+      const mine = serial ? (await api().sd.locate()).find((c) => c.saberSerial === serial) : undefined;
+      root = mine?.root ?? null;
     }
-    try { await board.send('sd 0', { idleMs: 700 }); } catch { /* the saber may have dropped serial briefly */ }
-    setUsbRoot(null); setUsb('idle');
+    if (!root && !ownerEjects) {
+      setOwnerEjects(true);
+      setUsbNote(`Hiltwright cannot tell which drive is ${board.saber?.name ?? 'the saber'}'s card. Use Safely Remove in Windows for it, then press Give the card back again.`);
+      return;
+    }
+    setUsb('ejecting');
+    if (root) {
+      const e = await api().sd.eject(root);
+      if (!e.ok) { setUsb('idle'); setUsbNote(e.detail); return; }
+    }
+    let access: boolean | null = null;
+    try { access = parseSdAccess((await board.send('sd 0', { idleMs: 700 })).lines); } catch { /* the saber may have dropped serial briefly */ }
+    setUsb('idle'); setOwnerEjects(false);
+    if (access === false) board.cardGivenBack();
+    else setUsbNote('The saber did not confirm it took its card back. Try again, or unplug it and plug it back in.');
     await scan();
   };
 
@@ -102,12 +130,14 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
 
   const pick = async () => {
     const entry = await api().sd.pickFont();
-    if (entry) { setPicked(entry); setMessage(null); }
+    if (entry) { setPicked(entry); setMessage(null); setConfirmReplace(false); }
   };
 
   const copy = async (replace: boolean) => {
     if (!picked || !card) return;
-    setBusy(true);
+    if (replace && !confirmReplace) { setConfirmReplace(true); return; }
+    setConfirmReplace(false);
+    setBusy(true); setProgress(null);
     try {
       const entry = await api().sd.copyFont(picked.path, card.root, replace);
       setMessage({ tone: 'green', text: `${entry.name} copied to the card (${entry.report.files} files).` });
@@ -116,7 +146,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     } catch (err) {
       const text = String(err).replace(/^Error: /, '');
       setMessage({ tone: /already on the card/.test(text) ? 'amber' : 'red', text });
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setProgress(null); }
   };
 
   // The fonts this saber's presets name, and where each one is: on the card, in the library ready to copy, or nowhere.
@@ -129,11 +159,12 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
       for (const f of list) {
         const lib = inLibrary(f); if (!lib) continue;
         setCopyingNeeded(f);
+        setProgress(null);
         try { await api().fontLibrary.copyToCard(lib.folder, card.root, false); done.push(f); } catch (err) { failed.push(`${f}: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}`); }
       }
       setMessage(failed.length ? { tone: done.length ? 'amber' : 'red', text: `${done.length ? `Copied ${done.join(', ')}. ` : ''}Not copied: ${failed.join('; ')}` } : { tone: 'green', text: `Copied ${done.join(', ')} from the font library to the card.` });
       await scan();
-    } finally { setCopyingNeeded(null); setBusy(false); }
+    } finally { setCopyingNeeded(null); setBusy(false); setProgress(null); }
   };
 
   const issues = fonts.flatMap((f) => f.report.issues.map((i) => ({ font: f.name, ...i })));
@@ -153,8 +184,8 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
                 : live ? 'Put the card in a reader, or let the saber share it over USB: it stops playing while it does.' : 'Put the saber\'s SD card in a card reader, or plug the saber in and share its card over USB.'}
             </div>
           </div>
-          {usb === 'mounted'
-            ? <button type="button" className="btn sm warn" disabled={busy || usbBusy} onClick={() => void ejectUsb()}><span className="b"><span className="i"><Icon name="eject" />Give the card back</span></span></button>
+          {shared
+            ? <button type="button" className="btn sm warn" disabled={busy || usbBusy} onClick={() => void ejectUsb()}><span className="b"><span className="i"><Icon name="eject" />{usb === 'ejecting' ? 'Giving it back…' : 'Give the card back'}</span></span></button>
             : <button type="button" className="btn sm pri" disabled={!live || busy || usbBusy || usb === 'unsupported'} title={live ? 'The saber releases its card and it appears as a drive. The blade goes off and sound stops until you give it back.' : 'Plug the saber in first'} onClick={() => void mountUsb()}><span className="b"><span className="i"><Icon name="usb" />{usb === 'mounting' ? 'Waiting for the drive…' : usb === 'ejecting' ? 'Giving it back…' : 'Share the saber\u2019s card'}</span></span></button>}
           {choice.choices.length > 1 && (
             <label className="field" style={{ minWidth: 200 }}><span className="label">Card</span>
@@ -166,7 +197,9 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
           )}
           <button type="button" className="btn sm" disabled={busy} onClick={() => void scan()}><span className="b"><span className="i"><Icon name="undo" />Look again</span></span></button>
         </div>
-        {usb === 'mounted' && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The saber has handed its card to this computer{usbRoot ? ` (${usbRoot})` : ''}. It cannot play until you give the card back; do that here rather than unplugging, so nothing is left half written. Copying is slow this way, a big font can take minutes.</span></div></div>}
+        {shared && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The saber has handed its card to this computer{usbRoot ? ` (${usbRoot})` : ''}. It cannot play until you give the card back; do that here rather than unplugging, so nothing is left half written. Copying is slow this way, a big font can take minutes.</span></div></div>}
+        {!live && board.cardLostWhileShared && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The connection went while the saber was sharing its card. The saber may still be holding its card. Reconnect it to give the card back.</span></div></div>}
+        {progress && busy && <div style={{ padding: '0 18px 12px' }}><div className="note"><Icon name="sd" /><span>Copying {progress.name}: {progress.done} of {progress.total} files</span></div></div>}
         {usbNote && <div style={{ padding: '0 18px 12px' }}><div className="note"><Icon name="info" /><span>{usbNote}</span></div></div>}
         {message && <div style={{ padding: '0 18px 16px' }}><div className={`note ${message.tone}`}><Icon name={message.tone === 'green' ? 'check' : message.tone === 'red' ? 'x' : 'warn'} /><span>{message.text}</span></div></div>}
       </section>
@@ -231,8 +264,8 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
                   {picked.report.issues.map((i, k) => <div key={k} className={`note ${i.kind === 'mixed' || i.kind === 'missing-hum' ? 'red' : 'amber'}`}><Icon name="warn" /><span>{i.text}</span></div>)}
                   <div className="row" style={{ gap: 8 }}>
                     <button type="button" className="btn sm pri" disabled={busy || !card} onClick={() => void copy(false)}><span className="b"><span className="i"><Icon name="check" />Copy to card</span></span></button>
-                    {fonts.some((f) => f.name.toLowerCase() === picked.name.toLowerCase()) && <button type="button" className="btn sm warn" disabled={busy} onClick={() => void copy(true)}><span className="b"><span className="i">Replace on card</span></span></button>}
-                    <button type="button" className="btn sm ghost" onClick={() => setPicked(null)}><span className="b"><span className="i">Cancel</span></span></button>
+                    {fonts.some((f) => f.name.toLowerCase() === picked.name.toLowerCase()) && <button type="button" className="btn sm warn" disabled={busy || !card} onClick={() => void copy(true)}><span className="b"><span className="i">{confirmReplace ? `Really replace ${picked.name}?` : 'Replace on card'}</span></span></button>}
+                    <button type="button" className="btn sm ghost" onClick={() => { setPicked(null); setConfirmReplace(false); }}><span className="b"><span className="i">Cancel</span></span></button>
                   </div>
                 </>
               ) : (

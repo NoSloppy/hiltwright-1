@@ -10,7 +10,7 @@ import {
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
 import { PROFFIE_FILTER, WebSerialTransport, describePort, grantedProffiePorts } from './serial';
 import { setConnectionSnapshot } from './support';
-import { connectGate, createRecovery, deleteShown, duplicateShown, moveShown, readBattery, runOperation, sdFailureIn, serialQueue, storedLayout, type SaveState } from './boardOps';
+import { connectGate, createRecovery, deleteShown, duplicateShown, moveShown, parseSdAccess, readBattery, runOperation, sdFailureIn, serialQueue, storedLayout, type SaveState } from './boardOps';
 
 export interface BoardInfo {
   version: VersionInfo | null;
@@ -78,6 +78,13 @@ export function useBoard() {
   const reopenRef = useRef<() => Promise<void>>(async () => { throw new Error('not connected'); });
   const rereadRef = useRef<() => Promise<boolean>>(async () => false);
   const [recovery] = useState(() => createRecovery({ reopen: () => reopenRef.current(), reread: () => rereadRef.current(), log: (l) => console.log(`[board] ${l}`) }));
+  // The saber's card shared with this computer (card-safety D1): known on every page, from the app's own share and
+  // from asking the saber when it connects. While it is shared nothing that uses the card is sent (D2).
+  const [card, setCard] = useState<{ shared: boolean; root: string | null }>({ shared: false, root: null });
+  const cardRef = useRef(card);
+  const setCardNow = (c: { shared: boolean; root: string | null }) => { cardRef.current = c; setCard(c); };
+  // The connection went while the card was shared: the saber may still be holding it until it is reconnected (D4).
+  const [cardLostWhileShared, setCardLostWhileShared] = useState(false);
   infoRef.current = info;
   saberRef.current = saber;
 
@@ -117,6 +124,13 @@ export function useBoard() {
   }, []);
 
   const disconnect = useCallback(async (reason?: string) => {
+    const c = cardRef.current;
+    if (c.shared) {
+      console.log(`[board] the connection went while the card was shared${c.root ? `; ejecting ${c.root}` : ''}`);
+      if (c.root) void api().sd.eject(c.root).then((r) => console.log(`[sd] eject ${c.root}: ${r.ok ? 'done' : r.detail}`), () => undefined);
+      setCardLostWhileShared(true);
+      setCardNow({ shared: false, root: null });
+    }
     client.current?.close();
     client.current = null;
     // Let go of the transport before waiting on it, so anything still running sees at once that it is gone.
@@ -227,6 +241,9 @@ export function useBoard() {
     const lp = await time(presetCommands.list(), { idleMs: 700, timeoutMs: 15000 });
     const fonts = await time('list_fonts', { idleMs: 700, timeoutMs: 15000 });
     const tracks = await time('list_tracks', { idleMs: 700, timeoutMs: 15000 });
+    // Is the card already shared (from the saber's own menu, or left so by an earlier session)? Firmware without
+    // MOUNT_SD_SETTING answers Whut?, which is not a missing command here: it has no card to share (D1).
+    const access = parseSdAccess((await time('sd', { idleMs: 500 }, false)).lines);
     const version = parseVersion(v.lines);
     // Which board this is, before the blade step: its stored layout is reused when the build is one already read.
     let usbSerial: string | null = null;
@@ -255,6 +272,9 @@ export function useBoard() {
       sdMissing: sdSeen.current,
     };
     infoRef.current = next; setInfo(next);
+    setCardLostWhileShared(false);
+    setCardNow({ shared: access === true, root: null });
+    if (access === true) console.log('[board] the saber says its card is shared with this computer');
     setStatus('connected');
     // A new connection starts with a clean save status: a failure from before an unplug no longer describes this saber.
     setSave({ kind: 'idle' });
@@ -274,6 +294,13 @@ export function useBoard() {
       if (ex) console.log(`[library] expected ${ex.id} (${ex.configName}) after the install; matched ${rec.id}${rec.id === ex.id ? '' : ' instead, still expecting it'}`);
       saberRef.current = rec; setSaber(rec);
       console.log(`[library] saber ${rec.id} "${rec.name}" serial=${rec.identity.usbSerial ?? 'none'} firstSeen=${rec.firstSeen}`);
+      // A card found shared: its drive is the one that belongs to this saber's USB connection (D3).
+      if (access === true && usbSerial) {
+        void api().sd.locate().then((cards) => {
+          const mine = cards.find((x) => x.saberSerial === usbSerial);
+          if (mine && cardRef.current.shared) { setCardNow({ shared: true, root: mine.root }); console.log(`[board] the shared card is ${mine.root}`); }
+        }, () => undefined);
+      }
       // The saber wanted has been reached and read: every board may be reached again.
       if (wanted.current) { wanted.current = null; void api().usb.wantSerial(null); }
       await api().snapshots.save(rec.id, 'Connected', next.presets);
@@ -482,7 +509,8 @@ export function useBoard() {
    */
   const run = useCallback((label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot = true, remember = false, confirm?: () => boolean): Promise<boolean> => {
     // `confirm`: whether the saber, read again after a stall, shows this change (usb-power-connect D5).
-    return enqueue(() => runOperation({ client: () => client.current, setBusy, setSave, log, snapshot, recovery }, label, op, withSnapshot, confirm)).then((ok) => {
+    const refuse = () => (cardRef.current.shared ? `Not sent: ${saberRef.current?.name ?? 'the saber'}'s card is shared with this computer. Give it back on Fonts & SD first.` : null);
+    return enqueue(() => runOperation({ client: () => client.current, setBusy, setSave, log, snapshot, recovery, refuse }, label, op, withSnapshot, confirm)).then((ok) => {
       if (ok && remember) void rememberPresets();
       return ok;
     });
@@ -611,6 +639,11 @@ export function useBoard() {
     await refreshLibrary();
   }, [refreshLibrary]);
 
+  /** The card is now shared with this computer, at this drive if known (Fonts & SD's share, card-safety D1). */
+  const cardShared = useCallback((root: string | null) => { setCardLostWhileShared(false); setCardNow({ shared: true, root }); }, []);
+  /** The saber said its card access is off: it has its card back. */
+  const cardGivenBack = useCallback(() => { setCardLostWhileShared(false); setCardNow({ shared: false, root: null }); }, []);
+
   const renameSaber = useCallback(async (name: string) => {
     const s = saberRef.current;
     if (!s) return;
@@ -694,7 +727,7 @@ export function useBoard() {
     };
   }, []);
 
-  return { status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, reachNext, currentSaber, restartSaber, currentPresets, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
+  return { card, cardShared, cardGivenBack, cardLostWhileShared, status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, reachNext, currentSaber, restartSaber, currentPresets, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
 }
 
 export type Board = ReturnType<typeof useBoard>;

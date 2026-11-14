@@ -55,11 +55,15 @@
 
 ## 3. The shared card on every page (renderer)
 
-- [ ] 3.1 In `boardOps.ts`, add `parseSdAccess(lines)`, and `refuse` in `OpDeps`, checked first by `runOperation` (design D1, D2). Verify in `apps/desktop/test/boardOps.test.ts`:
+- [x] 3.1 In `boardOps.ts`, add `parseSdAccess(lines)`, and `refuse` in `OpDeps`, checked first by `runOperation` (design D1, D2). Verify in `apps/desktop/test/boardOps.test.ts`:
   - `parseSdAccess` on `SD Access ON`, `SD Access OFF`, `Whut? :sd` and nothing
   - a refused operation is not run, fails with the reason, and sends nothing
-- [ ] 3.2 In `board.ts`, add `card`, `cardShared(root)` and `cardGivenBack()`, and the bare `sd` in `identify` (not counted as rejected). Pass `refuse` to `runOperation`. When the connection goes while shared, eject the known root (design D1, D2, D4). Verify with `npm run typecheck`, and in 4.1.
-- [ ] 3.3 Move `Fonts.tsx`'s sharing onto the board's `card` state:
+  - **Result, 2026-11-14.** `parseSdAccess(lines)` in `boardOps.ts`. `OpDeps.refuse` is checked first by `runOperation`: when it gives a reason, there is no snapshot, nothing is sent, and the save fails with that reason. Three tests in `boardOps.test.ts` (36 in the file).
+
+- [x] 3.2 In `board.ts`, add `card`, `cardShared(root)` and `cardGivenBack()`, and the bare `sd` in `identify` (not counted as rejected). Pass `refuse` to `runOperation`. When the connection goes while shared, eject the known root (design D1, D2, D4). Verify with `npm run typecheck`, and in 4.1.
+  - **Result, 2026-11-14.** `board.ts` has `card { shared, root }`, `cardShared(root)`, `cardGivenBack()` and `cardLostWhileShared`. `identify` sends a bare `sd` after `list_tracks`, not counted as rejected. It sets `shared` from the answer, then looks up the drive by `saberSerial`. `run()` passes `refuse` with the reason. `disconnect` ejects a known shared drive, and sets `cardLostWhileShared`. `npm run typecheck` passes. On hardware: 4.1.
+
+- [x] 3.3 Move `Fonts.tsx`'s sharing onto the board's `card` state:
   - share → `cardShared(root)`
   - give back → `cardGivenBack()` only on `SD Access OFF`, otherwise the not-confirmed note
   - the lost-connection note
@@ -67,12 +71,27 @@
   - the copy progress line (1.2)
 
   Verify with `npm run typecheck`, and in 4.1.
-- [ ] 3.4 While `card.shared`:
+  - **Result, 2026-11-14.** `Fonts.tsx` reads `board.card`, and its local state now covers only a share or give-back under way:
+    - share calls `cardShared(root)`; a share whose drive never appeared still counts as shared until `sd 0` answers OFF
+    - give back ejects the known drive, or the one found by serial, or asks the owner to use Safely Remove when no drive can be named; it calls `cardGivenBack()` only on `SD Access OFF`, and otherwise shows the not-confirmed note
+    - the lost-connection note
+    - the "Copying <name>: n of m files" line
+    - Replace takes two clicks ("Really replace <name>?"), and picking another font or Cancel clears it
+
+    `npm run typecheck` passes. On hardware: 4.1.
+
+- [x] 3.4 While `card.shared`:
   - `Presets.tsx` is read-only with the shared-card note and a button to Fonts & SD
   - `Controls.tsx` is disabled with the note
   - `Build.tsx` disables Install and Restore with the note, and skips the voice pack check
 
   Verify with `npm run typecheck`. Then make one offscreen screenshot of each page with `card.shared` forced in a development run, using `HILTWRIGHT_NO_BOARD=1` and the `fake:` connection, if the fake can set it; otherwise check in 4.1.
+  - **Result, 2026-11-14.** While `board.card.shared`:
+    - **Presets:** `locked` (no card, or the card shared) stops selections and edits, and disables every control through `busy`. An amber note says the card is shared and must be given back first, with "Go to Fonts & SD", and the chip reads "Card shared".
+    - **Diagnostics (`Controls.tsx`):** the sliders and effect buttons are disabled, with the note.
+    - **Build:** `canInstall` is false, so Install and "Put back" are off, with the note. The voice pack check is not sent.
+
+    A new development-only mode, `hiltwrightGoto('fake-shared:<page>')`, shows the fake connection with its card shared. Offscreen screenshots of Presets, Diagnostics and Build & Install (`HILTWRIGHT_NO_BOARD=1`, scratch data) show each note and the controls off. `npm run typecheck` passes; `npm test` 653 passed (gated skipped).
 
 ## 4. Checks
 
