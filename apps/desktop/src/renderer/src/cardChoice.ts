@@ -31,3 +31,11 @@ export function chooseCard(cards: CardInfo[], opts: { sharedRoot: string | null;
   if (choices.length === 1) return pick(choices[0]);
   return pick(null, choices.length > 1);
 }
+
+/**
+ * The card the owner picked on Fonts & SD, kept for this run so the font library copies to the same one. Not saved:
+ * drive letters change from one day to the next.
+ */
+let remembered: string | null = null;
+export function rememberCardChoice(root: string | null): void { remembered = root; }
+export function rememberedCardChoice(): string | null { return remembered; }

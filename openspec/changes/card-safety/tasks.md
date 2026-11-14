@@ -52,6 +52,19 @@
     - While asking there is no card, so copying is off.
 
     `npm run typecheck` passes; `npm test` 650 passed (gated skipped). On screen with two cards: 4.1.
+- [x] 2.3 The font library's "Copy to card" uses the same card (added at the owner's request, 2026-11-14):
+  - `cardChoice.ts` keeps the card chosen on Fonts & SD (`rememberCardChoice`, `rememberedCardChoice`)
+  - `FontLibrary.tsx` gets `board` and chooses with `chooseCard`
+  - while asking, the button is off and says "Choose the card on Fonts & SD"
+
+  Verify:
+  - `cardChoice.test.ts`: the remembered choice is used, and is dropped when its card is gone
+  - `npm run typecheck`
+  - an offscreen screenshot of the font library with a card from `HILTWRIGHT_SD_ROOT`, showing "Copy to card <root>"
+  - **Result, 2026-11-14.** `cardChoice.ts` keeps the pick made on Fonts & SD for the run (`rememberCardChoice` and `rememberedCardChoice`; drive letters change, so it is not saved), and Fonts & SD starts from it. `FontLibrary.tsx` now gets `board`, and chooses its card with `chooseCard` from the shared drive, the saber's serial and the remembered pick. While asking, its button reads "Choose the card on Fonts & SD" and is off, with a tooltip.
+    - Tests: a new test in `cardChoice.test.ts` covers the remembered pick between two cards, and dropping it when its card is gone (8 tests).
+    - `npm run typecheck` passes.
+    - Offscreen screenshot with board access off, a scratch `HILTWRIGHT_SD_ROOT` card and a scratch `HILTWRIGHT_FONT_LIBRARY`: the font's panel shows "Copy to card <root>".
 
 ## 3. The shared card on every page (renderer)
 

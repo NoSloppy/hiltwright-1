@@ -12,6 +12,8 @@ When the page opens, and when the owner asks it to look again, the app SHALL loo
 
 The owner SHALL be able to switch to another card that is present. A choice SHALL hold until the owner changes it or that card is gone.
 
+The font library's "Copy to card" SHALL use the same card, chosen the same way. While the owner has yet to choose, it SHALL copy nothing and say to choose the card on Fonts & SD. (Added at the owner's request, 2026-11-14: the font library picked the first card it found.)
+
 #### Scenario: A card in a reader
 - **WHEN** the owner puts the saber's card in a card reader and opens Fonts & SD
 - **THEN** the page names the drive and shows its space, font and track counts, and whether `presets.ini` is present
@@ -29,6 +31,10 @@ The owner SHALL be able to switch to another card that is present. A choice SHAL
 #### Scenario: Two cards in readers
 - **WHEN** two ProffieOS cards are in readers and no saber is sharing its card
 - **THEN** the page says there are two cards and asks the owner which one to show, and nothing is copied until one is chosen
+
+#### Scenario: Copying from the font library with two cards
+- **WHEN** two ProffieOS cards are in readers, and the owner opens a font in the font library
+- **THEN** its "Copy to card" is off and says to choose the card on Fonts & SD; once one is chosen there, it copies to that card
 
 ### Requirement: A font folder can be copied onto the card
 The owner SHALL be able to choose a font folder on the computer. They SHALL see its checks before copying, and copy the whole folder onto the card under its own name, reading the original only. A copy SHALL be refused when a font of that name is already on the card, unless the owner explicitly chooses to replace it. It SHALL also be refused when the folder name is not valid on an SD card, or contains `;` or `,`, which ProffieOS reads as separators between font folders. The page SHALL say how many sounds were copied.

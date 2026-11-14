@@ -10,7 +10,7 @@ import { XenoImport } from './XenoImport';
 import { fontsForPresets } from './fontNeeds';
 import { FEATURES } from './features';
 import { Icon } from './Icon';
-import { chooseCard } from './cardChoice';
+import { chooseCard, rememberCardChoice, rememberedCardChoice } from './cardChoice';
 import { parseSdAccess } from './boardOps';
 
 const api = () => window.hiltwright;
@@ -53,7 +53,8 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   const [confirmReplace, setConfirmReplace] = useState(false);
   // Which card is shown and copied to (card-safety D3): the owner's pick, the saber's own while it shares it, or the
   // only one. Read through refs so a scan started before a render uses the latest of each.
-  const [chosen, setChosen] = useState<string | null>(null);
+  const [chosen, setChosenNow] = useState<string | null>(rememberedCardChoice);
+  const setChosen = (root: string | null) => { rememberCardChoice(root); setChosenNow(root); };
   const serial = live ? board.saber?.identity.usbSerial ?? null : null;
   const pickRef = useRef({ sharedRoot: usbRoot, saberSerial: serial, chosen });
   pickRef.current = { sharedRoot: usbRoot, saberSerial: serial, chosen };

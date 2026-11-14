@@ -1,7 +1,7 @@
 // card-safety 2.2: the card Fonts & SD shows is the saber's own when it shares it, the owner's choice, or the only one.
 
 import { describe, expect, it } from 'vitest';
-import { chooseCard } from '../src/renderer/src/cardChoice';
+import { chooseCard, rememberCardChoice, rememberedCardChoice } from '../src/renderer/src/cardChoice';
 import type { CardInfo } from '../src/shared/api';
 
 const card = (root: string, saberSerial: string | null = null, proffie = true): CardInfo => ({ root, label: null, freeBytes: null, totalBytes: null, proffie, hasPresetsIni: proffie, saberSerial });
@@ -34,5 +34,17 @@ describe('which card Fonts & SD shows (card-safety D3)', () => {
   });
   it('no card at all: nothing to show, nothing to ask', () => {
     expect(chooseCard([card('F:\\', null, false)], none)).toMatchObject({ card: null, ask: false, choices: [] });
+  });
+});
+
+describe('the font library copies to the card chosen on Fonts & SD (card-safety 2.3)', () => {
+  it('the remembered choice picks between two cards, and is dropped when its card is gone', () => {
+    const other = card('F:\\');
+    rememberCardChoice(null);
+    expect(chooseCard([reader, other], { ...none, chosen: rememberedCardChoice() })).toMatchObject({ card: null, ask: true });
+    rememberCardChoice('F:\\');
+    expect(chooseCard([reader, other], { ...none, chosen: rememberedCardChoice() })).toMatchObject({ card: other, ask: false });
+    expect(chooseCard([reader], { ...none, chosen: rememberedCardChoice() })).toMatchObject({ card: reader, ask: false });
+    rememberCardChoice(null);
   });
 });

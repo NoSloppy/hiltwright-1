@@ -73,6 +73,8 @@ The page chooses with a pure `chooseCard(cards, { sharedRoot, saberSerial, chose
 
 When the connect-time `sd` says `ON`, the root is the card whose `saberSerial` matches, if any.
 
+The font library's "Copy to card" uses the same rule. The owner's pick on Fonts & SD is kept in `cardChoice.ts` (`rememberCardChoice`), so both pages copy to the same card. While Fonts & SD would ask, the library's button is off and says to choose there. (Added at the owner's request during apply, 2026-11-14.)
+
 **Rejected:**
 - *Only "the drive that appeared after `sd 1`".* It cannot find a card that was already shared when the app started, which is the case D1 adds.
 

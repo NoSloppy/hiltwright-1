@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardInfo, FontLibraryStatus, FontSound, ImportResult, LibraryFont, LibraryFontDetail } from '../../shared/api';
 import { Icon } from './Icon';
 import { ContributorLogo, useContributors } from './credits';
+import { chooseCard, rememberedCardChoice } from './cardChoice';
+import type { Board } from './board';
 
 const api = () => window.hiltwright;
 
@@ -50,7 +52,7 @@ export function useSoundPlayer() {
   return { play, stop, playing, loadingKey };
 }
 
-export function FontLibrary({ onDemo }: { onDemo: (folder: string) => void }) {
+export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => void; board: Board }) {
   const [status, setStatus] = useState<FontLibraryStatus | null>(null);
   const [fonts, setFonts] = useState<LibraryFont[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -63,7 +65,11 @@ export function FontLibrary({ onDemo }: { onDemo: (folder: string) => void }) {
   const [note, setNote] = useState<{ tone: 'green' | 'amber' | 'red'; text: string } | null>(null);
   // A details file that could not be read was kept aside (jsonStore.ts); said here as well as on the Armory.
   const [problems, setProblems] = useState<Awaited<ReturnType<typeof window.hiltwright.app.storeProblems>>>([]);
-  const [card, setCard] = useState<CardInfo | null>(null);
+  // The card to copy onto: the same one Fonts & SD shows, chosen the same way (card-safety D3).
+  const [cards, setCards] = useState<CardInfo[]>([]);
+  const live = board.status === 'connected' && !!board.info;
+  const pick = chooseCard(cards, { sharedRoot: live && board.card.shared ? board.card.root : null, saberSerial: live ? board.saber?.identity.usbSerial ?? null : null, chosen: rememberedCardChoice() });
+  const card = pick.card;
   const people = useContributors();
   const [groupBy, setGroupBy] = useState<GroupBy>(() => { try { const g = localStorage.getItem('hiltwright.fontlib.group'); return g === 'maker' || g === 'bundle' ? g : 'none'; } catch { return 'none'; } });
   useEffect(() => { try { localStorage.setItem('hiltwright.fontlib.group', groupBy); } catch { /* private mode */ } }, [groupBy]);
@@ -79,7 +85,7 @@ export function FontLibrary({ onDemo }: { onDemo: (folder: string) => void }) {
     void api().app.storeProblems().then((ps) => setProblems(ps.filter((x) => x.place === 'fonts')), () => undefined);
     setSelected((s) => (s && list.some((f) => f.folder === s) ? s : list[0]?.folder ?? null));
   }, []);
-  useEffect(() => { void refresh(); void api().sd.locate().then((cs) => setCard(cs.find((c) => c.proffie) ?? null)).catch(() => undefined); }, [refresh]);
+  useEffect(() => { void refresh(); void api().sd.locate().then(setCards).catch(() => undefined); }, [refresh]);
   useEffect(() => api().fontLibrary.onProgress(setProgress), []);
   useEffect(() => {
     setDetail(null);
@@ -253,14 +259,14 @@ export function FontLibrary({ onDemo }: { onDemo: (folder: string) => void }) {
         </section>
       </div>
 
-      {sel ? <FontDetail key={sel.folder} font={sel} detail={detail} card={card} player={player} onSetLogo={(m) => void setLogo(m)} onClearLogo={(m) => void clearLogo(m)} onDemo={onDemo} onChanged={onChanged} onRemoved={() => { player.stop(); void refresh(); }} />
+      {sel ? <FontDetail key={sel.folder} font={sel} detail={detail} card={card} askCard={pick.ask} player={player} onSetLogo={(m) => void setLogo(m)} onClearLogo={(m) => void clearLogo(m)} onDemo={onDemo} onChanged={onChanged} onRemoved={() => { player.stop(); void refresh(); }} />
         : <section className="panel"><div className="pb hint">Pick a font to see and hear what is in it.</div></section>}
     </div>
   );
 }
 
-function FontDetail({ font, detail, card, player, onSetLogo, onClearLogo, onDemo, onChanged, onRemoved }: {
-  font: LibraryFont; detail: LibraryFontDetail | null; card: CardInfo | null; player: ReturnType<typeof useSoundPlayer>;
+function FontDetail({ font, detail, card, askCard, player, onSetLogo, onClearLogo, onDemo, onChanged, onRemoved }: {
+  font: LibraryFont; detail: LibraryFontDetail | null; card: CardInfo | null; askCard: boolean; player: ReturnType<typeof useSoundPlayer>;
   onSetLogo: (maker: string) => void; onClearLogo: (maker: string) => void;
   onDemo: (folder: string) => void; onChanged: (f: LibraryFont) => void; onRemoved: () => void;
 }) {
@@ -390,7 +396,7 @@ function FontDetail({ font, detail, card, player, onSetLogo, onClearLogo, onDemo
       <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }}>
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}{note.replace && <> <button type="button" className="holo" disabled={copying} onClick={() => void copy(true)}>Replace it</button></>}</span></div>}
         <div className="row" style={{ gap: 8 }}>
-          <button type="button" className="btn sm pri" disabled={!card || copying} title={card ? `Copy this font's folder onto the card at ${card.root}` : 'No ProffieOS card found. Put one in a reader, or share the saber’s card on Fonts & SD.'} onClick={() => void copy(false)}><span className="b"><span className="i"><Icon name="sd" />{copying ? 'Copying…' : card ? `Copy to card ${card.root}` : 'No card'}</span></span></button>
+          <button type="button" className="btn sm pri" disabled={!card || copying} title={card ? `Copy this font's folder onto the card at ${card.root}` : askCard ? 'More than one ProffieOS card is in. Choose which one on Fonts & SD first.' : 'No ProffieOS card found. Put one in a reader, or share the saber’s card on Fonts & SD.'} onClick={() => void copy(false)}><span className="b"><span className="i"><Icon name="sd" />{copying ? 'Copying…' : card ? `Copy to card ${card.root}` : askCard ? 'Choose the card on Fonts & SD' : 'No card'}</span></span></button>
           <button type="button" className="btn sm ghost" onClick={() => void api().fontLibrary.open(font.folder)}><span className="b"><span className="i">Show files</span></span></button>
           {confirmRemove
             ? <button type="button" className="btn sm danger" style={{ marginLeft: 'auto' }} onClick={() => void api().fontLibrary.remove(font.folder).then(onRemoved, (err) => setNote({ tone: 'red', text: cleanErr(err) }))}><span className="b"><span className="i"><Icon name="trash" />Yes, remove</span></span></button>
