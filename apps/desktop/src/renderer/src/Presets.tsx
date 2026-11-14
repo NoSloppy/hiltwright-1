@@ -8,7 +8,7 @@
 // A plugged-in saber that cannot read its SD card is shown read-only: ProffieOS saves presets on the card.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { STARTER_LOOKS, argInfo, bankFromSaber, bankToModel, colorWordToHex, formatBuiltin, formatStyleArgs, hexToColorWord, lookSlots, parseStyleArgs, planRestore, registerLookSim, singleWords, starterLookFor, type LookDef, type PresetBank, type PresetRecord, type RestorePlan, type SaberConfigModel } from '@hiltwright/core';
+import { STARTER_LOOKS, argInfo, bankFromSaber, bankLoadCheck, bankToModel, colorWordToHex, formatBuiltin, formatStyleArgs, hexToColorWord, lookSlots, parseStyleArgs, planRestore, registerLookSim, singleWords, starterLookFor, type BankLoadCheck, type LookDef, type PresetBank, type PresetRecord, type RestorePlan, type SaberConfigModel } from '@hiltwright/core';
 import { BladePreview, canSimulate } from './BladePreview';
 import { LookPreviewNote } from './PreviewNote';
 import { SaberControls } from './Controls';
@@ -52,6 +52,9 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
   // History: the snapshot whose restore is being looked at, with its presets.
   const [restoring, setRestoring] = useState<{ meta: SnapshotMeta; presets: PresetRecord[] } | null>(null);
   useEffect(() => { setRestoring(null); }, [saber?.id, live]);
+  // Sets: the set about to be loaded, with what loading it would do.
+  const [loading, setLoading] = useState<{ bank: PresetBank } | null>(null);
+  useEffect(() => { setLoading(null); }, [saber?.id]);
   // A colour is written once the picker has been still for half a second, or at once when it is left (F45).
   const colourTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   useEffect(() => () => { for (const t of colourTimers.current.values()) clearTimeout(t); }, []);
@@ -172,7 +175,15 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
     setSets(await api().banks.save(bank));
     setNote({ tone: 'green', text: `Saved "${bank.name}": ${bank.presets.length} presets, to load onto any saber.` });
   };
+  // A set's problems, and staged edits it would replace, are shown first; a clean load onto nothing staged goes at once.
+  const askLoad = (bank: PresetBank) => {
+    const check = bankLoadCheck(bank, model, allLooks);
+    if (check.needsConfirm) setLoading({ bank }); else void loadSet(bank);
+  };
+  // Worked out again on every render: staged edits made while it is open are counted.
+  const loadCheck: BankLoadCheck | null = loading ? bankLoadCheck(loading.bank, model, allLooks) : null;
   const loadSet = async (bank: PresetBank) => {
+    setLoading(null);
     const next = bankToModel(bank, model, allLooks);
     await ws.saveModel(next);
     setIx(0);
@@ -327,10 +338,27 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
               <div className="list" style={{ overflow: 'auto' }}>
                 {sets.length === 0 && <div className="li hint" style={{ minHeight: 44 }}>No sets yet. Save this list as one to reuse it on another saber, or to keep a copy.</div>}
                 {sets.map((s) => (
-                  <div key={s.id} className="li" style={{ minHeight: 48, gap: 8 }}>
-                    <span className="col grow" style={{ gap: 0 }}><span className="ellip small" style={{ fontWeight: 600 }}>{s.name}</span><span className="hint mono" style={{ fontSize: 11 }}>{s.presets.length} presets · {when(s.updated)}</span></span>
-                    <button type="button" className="holo" style={{ fontSize: 11.5, fontWeight: 600 }} disabled={busy} onClick={() => void loadSet(s)}>Load</button>
-                    <button type="button" className="chip" aria-label={`Delete set ${s.name}`} onClick={() => void api().banks.remove(s.id).then(setSets)}><Icon name="trash" /></button>
+                  <div key={s.id} className="col" style={{ gap: 0 }}>
+                    <div className="li" style={{ minHeight: 48, gap: 8 }}>
+                      <span className="col grow" style={{ gap: 0 }}><span className="ellip small" style={{ fontWeight: 600 }}>{s.name}</span><span className="hint mono" style={{ fontSize: 11 }}>{s.presets.length} presets · {when(s.updated)}</span></span>
+                      <button type="button" className="holo" style={{ fontSize: 11.5, fontWeight: 600 }} disabled={busy || loading?.bank.id === s.id} onClick={() => askLoad(s)}>Load</button>
+                      <button type="button" className="chip" aria-label={`Delete set ${s.name}`} onClick={() => { if (loading?.bank.id === s.id) setLoading(null); void api().banks.remove(s.id).then(setSets); }}><Icon name="trash" /></button>
+                    </div>
+                    {loading?.bank.id === s.id && loadCheck && (
+                      <div className="col" style={{ gap: 8, padding: '10px 14px 12px', borderBottom: '1px solid var(--line)' }}>
+                        {loadCheck.problems.length > 0 && (
+                          <div className="col" style={{ gap: 4 }}>
+                            <span className="small" style={{ fontWeight: 600 }}>{loadCheck.canLoad ? `This set does not fit ${saber.name} exactly:` : 'This set cannot be loaded:'}</span>
+                            <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{loadCheck.problems.map((p, k) => <li key={k}>{p}</li>)}</ul>
+                          </div>
+                        )}
+                        {loadCheck.replacesStaged && <span className="small amber">{loadCheck.replacesStaged}</span>}
+                        <span className="row" style={{ gap: 8 }}>
+                          {loadCheck.canLoad && <button type="button" className="btn sm" disabled={busy} onClick={() => void loadSet(s)}><span className="b"><span className="i">{loadCheck.problems.length ? 'Load it anyway' : 'Load it'}</span></span></button>}
+                          <button type="button" className="holo small" onClick={() => setLoading(null)}>Cancel</button>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
