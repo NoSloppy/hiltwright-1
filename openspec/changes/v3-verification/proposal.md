@@ -15,6 +15,7 @@ Beta 1 promises Proffieboard V3 support, and nothing has ever been compiled for,
   - diagnostics 4.1, 4.3, 4.6
   - preset-editing 6.1, 6.4, 6.5, 6.7, 6.9, 6.10, 6.12, 6.13, 6.15, 6.19
 - Scenarios from later baselines, as they are archived.
+- **From `usb-power-connect` 5.3 (moved by the owner, 2026-11-14, as the V3 had no card or presets then):** on a V3 with a card and presets, ten preset selections, each after 30 s idle, with and without a battery. Record how many stalled (the `[board] paused:` lines) and that each one was reconnected and saved. Also check that connecting does not speak the voltage, and that a V3 with no battery shows its voltage with no USB-power note (it read 3.17 V). Already seen on the empty V3, 2026-11-14: the blade layout was reused (`blade layout [97]: stored for this build`, no `scanid`), and the saber matched its own record.
 - **From `baseline-firmware`, every board-marked scenario on the V3:** version after install (4.4), backup (5.4), reboot (5.6), driver (5.8), install (5.10) and restore (5.14). Also a V3 build from the app with its flash budget (3.3, FW13), and an install started from the V3's bootloader (5.7).
 - **From `baseline-sd-fonts`, on the V3:** sharing its card over USB (2.11) and giving it back (2.13).
 - **From `baseline-styles`:** the same side-by-side blade sample on the V3 (2.2), since the V3's LEDs and power path differ.

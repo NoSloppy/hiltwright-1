@@ -92,7 +92,7 @@ A battery reading under 2 volts means no battery is connected. While a connected
 - the header SHALL show "No battery" instead of a voltage
 - the Armory SHALL say that the saber is running on USB power alone, that it may pause when it plays sound or reads its card, and that Hiltwright reconnects if it does
 
-A reading of 2 volts or more SHALL be shown in volts, with no note. A saber whose firmware gives no battery reading SHALL get no note.
+A reading of 2 volts or more SHALL be shown in volts, with no note, even when no battery is connected. Some boards read a voltage with none: a Proffieboard V3 with no battery read 3.17 V. On those boards the app cannot tell a missing battery from a flat one, so it SHALL show no note. A saber whose firmware gives no battery reading SHALL get no note.
 
 #### Scenario: No battery connected
 - **WHEN** a saber with no battery connected is plugged in
@@ -102,3 +102,8 @@ A reading of 2 volts or more SHALL be shown in volts, with no note. A saber whos
 #### Scenario: A battery connected
 - **WHEN** a saber reading 3.9 volts connects
 - **THEN** the header shows 3.90 V, and there is no USB-power note
+
+#### Scenario: A V3 with no battery
+- **WHEN** a Proffieboard V3 with no battery connected is plugged in, and reads 3.17 V
+- **THEN** the header shows 3.17 V, and there is no USB-power note
+- *Needs a real board (V3).*

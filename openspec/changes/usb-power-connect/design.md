@@ -103,6 +103,7 @@ The header chip uses the label. The Armory's connection panel shows the USB-powe
 **Rejected:**
 - *A percentage.* ProffieOS's own curve starts at 2.85 V, so it says nothing below it.
 - *Flagging under 3 V.* A flat but present battery reads about 3 V, and it is not missing.
+- *Flagging a V3 by its reading.* The owner's V3.9 with no battery read 3.17 V (2026-11-14), which is what a nearly flat battery reads, so no voltage rule tells the two apart there. The owner chose to keep the 2 V rule and accept that a V3 on USB power gets no note. Recovery from a stall does not depend on the note.
 
 ### D7. Pauses are logged and counted
 The run log gets:
@@ -113,6 +114,7 @@ The connection snapshot gains `pauses`, the count for this connection, so a diag
 
 ## Risks / Trade-offs
 
+- **[A V3 with no battery gets no note]** → Its battery pin reads about 3.2 V with nothing connected. The owner accepted this (D6), and stalls are still recovered.
 - **[A dead saber is given up on about 3 s later than now]** → The reopen and re-read are bounded by the same 10 s silence limit. Then the error is the same as before.
 - **[An edit is judged saved because the saber already had that value]** → A change that changes nothing sends nothing (existing rule), so a stalled change always had a different value to reach.
 - **[The reopen does not release a stalled board on another board or Windows version]** → Then the result is the error the owner sees today. The V3 check records whether the V3 stalls at all.

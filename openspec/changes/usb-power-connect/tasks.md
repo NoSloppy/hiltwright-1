@@ -110,5 +110,10 @@
     - The owner confirmed: no voltage was spoken on connect or Read again, and the header showed "No battery" with the Armory note.
     - The owner accepted the unit test for "one `scanid` after a Build & Install". That is the new-install-stamp case of `storedLayout` in `boardOps.test.ts`. It was not run on hardware.
   - **Result, 2026-11-14:** passed on hote2.
-- [ ] 5.3 Hardware check by the owner on the V3, with and without a battery if one is to hand: the quiet and no-re-detection checks of 5.2, and the ten idle selections. Record whether the V3 stalls at all.
+- [x] 5.3 Hardware check by the owner on the V3, with and without a battery if one is to hand: the quiet and no-re-detection checks of 5.2, and the ten idle selections. Record whether the V3 stalls at all.
+  - **Result, 2026-11-14: moved to `v3-verification` by the owner.** The owner's only V3 (V3.9, serial 207A349A5430) has no card and no presets, so no selections could be made: its Presets page is read-only.
+    - Seen on it anyway: the blade layout was reused (`blade layout [97]: stored for this build`, no `scanid`), and the saber matched its own record (045975b73408).
+    - With no battery it read 3.17 V. The no-battery note therefore cannot show on a V3. The owner chose to keep the 2 V rule and record the gap: the spec now has a "V3 with no battery" scenario, and design D6 records it.
+    - The ten-selection stall check on a configured V3 is now part of `v3-verification` (roadmap 3.37).
+
 - [ ] 5.4 After archive, tick roadmap task 3.24a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
