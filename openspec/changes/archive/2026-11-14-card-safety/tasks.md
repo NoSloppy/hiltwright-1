@@ -190,4 +190,4 @@
 - [x] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.
   - **Result, 2026-11-14.** Measurement 5 in `docs/00-plan.md` section 8 is struck through, with the share and give-back behaviour and the 4 s against 120 s copy.
 
-- [ ] 4.3 After archive, tick roadmap task 3.24 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 4.3 After archive, tick roadmap task 3.24 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
