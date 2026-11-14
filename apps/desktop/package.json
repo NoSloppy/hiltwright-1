@@ -1,6 +1,7 @@
 {
   "name": "@hiltwright/desktop",
   "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",
   "description": "Hiltwright desktop app (Electron). Walking skeleton: connect to a Proffieboard over Web Serial, read version and presets.",
@@ -12,7 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "dist": "electron-vite build && electron-builder --win --publish never",
     "test": "vitest run",
-    "icons": "electron scripts/icons.mjs"
+    "icons": "electron scripts/icons.mjs",
+    "notices": "node scripts/notices.mjs"
   },
   "dependencies": {
     "@hiltwright/core": "*",

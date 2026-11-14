@@ -1,6 +1,7 @@
 {
   "name": "hiltwright",
   "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",
   "description": "ProffieOS for people who never want to see a compiler. Workspace root; see docs/00-plan.md.",
