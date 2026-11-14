@@ -382,7 +382,11 @@ export async function copyFont(src: string, root: string, options: CopyOptions |
     }
   } catch (err) {
     await rm(tmp, { recursive: true, force: true }).catch(() => undefined);
-    throw err;
+    // In plain words, with the system's own code kept for the log (card-safety 4.1: a card pulled mid-copy read
+    // "UNKNOWN: unknown error, copyfile …").
+    const code = (err as { code?: string }).code ?? (err instanceof Error ? err.message.split(':')[0] : String(err));
+    console.log(`[sd] copy of ${name} to ${root} stopped: ${String(err)}`);
+    throw new Error(`The copy of ${name} stopped part way: the card could not be written to (${code}). Nothing was left on the card under ${name}. Check the card is in, then copy it again.`);
   }
   if (!o.replace) {
     if (await exists(dst)) { await rm(tmp, { recursive: true, force: true }); throw new Error(`${name} is already on the card`); }

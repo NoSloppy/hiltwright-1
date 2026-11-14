@@ -90,7 +90,7 @@ describe('copies onto the card are all or nothing (card-safety D5)', () => {
     const src = await source();
     let n = 0;
     const failing = async (from: string, to: string) => { if (++n === 3) throw new Error('EIO: i/o error, write'); await copyFile(from, to); };
-    await expect(copyFont(src, root, { copyOne: failing })).rejects.toThrow('EIO');
+    await expect(copyFont(src, root, { copyOne: failing })).rejects.toThrow(/^The copy of Kylo stopped part way: the card could not be written to \(EIO\)\. Nothing was left on the card under Kylo\./);
     expect((await readdir(root)).sort()).toEqual(['Vader']);
     expect((await listFonts(root)).map((f) => f.name)).toEqual(['Vader']);
     await copyFont(src, root, {});
