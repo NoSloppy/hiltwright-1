@@ -22,6 +22,7 @@ import { StyleEditor } from './StyleEditor';
 import { FontLibrary } from './FontLibrary';
 import { Contributors } from './Contributors';
 import { About } from './About';
+import { QUICK_COMMANDS, destructiveReason } from './consoleCommands';
 import { flowStatus, nextStep, useWorkspace, type Workspace } from './workspace';
 import type { SaberRecord } from '../../shared/api';
 import { batteryLabel, noBattery } from './battery';
@@ -326,7 +327,10 @@ function Diagnostics({ board }: { board: ReturnType<typeof useBoard> }) {
   const [cmd, setCmd] = useState('');
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [board.lines]);
-  const quick = ['version', 'battery', 'get_volume', 'get_preset', 'show_current_preset', 'list_fonts', 'list_tracks', 'id', 'scanid'];
+  const quick = QUICK_COMMANDS;
+  // A typed command that restarts the board or changes files waits here until the owner says to send it.
+  const [held, setHeld] = useState<{ command: string; reason: string } | null>(null);
+  const run = (command: string) => { void board.send(command, { idleMs: 700 }); setCmd(''); setHeld(null); };
   const connected = board.status === 'connected';
   return (
     <>
@@ -340,8 +344,17 @@ function Diagnostics({ board }: { board: ReturnType<typeof useBoard> }) {
           {board.lines.map((l, i) => <div key={i} className={l.kind}>{l.text}</div>)}
           <div ref={end} />
         </div>
-        <form className="row" style={{ padding: 12, borderTop: '1px solid var(--line)', gap: 8 }} onSubmit={(e) => { e.preventDefault(); if (cmd.trim()) { void board.send(cmd.trim(), { idleMs: 700 }); setCmd(''); } }}>
-          <span className="input grow"><input type="text" value={cmd} onChange={(e) => setCmd(e.target.value)} aria-label="Serial command" placeholder="Type a command" disabled={!connected} /></span>
+        {held && (
+          <div className="note amber" role="alertdialog" aria-label="Confirm the command" style={{ margin: '0 12px 12px' }}><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+            <span>{held.reason} Send <b className="mono">{held.command}</b> anyway?</span>
+            <span className="row" style={{ gap: 8 }}>
+              <button type="button" className="btn sm pri" onClick={() => run(held.command)}><span className="b"><span className="i">Send it</span></span></button>
+              <button type="button" className="btn sm ghost" onClick={() => setHeld(null)}><span className="b"><span className="i">Do not send</span></span></button>
+            </span>
+          </span></div>
+        )}
+        <form className="row" style={{ padding: 12, borderTop: '1px solid var(--line)', gap: 8 }} onSubmit={(e) => { e.preventDefault(); const c = cmd.trim(); if (!c) return; const reason = destructiveReason(c); if (reason) setHeld({ command: c, reason }); else run(c); }}>
+          <span className="input grow"><input type="text" value={cmd} onChange={(e) => { setCmd(e.target.value); setHeld(null); }} aria-label="Serial command" placeholder="Type a command" disabled={!connected} /></span>
           <button type="submit" className="btn sm pri" disabled={!connected}><span className="b"><span className="i">Send</span></span></button>
         </form>
       </section>

@@ -57,6 +57,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const [tab, setTab] = useState<Tab>('config');
   // The Fett263 prop needs a voice pack on the card. The saber can tell us over serial: no card reader needed.
   const [voice, setVoice] = useState<VoicePackStatus | null>(null);
+  // Why the card could not be read, when it could not (kept apart from "the pack is not there").
+  const [voiceWhy, setVoiceWhy] = useState<string | null>(null);
   useEffect(() => {
     // Not while the card is shared: the saber would be reading a card this computer has (card-safety D2).
     if (board.status !== 'connected' || board.card.shared) return;
@@ -66,8 +68,8 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         const cat = await board.send('cat common/voicepack.ini', { idleMs: 700 });
         const dir = await board.send('dir common', { idleMs: 900, until: (l) => /^(Done listing files\.|No such directory\.)/.test(l) });
         const rejected = [...cat.lines, ...dir.lines].some((l) => /^Whut\? :/.test(l));
-        if (live) setVoice(rejected ? null : voicePackFromSerial(cat.lines, dir.lines));
-      } catch { if (live) setVoice(null); }
+        if (live) { setVoice(rejected ? null : voicePackFromSerial(cat.lines, dir.lines)); setVoiceWhy(rejected ? 'this firmware does not answer the card commands (cat and dir)' : null); }
+      } catch { if (live) { setVoice(null); setVoiceWhy('the saber is not answering'); } }
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -349,7 +351,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const nowStep = !wiringOk ? 1 : !tool?.ready ? 2 : !built ? 3 : step === 'done' ? 0 : 4;
   // An install armed for a build that has since gone out of date is disarmed.
   if (stale && armed) setArmed(false);
-  const verdict = voicePackVerdict(prop, voice);
+  const verdict = voicePackVerdict(prop, voice, voiceWhy);
   const canBuild = !busy && !!tool?.ready && !!model && !preview?.errors.length;
 
   return (

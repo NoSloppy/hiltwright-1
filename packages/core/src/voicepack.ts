@@ -46,12 +46,17 @@ export function voicePackFromSerial(catLines: string[], dirLines: string[]): Voi
 
 export interface VoicePackVerdict { ok: boolean; tone: 'green' | 'amber'; text: string }
 
-/** What to tell the owner before building with `prop`, given what the card holds. Null when the prop needs no pack. */
-export function voicePackVerdict(prop: Prop, s: VoicePackStatus | null): VoicePackVerdict | null {
+/**
+ * What to tell the owner before building with `prop`, given what the card holds. Null when the prop needs no pack.
+ * `s` is null when the card could not be read; `couldNotRead` then says why (for example that the saber did not
+ * answer). A card that could not be read is not a card without the pack, so that warning says only that it could
+ * not check and why: it never says the pack is missing or that the saber will speak an error.
+ */
+export function voicePackVerdict(prop: Prop, s: VoicePackStatus | null, couldNotRead?: string | null): VoicePackVerdict | null {
   if (prop !== 'fett263') return null;
   const need = FETT263_REQUIRED_VOICE_PACK;
   const fix = `Put the Fett263 Voice Pack version ${need} in the common folder on the SD card (voicepack.ini plus its menu sounds). Until then the saber speaks a voice pack error on every preset change; everything else works.`;
-  if (!s) return { ok: false, tone: 'amber', text: `Fett263 button controls need the Fett263 Voice Pack version ${need} on the SD card. Hiltwright could not check this card. ${fix}` };
+  if (!s) return { ok: false, tone: 'amber', text: `Hiltwright could not check the voice pack on this card${couldNotRead ? `: ${couldNotRead}` : ''}. That does not mean it is missing; check again once the saber answers.` };
   if (!s.menuSounds && !s.ini) return { ok: false, tone: 'amber', text: `No voice pack found in the common folder. ${fix}` };
   if ((s.version ?? 1) < need) return { ok: false, tone: 'amber', text: `The card has voice pack version ${s.version ?? 1}, and this firmware needs version ${need}. ${fix}` };
   if (!s.menuSounds) return { ok: false, tone: 'amber', text: `voicepack.ini says version ${s.version}, but the menu sounds (mnum) are missing from the common folder. ${fix}` };

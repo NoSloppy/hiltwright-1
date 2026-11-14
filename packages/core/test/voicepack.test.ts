@@ -30,4 +30,22 @@ describe('voice pack', () => {
     expect(voicePackVerdict('fett263', { ini: true, version: 2, menuSounds: false })?.text).toMatch(/menu sounds/);
     expect(voicePackVerdict('fett263', null)?.text).toMatch(/could not check/);
   });
+
+  it('the three outcomes: found, missing, could not check', () => {
+    const found = voicePackVerdict('fett263', { ini: true, version: 2, menuSounds: true })!;
+    expect(found).toMatchObject({ ok: true, tone: 'green' });
+    expect(found.text).toMatch(/found on the card/);
+
+    const missing = voicePackVerdict('fett263', { ini: false, version: null, menuSounds: false })!;
+    expect(missing).toMatchObject({ ok: false, tone: 'amber' });
+    expect(missing.text).toMatch(/No voice pack found/);
+    expect(missing.text).toMatch(/speaks a voice pack error/);
+
+    const unread = voicePackVerdict('fett263', null, 'the saber is not answering')!;
+    expect(unread).toMatchObject({ ok: false, tone: 'amber' });
+    expect(unread.text).toMatch(/could not check/);
+    expect(unread.text).toMatch(/the saber is not answering/);
+    // Not being able to read the card is not the pack being missing.
+    expect(unread.text).not.toMatch(/No voice pack found|speaks a voice pack error|Put the Fett263/);
+  });
 });
