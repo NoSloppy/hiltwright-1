@@ -37,4 +37,4 @@ Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at h
 
 TODO(owner): feedback channel
 
-TODO(owner)
+When you report a problem, press "Save diagnostics" in the app and attach the file it saves.
