@@ -88,7 +88,7 @@
 ## 5. Checks
 
 - [x] 5.1 Record `battery_voltage` on hote2 as `packages/core/test/transcripts/os8/36-battery_voltage.txt` with `tools/record-transcripts.ps1`. Check PnP first that the board is hote2 (serial 209133815232), and get the owner's go-ahead. Add it to the recorded-transcripts tests in `protocol.test.ts`. Verify that `npm test` passes and the transcript parses to the voltage the board printed.
-  - **Result, 2026-11-14.** PnP showed one Proffieboard: hote2, serial 209133815232, on COM8. The owner gave the go-ahead. Recorded `battery_voltage` plain (`36-battery_voltage.txt`, `3.50` CRLF) and tagged (`37-tagged_battery_voltage.txt`, `1,4,b1|3.50`), and added both to `index.json`. The saber did not speak. A test in `protocol.test.ts` reads 3.5 from each (36 tests pass). Note: hote2 read 3.50 V this time, not the 0.03-1.48 V of 2026-10-25.
+  - **Result, 2026-11-14.** PnP showed one Proffieboard: hote2, serial 209133815232, on COM8. The owner gave the go-ahead. Recorded `battery_voltage` plain (`36-battery_voltage.txt`, `3.50` CRLF) and tagged (`37-tagged_battery_voltage.txt`, `1,4,b1|3.50`), and added both to `index.json`. The saber did not speak. A test in `protocol.test.ts` reads 3.5 from each (36 tests pass). hote2 read 3.50 V because a battery was connected this time (owner, 2026-11-14). On 2026-10-25, with none, it read 0.03-1.48 V.
 
 - [ ] 5.2 Hardware check by the owner on the V2.2 hote2 with no battery, from a development build:
   - **Quiet:** connect, then press Read again. The saber does not speak its voltage. The header shows "No battery", and the Armory shows the USB-power note.
