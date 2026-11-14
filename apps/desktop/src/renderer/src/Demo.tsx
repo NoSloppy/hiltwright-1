@@ -359,7 +359,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
       // no pstoff. When it did, the engine has already been asked and these do nothing more.
       if (ev.kind === 'on') eng.ignite(); else if (ev.kind === 'off') eng.retract(true);
       else if (ev.kind === 'clash' || ev.kind === 'blast' || ev.kind === 'stab') eng.effect(ev.kind);
-      else if (ev.kind === 'lockup') { if (ev.type) eng.beginLockup(ev.type === 'normal' ? 'lock' : ev.type === 'melt' ? 'drag' : ev.type); else eng.endLockup(); }
+      else if (ev.kind === 'lockup') { if (ev.type) eng.beginLockup(ev.type === 'normal' ? 'lock' : ev.type); else eng.endLockup(); }
       else if (ev.kind === 'sound') { if (propBehaviour(propKey).transitionSounds) eng.transition(ev.n); }
       else if (ev.kind === 'motion') eng.motion(ev.degPerSec, ev.dt);
     };
@@ -509,7 +509,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
               </div>
               {source && (
                 <div className="col" style={{ gap: 6 }}>
-                  <div className="row between"><span className="label">Font</span>{engine && <span className="hint" style={{ fontSize: 11.5 }}>{engine.hasSmoothSwing ? 'SmoothSwing' : 'no swing sounds'}</span>}</div>
+                  <div className="row between"><span className="label">Font</span>{engine && <span className="hint" style={{ fontSize: 11.5 }}>{engine.hasSmoothSwing ? 'SmoothSwing' : engine.hasPlainSwings ? 'Swing sounds, no SmoothSwing' : 'no swing sounds'}</span>}</div>
                   <span className="input sans" style={{ height: 28, fontSize: 12 }}><span className="ellip">{(fontName && (libNames[fontName] ?? fontName)) || (fonts.length ? 'Pick a font' : 'No fonts here')}</span><span className="caret"><Icon name="down" /></span>
                     <Select value={fontName} aria-label="Sound font" disabled={!!loading} onChange={(e) => void loadFont(e.target.value)}><option value="">Pick a font</option>{fonts.map((f) => <option key={f.name} value={f.name}>{libNames[f.name] ?? f.name}</option>)}</Select></span>
                 </div>
