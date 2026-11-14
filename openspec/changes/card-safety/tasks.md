@@ -151,6 +151,7 @@
     - **Already shared at connect** passed: shared, the app closed without giving back, and started again. Every page treated the card as shared, and give-back worked (owner).
     - **Pages locked while shared** passed (owner).
     - **Found:** the "Card" list on Fonts & SD was a blank box. It used the browser's `<select>`, which the app's field styling hides. It now uses the app's own `Select`. It was also off while fonts were being read, which on a shared card hardly ever ends, so it now waits only for a copy.
+  - **Run 5, 2026-11-14:** with hote2 sharing and a card in the reader, two cards worked and switching worked (owner). But the list's shown choice changed only once the drive list and the new card's reading came back, which made the list seem not to work. Fixed: a switch shows the chosen card at once and clears the old card's lists, and its fonts load after.
 
   Record each result here.
 - [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.
