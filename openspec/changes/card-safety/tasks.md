@@ -115,6 +115,7 @@
   - **Replace:** replace a font in the reader with a different version. Two clicks are needed, and the card's folder then has only the new files.
   - **Interrupted copy:** pull the reader's card during a copy, put it back, and copy again. The font is listed once, whole.
   - **Speed (SF22):** time one font copied over USB and the same font from the reader.
+  - **Run 1, 2026-11-14:** share worked (`h9| sd 1` → `SD Access ON` at 14:20:16, `I:` marked "hotetest's own card"). But reading the card's fonts over USB was still running two minutes later, and that greyed out "Give the card back" (owner). Fixed: the scan is tracked apart from `busy` and goes stale on give-back, and Give back is off only during a copy. While reading, the line says "reading the fonts…" instead of "0 fonts · 0 tracks".
 
   Record each result here.
 - [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.
