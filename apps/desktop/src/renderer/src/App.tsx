@@ -116,7 +116,7 @@ export function App() {
           ))}
         </nav>
         {ws.saber && <div className="col" style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', gap: 2 }}><span className="sec" style={{ padding: 0 }}>Working on</span><b className="ellip" style={{ fontWeight: 600, fontSize: 13 }}>{ws.saber.name}</b><span className="hint">{ws.live ? 'plugged in' : ws.saber.planned ? 'planned, not seen yet' : 'not plugged in'}</span></div>}
-        <div className="mono mute" style={{ marginTop: 'auto', padding: '14px 20px', borderTop: '1px solid var(--line)', fontSize: 11 }}>Hiltwright {window.hiltwright?.appVersion ?? '?'} alpha</div>
+        <div className="mono mute" style={{ marginTop: 'auto', padding: '14px 20px', borderTop: '1px solid var(--line)', fontSize: 11 }}>Hiltwright {window.hiltwright?.appVersion ?? '?'} beta</div>
       </aside>
 
       <header className="top">
