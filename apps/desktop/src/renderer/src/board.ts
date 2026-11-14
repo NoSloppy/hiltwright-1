@@ -629,6 +629,19 @@ export function useBoard() {
       const i = infoRef.current;
       if (!c || !i) return 'not connected';
       const steps: string[] = [];
+      if (mode === 'stall') {
+        // usb-power-connect 3.3: select a preset while the link is stalled (the app hears nothing until the port is
+        // opened again), then go back. Both should be saved, the first after a pause, with no error.
+        const start = i.currentPreset ?? 0;
+        const target = start === 0 ? 1 : 0;
+        WebSerialTransport.stalled = true;
+        const t0 = Date.now();
+        const ok = await choosePreset(target);
+        steps.push(`select ${target + 1} while stalled → ${ok ? 'saved' : 'FAILED'} in ${Date.now() - t0} ms, current ${infoRef.current?.currentPreset}, pauses so far ${recovery.count}, port ${transport.current ? 'open' : 'closed'}`);
+        const back = await choosePreset(start);
+        steps.push(`back to ${start + 1} → ${back ? 'saved' : 'FAILED'}, current ${infoRef.current?.currentPreset}`);
+        return steps.join(' | ');
+      }
       const stressCount = /^stress(?:-on)?-(\d+)$/.exec(mode ?? '')?.[1];
       if (stressCount) mode = mode!.startsWith('stress-on') ? 'stress-on' : 'stress';
       if (mode === 'stress' || mode === 'stress-on') {

@@ -279,5 +279,23 @@
     "command": "a7| whut_is_this",
     "file": "35-tagged_unknown_command.txt",
     "note": "an unknown command inside a tag is rejected as Whut? :<tag>|"
+  },
+  {
+    "n": 36,
+    "command": "battery_voltage",
+    "file": "36-battery_voltage.txt",
+    "bytes": 6,
+    "firstByteMs": 45,
+    "lines": 2,
+    "note": "prints the voltage only; battery also says it aloud (usb-power-connect D1). hote2, 2026-11-14"
+  },
+  {
+    "n": 37,
+    "command": "b1| battery_voltage",
+    "file": "37-tagged_battery_voltage.txt",
+    "bytes": 12,
+    "firstByteMs": 44,
+    "lines": 2,
+    "note": "the same, tagged: n,len,tag| prefix, LF only"
   }
 ]

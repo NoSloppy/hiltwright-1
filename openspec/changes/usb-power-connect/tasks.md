@@ -59,7 +59,7 @@
   - the three list checks, each true and false
   - **Result, 2026-10-25.** `NOT_MADE_AFTER_PAUSE`, `duplicateShown`, `deleteShown` and `moveShown` in `boardOps.ts`. `runOperation` takes `recovery` in its deps and an optional `confirm`, and judges a turn that met a stall. Eight tests: saved after a pause, not made and run once, lost, queued op on the new client, no stall unchanged, and the three list checks. 33 in the file.
 
-- [ ] 3.3 In `board.ts`, wire it up (design D3, D4, D7):
+- [x] 3.3 In `board.ts`, wire it up (design D3, D4, D7):
   - `onSilent` while connected starts the recovery
   - `reopen` closes and reopens the same port, making a new client that carries on the old one's `seq` and `kicks`
   - `reread` runs the probe, `get_preset` and `list_presets`, then applies and remembers the presets
@@ -70,7 +70,12 @@
   Add a development aid `hiltwrightStallBoard()` that mutes the board until the next open. Verify:
   - `npm run typecheck` and `npm test`
   - one development run on hote2 using that aid, confirmed first to be hote2 by its PnP serial and with the owner's go-ahead: a preset selection made while stalled is reconnected and reported saved, and the run log shows the paused and reconnected lines
-  - **Result, 2026-10-25.** Code in place, not yet verified on hardware. `board.ts` has `makeClient`, `reopenRef` (closes the old client and transport at once, reopens the same port, carries on `seq` and `kicks`) and `rereadRef` (probe, `get_preset`, `list_presets`, then apply and remember). `onSilent` starts the recovery; `sendNow` waits for it; every preset operation passes its `confirm`. `pauses` is in the connection snapshot and the diagnostics file (`supportBundle.test.ts` checks the line). `hiltwrightStallBoard()` is in development builds. `npm run typecheck` passes; `npm test` 628 passed (gated skipped). Still to do: the hote2 development run with the owner's go-ahead.
+  - **Result, 2026-10-25.** Code in place, not yet verified on hardware. `board.ts` has `makeClient`, `reopenRef` (closes the old client and transport at once, reopens the same port, carries on `seq` and `kicks`) and `rereadRef` (probe, `get_preset`, `list_presets`, then apply and remember). `onSilent` starts the recovery; `sendNow` waits for it; every preset operation passes its `confirm`. `pauses` is in the connection snapshot and the diagnostics file (`supportBundle.test.ts` checks the line). `hiltwrightStallBoard()` is in development builds. `npm run typecheck` passes; `npm test` 628 passed (gated skipped). Hardware run, 2026-11-14, with the owner's go-ahead: PnP showed only hote2 (209133815232, COM8). The run used `HILTWRIGHT_E2E=stall` (a new development-only mode of `hiltwrightE2E`), `HILTWRIGHT_OFFSCREEN=1`, and a scratch `HILTWRIGHT_USER_DATA`. The run log:
+    - `set_preset 0` met the stall: `silent: set_preset 0 (10499 ms, nothing heard)`, then `paused: set_preset 0, reconnecting`.
+    - The port opened again, and the probe, `h10| get_preset` and `h11| list_presets` followed, carrying on the tag numbers. Then `reconnected after 1602 ms`.
+    - `ok after a pause: Select preset 1`, in 12.1 s in all, with the saber on preset 1 and no error state.
+    - The next selection went to the new client as `h12| set_preset 6`, was saved in 567 ms, and put hote2 back on preset 7 where it started.
+    - The first connect on the empty scratch library sent `scanid` and `battery_voltage`, as it should.
 
 ## 4. The no-battery notice
 
@@ -82,7 +87,9 @@
 
 ## 5. Checks
 
-- [ ] 5.1 Record `battery_voltage` on hote2 as `packages/core/test/transcripts/os8/36-battery_voltage.txt` with `tools/record-transcripts.ps1`. Check PnP first that the board is hote2 (serial 209133815232), and get the owner's go-ahead. Add it to the recorded-transcripts tests in `protocol.test.ts`. Verify that `npm test` passes and the transcript parses to the voltage the board printed.
+- [x] 5.1 Record `battery_voltage` on hote2 as `packages/core/test/transcripts/os8/36-battery_voltage.txt` with `tools/record-transcripts.ps1`. Check PnP first that the board is hote2 (serial 209133815232), and get the owner's go-ahead. Add it to the recorded-transcripts tests in `protocol.test.ts`. Verify that `npm test` passes and the transcript parses to the voltage the board printed.
+  - **Result, 2026-11-14.** PnP showed one Proffieboard: hote2, serial 209133815232, on COM8. The owner gave the go-ahead. Recorded `battery_voltage` plain (`36-battery_voltage.txt`, `3.50` CRLF) and tagged (`37-tagged_battery_voltage.txt`, `1,4,b1|3.50`), and added both to `index.json`. The saber did not speak. A test in `protocol.test.ts` reads 3.5 from each (36 tests pass). Note: hote2 read 3.50 V this time, not the 0.03-1.48 V of 2026-10-25.
+
 - [ ] 5.2 Hardware check by the owner on the V2.2 hote2 with no battery, from a development build:
   - **Quiet:** connect, then press Read again. The saber does not speak its voltage. The header shows "No battery", and the Armory shows the USB-power note.
   - **No re-detection:** unplug and plug in again. The run log shows no `scanid`. After a Build & Install, the first connect shows one `scanid`, and the next shows none.

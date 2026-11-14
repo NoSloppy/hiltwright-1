@@ -31,6 +31,12 @@ describe('recorded OS 8.10 transcripts (Hiltwright build on the same V2.2)', () 
   it('version is a git keyword followed by an unsolicited battery line', () => {
     expect(parseVersion(os8('01-version.txt'))).toEqual({ version: 'git-ce12a06', major: null, config: 'config/hiltwright_hote2.h', prop: 'SaberSA22CButtons', buttons: 2, installed: 'Sep  9 2026 15:24:29' });
   });
+  it('battery_voltage prints the voltage alone, plain and tagged (recorded 2026-11-14)', () => {
+    expect(parseBatteryVoltage(os8('36-battery_voltage.txt'))).toBe(3.5);
+    const tagged = os8('37-tagged_battery_voltage.txt');
+    expect(tagged).toEqual(['1,4,b1|3.50']);
+    expect(parseBatteryVoltage(tagged.map((l) => l.replace(/^\d+,\d+,[A-Za-z0-9_]+\|/, '')))).toBe(3.5);
+  });
   it('integers survive trailing SD and amplifier events', () => {
     expect(parseInteger(os8('03-get_volume.txt'))).toBe(1800);
     expect(parseInteger(os8('04-get_preset.txt'))).toBe(2);
