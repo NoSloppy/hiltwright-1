@@ -22,6 +22,8 @@ import type { HiltInput, LegacyHilts } from '../shared/api';
 import { buildFirmware } from './build';
 import { cleanFirmware, hexMap } from './firmwareRecord';
 import { insideFolder } from './paths';
+import { legalDir, readLegal } from './legal';
+import { sourceUrl } from '../shared/about';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { writeAllowed, type KeptBuild } from './writeGuard';
@@ -482,6 +484,14 @@ export function registerIpc(): void {
     const u = new URL(str(url, 500));
     if (u.protocol !== 'https:' || !['pod.hubbe.net', 'fredrik.hubbe.net'].includes(u.hostname)) throw new Error('Only ProffieOS help pages can be opened');
     await shell.openExternal(u.toString());
+  });
+  // The About screen: the licence and notices that ship with the app, and the tagged source of this build. The link is
+  // built here from the app's own version, never taken from the page, so this opens one fixed address and nothing else.
+  handle('app:legal', () => readLegal(legalDir(app.isPackaged, process.resourcesPath, app.getAppPath())));
+  handle('app:openSource', async () => {
+    const url = sourceUrl(app.getVersion());
+    if (!url) throw new Error(`No source link for version ${app.getVersion()}`);
+    await shell.openExternal(url);
   });
   handle('app:openPath', async (_e, p: unknown) => {
     const target = str(p, 1000);

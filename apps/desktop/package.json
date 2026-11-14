@@ -55,6 +55,14 @@
       {
         "from": "resources/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "../../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../../THIRD-PARTY-NOTICES.md",
+        "to": "THIRD-PARTY-NOTICES.md"
       }
     ],
     "win": {
@@ -72,6 +80,7 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
+      "license": "../../LICENSE",
       "artifactName": "Hiltwright-${version}-setup.${ext}"
     },
     "mac": {

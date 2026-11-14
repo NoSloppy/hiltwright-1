@@ -403,6 +403,10 @@ export interface HiltwrightApi {
     /** False when a development run was started with HILTWRIGHT_NO_BOARD: no board can be reached. */
     boardAccess(): Promise<boolean>;
     openPath(path: string): Promise<void>;
+    /** The licence and third-party notices that ship with the app. A file that is missing is null. */
+    legal(): Promise<{ licence: string | null; notices: string | null }>;
+    /** Open the tagged source of this build on GitHub, in the system browser. Takes no address: main builds it from the app version. */
+    openSource(): Promise<void>;
     /** Open a known help page in the system browser. Only pod.hubbe.net and fredrik.hubbe.net are allowed. */
     openHelp(url: string): Promise<void>;
   };

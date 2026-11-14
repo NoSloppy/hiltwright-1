@@ -19,24 +19,27 @@ Hiltwright does not ship these. The first-run toolchain install and the driver s
 ### arduino-cli 1.3.1
 
 - Source: https://github.com/arduino/arduino-cli/releases/download/v1.3.1/ (Windows zip, macOS or Linux tar.gz asset chosen by platform; `CLI_VERSION` in `apps/desktop/src/main/toolchain.ts`).
-- Licence: TODO(owner): licence and author not recorded in this repository.
+- Author: Arduino (the `arduino` organisation on GitHub). Source: https://github.com/arduino/arduino-cli.
+- Licence: GPL-3.0 (its README says "Arduino CLI is licensed under the GPL-3.0 license", and offers a separate commercial licence; read at https://github.com/arduino/arduino-cli). Hiltwright runs it as a separate program and does not link it.
 
 ### Proffieboard Arduino core (`proffieboard:stm32l4`)
 
 - Source: board index https://profezzorn.github.io/arduino-proffieboard/package_proffieboard_index.json; core repository https://github.com/profezzorn/arduino-proffieboard.
 - Version: not pinned by Hiltwright. arduino-cli installs whatever version the index serves at install time (`docs/02-toolchain-usb-recon.md` recorded platform v4.6 in the index at the time of recon).
 - Basis: a fork of the Arduino STM32L4 core (`docs/01-proffieos-recon.md`).
-- Licence: TODO(owner): the core's licence has not been checked (`docs/01-proffieos-recon.md` lists it as "license not checked"). Check it before any bundling.
+- Licence: TODO(owner): still unconfirmed. https://github.com/profezzorn/arduino-proffieboard shows no LICENSE file and no licence section in its README, and the upstream https://github.com/GrumpyOldPizza/arduino-STM32L4 shows none either. Ask the maintainer, or check the headers in the core's source, before any bundling.
 
 ### xPack arm-none-eabi-gcc 14.2.1-1.1
 
 - Installed as a dependency of the Proffieboard core (`docs/02-toolchain-usb-recon.md`).
-- Source and licence: TODO(owner): source URL and licence not recorded in this repository.
+- Source: https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack (a binary distribution of GNU Arm Embedded GCC, by Liviu Ionescu).
+- Licence: the xPack packaging scripts are MIT (its README: "Unless otherwise stated, the original content is released under the terms of the MIT License"; read at the repository URL above). TODO(owner): the licences of the GCC and binutils binaries inside the package (GNU licences) were not stated on the pages read; confirm from the package's own licence files.
 
 ### dfu-util
 
 - Comes with the Proffieboard core's tools folder; Hiltwright locates it there (`findDfuUtil` in `apps/desktop/src/main/toolchain.ts`).
-- Version and licence: TODO(owner): neither recorded in this repository.
+- Source: https://sourceforge.net/p/dfu-util/dfu-util/ (git repository; project page https://dfu-util.sourceforge.net/).
+- Licence: GPL version 2 (the project page says "This software is licensed under the GPL version 2"; read at https://dfu-util.sourceforge.net/). The current upstream release listed there is 0.11. TODO(owner): which version the Proffieboard core's tools folder ships is not recorded.
 
 ### Windows bootloader driver installer (`proffie-dfu-setup.exe`)
 

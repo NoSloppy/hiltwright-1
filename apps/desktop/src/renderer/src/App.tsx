@@ -21,13 +21,14 @@ import { usePendingLookColours } from './pendingColours';
 import { StyleEditor } from './StyleEditor';
 import { FontLibrary } from './FontLibrary';
 import { Contributors } from './Contributors';
+import { About } from './About';
 import { flowStatus, nextStep, useWorkspace, type Workspace } from './workspace';
 import type { SaberRecord } from '../../shared/api';
 import { batteryLabel, noBattery } from './battery';
 // three.js is only needed in the demo room, so it loads when that page is first opened.
 const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
 
-type Page = 'armory' | 'wiring' | 'presets' | 'fonts' | 'build' | 'looks' | 'editor' | 'library' | 'contributors' | 'demo' | 'diag';
+type Page = 'armory' | 'wiring' | 'presets' | 'fonts' | 'build' | 'looks' | 'editor' | 'library' | 'contributors' | 'demo' | 'diag' | 'about';
 const NAV: { section: string; pages: { id: Page; title: string; icon: Parameters<typeof Icon>[0]['name']; step?: number }[] }[] = [
   { section: 'Saber', pages: [
     { id: 'armory', title: 'Armory', icon: 'armory' },
@@ -43,10 +44,10 @@ const NAV: { section: string; pages: { id: Page; title: string; icon: Parameters
     { id: 'contributors', title: 'Contributors', icon: 'people' },
     { id: 'demo', title: 'Demo room', icon: 'play' },
   ] },
-  { section: 'Tools', pages: [{ id: 'diag', title: 'Diagnostics', icon: 'diag' }] },
+  { section: 'Tools', pages: [{ id: 'diag', title: 'Diagnostics', icon: 'diag' }, { id: 'about', title: 'About', icon: 'info' }] },
 ];
 const PAGES = NAV.flatMap((g) => g.pages);
-const TITLE: Record<Page, string> = { armory: 'Armory', wiring: 'Wiring', presets: 'Presets', fonts: 'Fonts & SD', build: 'Build & Install', looks: 'Styles', editor: 'Style editor', library: 'Font library', contributors: 'Contributors', demo: 'Demo room', diag: 'Diagnostics' };
+const TITLE: Record<Page, string> = { armory: 'Armory', wiring: 'Wiring', presets: 'Presets', fonts: 'Fonts & SD', build: 'Build & Install', looks: 'Styles', editor: 'Style editor', library: 'Font library', contributors: 'Contributors', demo: 'Demo room', diag: 'Diagnostics', about: 'About' };
 
 export function App() {
   const real = useBoard();
@@ -149,6 +150,7 @@ export function App() {
             : page === 'library' ? <FontLibrary board={board} onDemo={(folder) => { setDemoFont(folder); setPage('demo'); }} />
             : page === 'contributors' ? <Contributors onFonts={() => setPage('library')} onLooks={(name) => { setStyleCreator(name); setPage('looks'); }} onDemo={() => setPage('demo')} />
             : page === 'demo' ? <Suspense fallback={<span className="hint">Opening the demo room…</span>}><Demo initialLook={demoLook} initialFont={demoFont} board={board} /></Suspense>
+            : page === 'about' ? <About />
             : <Diagnostics board={board} />}
         </ErrorBoundary>
       </main>
