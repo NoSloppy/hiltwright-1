@@ -10,7 +10,7 @@ import type { HiltAddMode, HiltInfo, HiltInput, PackInfo } from '../../shared/ap
 import { FontEngine } from './fontEngine';
 import type { Board } from './board';
 import type { FontEntry } from '../../shared/api';
-import { lookAtSlot } from '@hiltwright/core';
+import { presetBladeLoad } from './demoFromSaber';
 import { adoptOnce, asArrayBuffer } from './hiltStore';
 import { ContributorLogo, useContributors } from './credits';
 import type { Object3D } from 'three';
@@ -138,18 +138,22 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
   const info = board.info;
   const presets = info?.presets ?? saber?.presets ?? [];
   const [presetIndex, setPresetIndex] = useState<number>(() => board.info?.currentPreset ?? 0);
+  const [fromNote, setFromNote] = useState<string | null>(null);
   const loadFromSaber = async (i: number) => {
     setPresetIndex(i);
     const p = presets[i];
     if (!p || !saber) return;
     const mainBlade = (saber.model?.blades.findIndex((b) => b.role === 'main') ?? 0) + 1 || 1;
-    const look = saber.firmware ? lookAtSlot(saber.firmware, i, mainBlade) : null;
-    if (look && LOOKS.some((l) => l.id === look.id)) { setLookId(look.id); setTried({}); }
+    // The preset's style and its own colours, by the one rule the Styles page uses; a style the room cannot show is said so.
+    const base = { model: saber.model, firmware: saber.firmware, saberPresets: presets, preset: i, shown: LOOKS };
+    const main = presetBladeLoad({ ...base, blade: mainBlade, current: LOOKS.find((l) => l.id === lookId)?.name ?? LOOKS[0].name });
+    if (main.lookId) { setLookId(main.lookId); setTried(main.colours); }
     // A staff hilt's second blade: the next blade slot the saber treats as a blade.
     const roles = saber.model?.blades.map((b) => b.role) ?? [];
     const secondBlade = roles.findIndex((r, k) => k !== mainBlade - 1 && (r === 'main' || r === 'side')) + 1;
-    const look2 = secondBlade > 0 && saber.firmware ? lookAtSlot(saber.firmware, i, secondBlade) : null;
-    if (look2 && LOOKS.some((l) => l.id === look2.id)) { setStaffLookId(look2.id); setStaffTried({}); }
+    const second = secondBlade > 0 ? presetBladeLoad({ ...base, blade: secondBlade, current: LOOKS.find((l) => l.id === staffLookId)?.name ?? staffLook.name }) : null;
+    if (second?.lookId) { setStaffLookId(second.lookId); setStaffTried(second.colours); }
+    setFromNote([main.note, look3d.staff ? second?.note : null].filter(Boolean).join(' ') || null);
     const folder = p.font.split(';')[0];
     const from = sources.find((sr) => fonts.some((f) => f.name === folder) && sr.root === source?.root) ?? source;
     // The font may live on a different source than the one selected: try each until one has it.
@@ -480,12 +484,13 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
                 {presets.length > 0 && (
                   <div className="col" style={{ gap: 6, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
                     <span className="label">From {saber?.name ?? 'the saber'}</span>
-                    <div className="row" style={{ gap: 6 }} title="Set the style and the font from one of the saber's presets">
+                    <div className="row" style={{ gap: 6 }} title="Set the style, its colours and the font from one of the saber's presets">
                       <span className="input sans grow" style={{ height: 28, fontSize: 12 }}><span className="ellip">{presets[presetIndex]?.name.replace(/\s*\n\s*/g, ' ') ?? 'Preset'}</span><span className="caret"><Icon name="down" /></span>
                         <Select value={presetIndex} aria-label="Saber preset" onChange={(e) => setPresetIndex(Number(e.target.value))}>{presets.map((p, i) => <option key={i} value={i}>{i + 1}. {p.name.replace(/\s*\n\s*/g, ' ')}</option>)}</Select></span>
                       <button type="button" className="chip" disabled={!!loading} onClick={() => void loadFromSaber(presetIndex)}><Icon name="play" />Load</button>
                     </div>
-                    <span className="hint" style={{ fontSize: 11.5 }}>The preset's style and its font, as they are on the saber.</span>
+                    <span className="hint" style={{ fontSize: 11.5 }}>The preset's style, colours and font, as they are on the saber.</span>
+                    {fromNote && <span className="hint" style={{ fontSize: 11.5 }} role="status">{fromNote}</span>}
                   </div>
                 )}
               </>
