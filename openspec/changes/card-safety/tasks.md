@@ -121,6 +121,11 @@
     - The eject now waits up to 8 s for Windows to drop the drive, where it used to wait 1.5 s.
     - The page logs each eject and the saber's answer to `sd 0`.
     - New test in `cardCopy.test.ts`: a listing stopped mid-way rejects, and a new one works.
+  - **Run 2, 2026-11-14 14:31** (log `hiltwright-20261114-143124.log`):
+    - On reconnect the saber said `SD Access OFF`, so its card was no longer shared. The "already shared at connect" check is not done yet.
+    - Shared again at 14:31:46.
+    - The first give-back stopped the reading (`sd:listFonts failed: Stopped…` at 14:32:17), but Windows had not let go after 8 s. The owner's second click at 14:32:31 ejected at once, `sd 0` answered `SD Access OFF`, and Presets was live again.
+    - Fixed: the eject now tries up to three times by itself before reporting.
 
   Record each result here.
 - [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.

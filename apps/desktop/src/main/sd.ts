@@ -115,8 +115,14 @@ export async function ejectVolume(root: string): Promise<{ ok: boolean; detail: 
     const letter = root.replace(/[\\/]+$/, '');
     if (!/^[A-Za-z]:$/.test(letter)) return { ok: false, detail: `Not a drive letter: ${root}` };
     const script = `$sh = New-Object -ComObject Shell.Application; $v = $sh.NameSpace(17).ParseName('${letter}'); if ($v -eq $null) { 'gone' } else { $v.InvokeVerb('Eject'); for ($i = 0; $i -lt 16 -and (Test-Path '${letter}\\'); $i++) { Start-Sleep -Milliseconds 500 }; if (Test-Path '${letter}\\') { 'still-there' } else { 'ejected' } }`;
-    const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 15000, windowsHide: true }, (err, stdout) => resolve(err ? `error ${String(err)}` : String(stdout).trim())));
-    if (out === 'ejected' || out === 'gone') return { ok: true, detail: out };
+    // Windows can take more than one try to let go once Hiltwright's own reading has stopped: on hote2 the second
+    // try, five seconds after the first, ejected at once (card-safety 4.1, 2026-11-14). So up to three, quietly.
+    let out = '';
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 15000, windowsHide: true }, (err, stdout) => resolve(err ? `error ${String(err)}` : String(stdout).trim())));
+      if (out === 'ejected' || out === 'gone') return { ok: true, detail: attempt > 1 ? `${out} (try ${attempt})` : out };
+      if (out !== 'still-there') break;
+    }
     return { ok: false, detail: out === 'still-there' ? 'Windows did not release the drive. Close any window or program that has files on it open, then try again.' : out };
   }
   const cmd = process.platform === 'darwin' ? ['diskutil', ['eject', root]] as const : ['udisksctl', ['unmount', '-b', root]] as const;
