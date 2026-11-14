@@ -3,13 +3,13 @@
 // "queued" when it is in the build model but not yet installed, and "new" otherwise.
 
 import { useEffect, useMemo, useState } from 'react';
-import { STARTER_LOOKS, analyzeStyleCode, registerLookSim, argInfo, formatBuiltin, formatStyleArgs, hexToColorWord, lookSlots, type BladeRole, type LookDef } from '@hiltwright/core';
+import { STARTER_LOOKS, analyzeStyleCode, registerLookSim, argInfo, hexToColorWord, type BladeRole, type LookDef } from '@hiltwright/core';
 import type { Board } from './board';
 import { Icon } from './Icon';
 import { ContributorLogo, CreditCard, NOT_A_CONTRIBUTOR, useContributors } from './credits';
 import { BladePreview, canSimulate } from './BladePreview';
-import { queuedLookIds, withLookInSlot } from './saberModel';
-import { installedLookIds } from './slotModel';
+import { installedLookIds, queuedLookIds } from './slotModel';
+import { modelAfterPutIn, planPutIn, putInResult, putInWords } from './styleToSaber';
 import type { Workspace } from './workspace';
 import { Select } from './Select';
 
@@ -128,32 +128,36 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
 
   const presetName = (i: number) => (model?.presets[i]?.name ?? info?.presets[i]?.name)?.replace(/\s*\n\s*/g, ' ') ?? `preset ${i + 1}`;
   const colourCount = Object.keys(tried).length;
-  const withColours = colourCount ? ` with the ${colourCount === 1 ? 'setting' : `${colourCount} settings`} you chose` : '';
+  const triedArgs = useMemo(() => new Map(Object.entries(tried).map(([n, v]) => [Number(n), /^#/.test(v) ? hexToColorWord(v) : v])), [tried]);
 
-  /** A look not on the saber yet: queue it for the next build, and keep the chosen colours for after the install. */
-  const addToSaber = async () => {
-    if (!model || !saber || !fittingBlade) return;
-    const next = withLookInSlot(model, sel, targetPreset, fittingBlade.n, formatStyleArgs(triedArgs) || null);
-    await ws.saveModel(next);
-    setNote({ tone: 'green', text: `"${sel.name}" goes into ${presetName(targetPreset)}, blade ${fittingBlade.n}${withColours}, with the next Build & Install.${colourCount ? ' The colours are written to the saber right after the install.' : ''}` });
-  };
+  // What "Use it in" does here (styleToSaber.ts): written live, saved in the plan (staged or not), already there, or
+  // nothing while the saber's card is out or shared. The picker lists the model's presets, so `preset` is a model index.
+  const preset = model ? Math.min(targetPreset, Math.max(0, model.presets.length - 1)) : 0;
+  const locked = live ? (info?.sdMissing ? 'no-card' as const : board.card.shared ? 'card-shared' as const : null) : null;
+  const plan = connected && model && info && fittingBlade
+    ? planPutIn({ model, firmware: saber?.firmware, saberPresets: info.presets, live, locked, look: sel, preset, blade: fittingBlade.n, tried: triedArgs })
+    : null;
+  const words = plan && fittingBlade && saber ? putInWords(plan, { saber: saber.name, preset: presetName(preset), blade: fittingBlade.n, queuedElsewhere: selState === 'queued', kb: sel.kb ?? null, tried: colourCount > 0 }) : null;
 
-  /** A look already on the saber: point the preset's blade at it now, with the chosen colours. */
   const [applying, setApplying] = useState(false);
-  const useInPreset = async () => {
-    if (!saber?.firmware || !fittingBlade || !live) return;
-    const slots = lookSlots(saber.firmware, sel.id);
-    const slot = slots.find((sl) => sl.blade === fittingBlade.n) ?? slots[0];
-    if (!slot) return;
+  const putIn = async () => {
+    if (!plan || !model || !saber || !fittingBlade || applying) return;
+    // The model as it was when the owner acted: a draft rebuilt meanwhile from the saber's read-back loses nothing.
+    const snapshot = model;
+    const look = sel;
+    const blade = fittingBlade.n;
+    const names = { saber: saber.name, preset: presetName(preset), blade, look: look.name, tried: colourCount > 0 };
     setApplying(true); setNote(null);
     try {
-      const style = formatBuiltin({ preset: slot.preset, blade: slot.blade, args: formatStyleArgs(triedArgs) || null });
-      const ok = await board.setPresetStyles(targetPreset, { [fittingBlade.n]: style }, `${sel.name} → ${presetName(targetPreset)}`);
-      setNote(ok ? { tone: 'green', text: `${presetName(targetPreset)} now uses "${sel.name}" on blade ${fittingBlade.n}${withColours}. The saber confirmed it.` } : { tone: 'red', text: 'The saber did not confirm the change. Nothing was left half done; try again, or check the connection on the Armory page.' });
+      let ok = true;
+      // Through the board's write path (busy state, stall recovery, the shared-card refusal), as Presets writes.
+      if (plan.kind === 'live') ok = await board.setPresetStyles(preset, { [blade]: plan.style }, `${look.name} → ${names.preset}`);
+      const next = ok ? modelAfterPutIn(snapshot, plan, look, preset, blade) : null;
+      if (next) await ws.saveModel(next);
+      setNote(putInResult(plan, names, ok));
     } finally { setApplying(false); }
   };
 
-  const triedArgs = useMemo(() => new Map(Object.entries(tried).map(([n, v]) => [Number(n), /^#/.test(v) ? hexToColorWord(v) : v])), [tried]);
   const stateChip = (st: LookState) => (st === 'compiled' ? <span className="chip ok"><Icon name="check" />On the saber</span> : st === 'queued' ? <span className="chip warn"><Icon name="clock" />Queued</span> : <span className="chip">Needs a build</span>);
 
   return (
@@ -285,24 +289,17 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
               {!connected && <span className="hint">No saber yet: start one in the Armory, and styles can be put into its presets before it is ever plugged in.</span>}
               {connected && model && (
                 <div className="row" style={{ gap: 8, alignItems: 'end' }}>
-                  <label className="field grow"><span className="label">Preset</span><span className="input sans" style={{ height: 32 }}><span className="ellip">{presetName(targetPreset)}</span><span className="caret"><Icon name="down" /></span>
-                    <Select value={targetPreset} aria-label="Preset to put the style in" onChange={(e) => setTargetPreset(Number(e.target.value))}>{model!.presets.map((_p, i) => <option key={i} value={i}>{i + 1}. {presetName(i)}</option>)}</Select></span></label>
+                  <label className="field grow"><span className="label">Preset</span><span className="input sans" style={{ height: 32 }}><span className="ellip">{presetName(preset)}</span><span className="caret"><Icon name="down" /></span>
+                    <Select value={preset} aria-label="Preset to put the style in" onChange={(e) => setTargetPreset(Number(e.target.value))}>{model!.presets.map((_p, i) => <option key={i} value={i}>{i + 1}. {presetName(i)}</option>)}</Select></span></label>
                   <label className="field" style={{ width: 140 }}><span className="label">Blade</span><span className="input sans" style={{ height: 32 }}><span className="ellip">{fittingBlade ? `${fittingBlade.n}. ${ROLE_LABEL[fittingBlade.role]}` : 'none'}</span><span className="caret"><Icon name="down" /></span>
                     <Select value={fittingBlade?.n ?? 1} aria-label="Blade slot" onChange={(e) => setTargetBlade(Number(e.target.value))}>{bladesForLook.map((b) => <option key={b.n} value={b.n}>{b.n}. {ROLE_LABEL[b.role]}{b.fits ? '' : ' (unusual)'}</option>)}</Select></span></label>
                 </div>
               )}
-              {connected && model && live && selState === 'compiled' && (
+              {plan && words && (
                 <>
-                  <button type="button" className="btn pri full" disabled={!live || !fittingBlade || applying || board.busy} onClick={() => void useInPreset()}><span className="b"><span className="i"><Icon name="presets" />{applying ? 'Writing to the saber…' : `Use it in ${presetName(targetPreset)}`}</span></span></button>
-                  <span className="hint">{live ? `This style is already on ${saber!.name}, so it is written to the preset now${colourCount ? ', in the colours you chose above' : ''}. No rebuild.` : `This style is already on ${saber!.name}. Plug the saber in to put it on a preset.`} <button type="button" className="holo" onClick={onPresets}>Open Presets</button></span>
-                </>
-              )}
-              {connected && model && (!live || selState !== 'compiled') && (
-                <>
-                  <button type="button" className="btn pri full" disabled={!fittingBlade} onClick={() => void addToSaber()}><span className="b"><span className="i"><Icon name="plus" />{selState === 'queued' ? `Also use it in ${presetName(targetPreset)}` : `Add to ${presetName(targetPreset)}`}</span></span></button>
-                  {selState === 'queued'
-                    ? <button type="button" className="btn warn full" onClick={onBuild}><span className="b"><span className="i"><Icon name="bolt" />Build &amp; install queued styles</span></span></button>
-                    : <span className="hint">New styles reach the saber with the next Build &amp; Install{sel.kb != null ? `, and cost about ${sel.kb.toFixed(1)} KB of firmware space once` : ''}.{colourCount ? ' The colours you tried go with it.' : ''}</span>}
+                  <button type="button" className="btn pri full" disabled={!words.enabled || applying || (plan.kind === 'live' && board.busy)} onClick={() => void putIn()}><span className="b"><span className="i"><Icon name={plan.kind === 'live' ? 'presets' : plan.kind === 'already' ? 'check' : 'plus'} />{applying && plan.kind === 'live' ? 'Writing to the saber…' : words.button}</span></span></button>
+                  <span className="hint">{words.hint} <button type="button" className="holo" onClick={onPresets}>Open Presets</button></span>
+                  {selState === 'queued' && <button type="button" className="btn warn full" onClick={onBuild}><span className="b"><span className="i"><Icon name="bolt" />Build &amp; install queued styles</span></span></button>}
                 </>
               )}
               {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : 'x'} /><span>{note.text}</span></div>}
