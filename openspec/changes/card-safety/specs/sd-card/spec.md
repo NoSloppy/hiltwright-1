@@ -12,6 +12,12 @@ When the page opens, and when the owner asks it to look again, the app SHALL loo
 
 The owner SHALL be able to switch to another card that is present. A choice SHALL hold until the owner changes it or that card is gone.
 
+**Any card can be chosen** (added at the owner's request, 2026-11-14). The list SHALL offer every removable drive with media in it, not only ProffieOS cards, each marked for what it holds:
+- **Empty:** nothing on it but the system's own files. The page SHALL say fonts can be copied onto it to start a saber card.
+- **Not a saber card:** other files, no fonts and no presets file. The page SHALL say so, and that copying adds font folders beside those files and changes nothing else.
+
+The app SHALL NOT choose an empty or non-saber card by itself. With no ProffieOS card and such drives present, it SHALL ask.
+
 The font library's "Copy to card" SHALL use the same card, chosen the same way. While the owner has yet to choose, it SHALL copy nothing and say to choose the card on Fonts & SD. (Added at the owner's request, 2026-11-14: the font library picked the first card it found.)
 
 #### Scenario: A card in a reader
@@ -31,6 +37,14 @@ The font library's "Copy to card" SHALL use the same card, chosen the same way. 
 #### Scenario: Two cards in readers
 - **WHEN** two ProffieOS cards are in readers and no saber is sharing its card
 - **THEN** the page says there are two cards and asks the owner which one to show, and nothing is copied until one is chosen
+
+#### Scenario: An empty card in a reader
+- **WHEN** the only drive with media is an empty card
+- **THEN** the page asks which card to use and lists it as empty; once chosen, fonts can be copied onto it
+
+#### Scenario: A drive that is not a saber card
+- **WHEN** the owner chooses a drive with other files on it and no fonts
+- **THEN** the page says it is not a saber card, and that copying adds font folders beside its files and changes nothing else
 
 #### Scenario: Copying from the font library with two cards
 - **WHEN** two ProffieOS cards are in readers, and the owner opens a font in the font library

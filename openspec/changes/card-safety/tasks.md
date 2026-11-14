@@ -65,6 +65,23 @@
     - Tests: a new test in `cardChoice.test.ts` covers the remembered pick between two cards, and dropping it when its card is gone (8 tests).
     - `npm run typecheck` passes.
     - Offscreen screenshot with board access off, a scratch `HILTWRIGHT_SD_ROOT` card and a scratch `HILTWRIGHT_FONT_LIBRARY`: the font's panel shows "Copy to card <root>".
+- [x] 2.4 Any card can be chosen (added at the owner's request, 2026-11-14):
+  - `CardInfo.empty` from `locateCards()`
+  - `chooseCard` offers every drive with media, and picks only ProffieOS cards by itself
+  - the Card list and heading mark empty and non-saber cards, with their notes
+  - the closed Card field shows the chosen card
+
+  Verify:
+  - `cardChoice.test.ts`: an empty card is offered and asked for, not picked; with one ProffieOS card beside an empty one, the ProffieOS card is picked
+  - `sdLayout.test.ts`: `locateCards` would be platform-bound, so `empty` comes from a pure `isEmptyCard(names)`, tested there
+  - `npm run typecheck`, and the owner's look in 4.1
+  - **Result, 2026-11-14.**
+    - `CardInfo.empty` comes from a pure `isEmptyCard(names)`, which ignores System Volume Information, `$RECYCLE.BIN` and dot entries.
+    - `chooseCard` offers every drive with media, but picks only a ProffieOS card by itself, and asks otherwise. `cardKind(c)` gives `saber`, `empty` or `other`.
+    - Fonts & SD names each drive with "(empty)", "(not a saber card)" or "(<saber>'s own)". Its heading reads "Empty card at…" or "Not a saber card at…". It adds a note for an empty card (copy fonts to start one; `common` and the voice pack are not put on yet) and for a non-saber drive (copying adds folders beside its files, nothing else changes).
+    - The closed Card field shows the chosen drive's name, and the list also appears when it is asking about a single drive.
+    - Tests: `cardChoice.test.ts` (11) and `sdLayout.test.ts` (9) pass. `npm run typecheck` passes.
+    - Offscreen screenshot with an empty scratch card: "No ProffieOS card found. Choose a card to use", with the list open on the card.
 
 ## 3. The shared card on every page (renderer)
 

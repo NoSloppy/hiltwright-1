@@ -1,12 +1,15 @@
-// card-safety 2.2: the card Fonts & SD shows is the saber's own when it shares it, the owner's choice, or the only one.
+// card-safety 2.2-2.4: the card Fonts & SD shows is the saber's own when it shares it, the owner's choice, or the only
+// ProffieOS card. Any drive with media can be chosen; an empty or non-saber one is never picked by itself.
 
 import { describe, expect, it } from 'vitest';
-import { chooseCard, rememberCardChoice, rememberedCardChoice } from '../src/renderer/src/cardChoice';
+import { cardKind, chooseCard, rememberCardChoice, rememberedCardChoice } from '../src/renderer/src/cardChoice';
 import type { CardInfo } from '../src/shared/api';
 
-const card = (root: string, saberSerial: string | null = null, proffie = true): CardInfo => ({ root, label: null, freeBytes: null, totalBytes: null, proffie, hasPresetsIni: proffie, saberSerial });
+const card = (root: string, saberSerial: string | null = null, proffie = true, empty = false): CardInfo => ({ root, label: null, freeBytes: null, totalBytes: null, proffie, hasPresetsIni: proffie, saberSerial, empty });
 const reader = card('E:\\');
 const shared = card('H:\\', '209133815232');
+const blankCard = card('G:\\', null, false, true);
+const stick = card('F:\\', null, false, false);
 const none = { sharedRoot: null, saberSerial: null, chosen: null };
 
 describe('which card Fonts & SD shows (card-safety D3)', () => {
@@ -19,21 +22,36 @@ describe('which card Fonts & SD shows (card-safety D3)', () => {
     expect(chooseCard([reader, card('H:\\')], { ...none, sharedRoot: 'H:\\' })).toMatchObject({ card: { root: 'H:\\' }, own: true });
   });
   it("the saber's own card counts even before it has fonts on it", () => {
-    const blank = card('H:\\', '209133815232', false);
+    const blank = card('H:\\', '209133815232', false, true);
     expect(chooseCard([reader, blank], { ...none, saberSerial: '209133815232' }).card).toBe(blank);
   });
   it("the owner's choice holds while that card is there, and is dropped once it is gone", () => {
     expect(chooseCard([reader, shared], { sharedRoot: null, saberSerial: '209133815232', chosen: 'E:\\' })).toMatchObject({ card: reader, own: false });
     expect(chooseCard([shared], { sharedRoot: null, saberSerial: '209133815232', chosen: 'E:\\' })).toMatchObject({ card: shared, own: true });
   });
-  it('the only ProffieOS card is shown; a drive with no fonts is not a choice', () => {
-    expect(chooseCard([reader, card('F:\\', null, false)], none)).toMatchObject({ card: reader, ask: false });
-  });
   it('two cards and no saber sharing: ask, and show none', () => {
     expect(chooseCard([reader, card('F:\\')], none)).toMatchObject({ card: null, ask: true });
   });
-  it('no card at all: nothing to show, nothing to ask', () => {
-    expect(chooseCard([card('F:\\', null, false)], none)).toMatchObject({ card: null, ask: false, choices: [] });
+  it('no drive at all: nothing to show, nothing to ask', () => {
+    expect(chooseCard([], none)).toMatchObject({ card: null, ask: false, choices: [] });
+  });
+});
+
+describe('any card can be chosen (card-safety 2.4)', () => {
+  it('the one ProffieOS card is picked, with the empty card and the stick still offered', () => {
+    const c = chooseCard([reader, blankCard, stick], none);
+    expect(c).toMatchObject({ card: reader, ask: false });
+    expect(c.choices).toEqual([reader, blankCard, stick]);
+  });
+  it('an empty card alone is offered and asked for, never picked by itself', () => {
+    expect(chooseCard([blankCard], none)).toMatchObject({ card: null, ask: true, choices: [blankCard] });
+  });
+  it('once chosen, an empty card or a non-saber drive is the card', () => {
+    expect(chooseCard([blankCard, stick], { ...none, chosen: 'G:\\' })).toMatchObject({ card: blankCard, ask: false });
+    expect(chooseCard([blankCard, stick], { ...none, chosen: 'F:\\' })).toMatchObject({ card: stick, ask: false });
+  });
+  it('each drive is marked for what it holds', () => {
+    expect([reader, blankCard, stick].map(cardKind)).toEqual(['saber', 'empty', 'other']);
   });
 });
 

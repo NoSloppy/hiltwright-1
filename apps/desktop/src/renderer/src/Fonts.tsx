@@ -10,7 +10,7 @@ import { XenoImport } from './XenoImport';
 import { fontsForPresets } from './fontNeeds';
 import { FEATURES } from './features';
 import { Icon } from './Icon';
-import { chooseCard, rememberCardChoice, rememberedCardChoice } from './cardChoice';
+import { cardKind, chooseCard, rememberCardChoice, rememberedCardChoice } from './cardChoice';
 import { Select } from './Select';
 import { parseSdAccess } from './boardOps';
 
@@ -60,6 +60,9 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   const pickRef = useRef({ sharedRoot: usbRoot, saberSerial: serial, chosen });
   pickRef.current = { sharedRoot: usbRoot, saberSerial: serial, chosen };
   const choice = chooseCard(cards, { sharedRoot: usbRoot, saberSerial: serial, chosen });
+  const isOwnCard = (c: CardInfo) => (!!serial && c.saberSerial === serial) || c.root === usbRoot;
+  const cardName = (c: CardInfo) => `${c.root}${c.label ? ` ${c.label}` : ''}${isOwnCard(c) ? ` (${board.saber?.name ?? 'saber'}'s own)` : cardKind(c) === 'empty' ? ' (empty)' : cardKind(c) === 'other' ? ' (not a saber card)' : ''}`;
+  const kind = card ? cardKind(card) : null;
   const mountUsb = async () => {
     setUsb('mounting'); setUsbNote(null);
     const before = new Set((await api().sd.locate()).map((c) => c.root));
@@ -195,7 +198,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
         <div className="row" style={{ padding: '12px 18px', gap: 16 }}>
           <span style={{ color: card ? 'var(--holo)' : 'var(--mute)', display: 'flex', width: 26, height: 26 }}><Icon name="sd" /></span>
           <div className="col grow" style={{ gap: 2 }}>
-            <h3>{card ? `ProffieOS card at ${card.root}${card.label ? ` (${card.label})` : ''}${choice.own && card.root === choice.card?.root ? `: ${board.saber?.name ?? 'the saber'}'s own card` : ''}` : scanning ? 'Looking for a card…' : choice.ask ? `${choice.choices.length} ProffieOS cards found. Which one is this saber's?` : 'No ProffieOS card found'}</h3>
+            <h3>{card ? `${kind === 'empty' ? 'Empty card' : kind === 'other' ? 'Not a saber card' : 'ProffieOS card'} at ${card.root}${card.label ? ` (${card.label})` : ''}${choice.own && card.root === choice.card?.root ? `: ${board.saber?.name ?? 'the saber'}'s own card` : ''}` : scanning ? 'Looking for a card…' : choice.ask ? (choice.choices.some((c) => c.proffie) ? `${choice.choices.length} cards found. Which one is this saber's?` : 'No ProffieOS card found. Choose a card to use') : 'No ProffieOS card found'}</h3>
             <div className="dim small">
               {card ? `${mb(card.freeBytes)} free of ${mb(card.totalBytes)} · ${scanning ? 'reading the fonts…' : `${fonts.length} fonts · ${tracks.length} tracks`} · presets.ini ${card.hasPresetsIni ? 'present' : 'not present'} · voice pack ${voice?.ini || voice?.menuSounds ? `version ${voice.version ?? 1}${voice.menuSounds ? '' : ', menu sounds missing'}` : 'not found'}`
                 : choice.ask ? 'Choose the card in the list. Nothing is copied until you do.'
@@ -206,16 +209,18 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
           {shared
             ? <button type="button" className="btn sm warn" disabled={busy || usbBusy} title={busy ? 'Wait for the copy to finish' : undefined} onClick={() => void ejectUsb()}><span className="b"><span className="i"><Icon name="eject" />{usb === 'ejecting' ? 'Giving it back…' : 'Give the card back'}</span></span></button>
             : <button type="button" className="btn sm pri" disabled={!live || busy || usbBusy || usb === 'unsupported'} title={live ? 'The saber releases its card and it appears as a drive. The blade goes off and sound stops until you give it back.' : 'Plug the saber in first'} onClick={() => void mountUsb()}><span className="b"><span className="i"><Icon name="usb" />{usb === 'mounting' ? 'Waiting for the drive…' : usb === 'ejecting' ? 'Giving it back…' : 'Share the saber\u2019s card'}</span></span></button>}
-          {choice.choices.length > 1 && (
+          {(choice.choices.length > 1 || choice.ask) && (
             <label className="field" style={{ minWidth: 200 }}><span className="label">Card</span>
-              <span className="input sans"><Select aria-label="Card" value={card?.root ?? ''} disabled={busy} onChange={(e) => { const root = e.target.value || null; pickRef.current = { ...pickRef.current, chosen: root }; setChosen(root); void scan(); }}>
+              <span className="input sans"><span className="ellip">{card ? cardName(card) : 'Choose a card…'}</span><span className="caret"><Icon name="down" /></span><Select aria-label="Card" value={card?.root ?? ''} disabled={busy} onChange={(e) => { const root = e.target.value || null; pickRef.current = { ...pickRef.current, chosen: root }; setChosen(root); void scan(); }}>
                 {!card && <option value="">Choose a card…</option>}
-                {choice.choices.map((c) => <option key={c.root} value={c.root}>{c.root}{c.label ? ` ${c.label}` : ''}{(serial && c.saberSerial === serial) || c.root === usbRoot ? ` (${board.saber?.name ?? 'saber'}'s own)` : ''}</option>)}
+                {choice.choices.map((c) => <option key={c.root} value={c.root}>{cardName(c)}</option>)}
               </Select></span>
             </label>
           )}
           <button type="button" className="btn sm" disabled={working} onClick={() => void scan()}><span className="b"><span className="i"><Icon name="undo" />Look again</span></span></button>
         </div>
+        {card && kind === 'empty' && !scanning && <div style={{ padding: '0 18px 12px' }}><div className="note"><Icon name="sd" /><span>This card is empty. Copy the fonts the presets use, or add a font, to start a saber card on it. A saber also needs its <span className="mono">common</span> folder and voice pack, which Hiltwright does not put on the card yet.</span></div></div>}
+        {card && kind === 'other' && !scanning && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>This drive has other files on it and no fonts or <span className="mono">presets.ini</span>, so it is not a saber card. Copying a font adds its folder beside those files and changes nothing else.</span></div></div>}
         {shared && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The saber has handed its card to this computer{usbRoot ? ` (${usbRoot})` : ''}. It cannot play until you give the card back; do that here rather than unplugging, so nothing is left half written. Copying is slow this way, a big font can take minutes.</span></div></div>}
         {!live && board.cardLostWhileShared && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The connection went while the saber was sharing its card. The saber may still be holding its card. Reconnect it to give the card back.</span></div></div>}
         {progress && busy && <div style={{ padding: '0 18px 12px' }}><div className="note"><Icon name="sd" /><span>Copying {progress.name}: {progress.done} of {progress.total} files</span></div></div>}

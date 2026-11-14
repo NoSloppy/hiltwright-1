@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkFontDir, copyFont, listFonts, listTracks, parseRemovableDrives, readVoicePack } from '../src/main/sd';
+import { checkFontDir, copyFont, isEmptyCard, listFonts, listTracks, parseRemovableDrives, readVoicePack } from '../src/main/sd';
 
 /** A minimal 16-bit mono 44.1 kHz PCM wav header with no samples. */
 function wav(): Buffer {
@@ -138,6 +138,12 @@ describe("which removable drive is a saber's own card (card-safety D3)", () => {
       { root: 'H:\\', label: null, free: 7_000_000_000, total: 7_900_000_000, saberSerial: '209133815232' },
       { root: 'J:\\', label: null, free: null, total: null, saberSerial: null },
     ]);
+  });
+  it("a card with only the system's own entries is empty; one file of the owner's makes it not", () => {
+    expect(isEmptyCard([])).toBe(true);
+    expect(isEmptyCard(['System Volume Information', '$RECYCLE.BIN', '.Spotlight-V100', '.fseventsd'])).toBe(true);
+    expect(isEmptyCard(['System Volume Information', 'holiday.jpg'])).toBe(false);
+    expect(isEmptyCard(['presets.ini'])).toBe(false);
   });
   it('one drive printed as an object, and nothing at all, both read', () => {
     expect(parseRemovableDrives(JSON.stringify({ DeviceID: 'H:', Owner: '209133815232' }))[0].saberSerial).toBe('209133815232');

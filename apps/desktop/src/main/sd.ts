@@ -16,6 +16,15 @@ export interface CardInfo {
   hasPresetsIni: boolean;
   /** The USB serial of the Proffieboard this drive belongs to: the saber is sharing its own card (card-safety D3). */
   saberSerial: string | null;
+  /** Nothing on it but the system's own files: a blank card fonts can be copied onto (card-safety 2.4). */
+  empty: boolean;
+}
+
+/** Names Windows and macOS put on a card by themselves, which do not make it anything but empty. */
+const SYSTEM_ENTRY = /^(system volume information|\$recycle\.bin|\..*)$/i;
+/** Whether a card's top level has nothing but the system's own entries. */
+export function isEmptyCard(names: string[]): boolean {
+  return names.every((n) => SYSTEM_ENTRY.test(n));
 }
 
 export interface FontEntry {
@@ -201,14 +210,16 @@ export async function locateCards(): Promise<CardInfo[]> {
     if (!(await isDir(c.root))) continue;
     const hasPresetsIni = await exists(join(c.root, 'presets.ini')) || await exists(join(c.root, 'presets.tmp'));
     let fontDirs = 0;
+    let names: string[] = [];
+    try { names = await readdir(c.root); } catch { /* unreadable */ }
     try {
-      for (const name of await readdir(c.root)) {
+      for (const name of names) {
         if (name.startsWith('.') || name.toLowerCase() === 'tracks') continue;
         const p = join(c.root, name);
         if (await isDir(p) && await looksLikeFont(p)) { fontDirs++; if (fontDirs >= 1) break; }
       }
     } catch { /* unreadable */ }
-    out.push({ root: c.root, label: c.label, freeBytes: c.free, totalBytes: c.total, proffie: hasPresetsIni || fontDirs > 0, hasPresetsIni, saberSerial: c.saberSerial });
+    out.push({ root: c.root, label: c.label, freeBytes: c.free, totalBytes: c.total, proffie: hasPresetsIni || fontDirs > 0, hasPresetsIni, saberSerial: c.saberSerial, empty: isEmptyCard(names) });
   }
   return out;
 }

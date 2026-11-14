@@ -74,6 +74,8 @@ export interface CardInfo {
   hasPresetsIni: boolean;
   /** The USB serial of the Proffieboard this drive belongs to, when a saber is sharing its own card. */
   saberSerial: string | null;
+  /** Nothing on it but the system's own files. */
+  empty: boolean;
 }
 
 export interface PackInfo {
