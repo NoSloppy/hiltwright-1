@@ -95,5 +95,12 @@
   - **No re-detection:** unplug and plug in again. The run log shows no `scanid`. After a Build & Install, the first connect shows one `scanid`, and the next shows none.
   - **Stalls:** wait 30 s, then select a preset; repeat ten times. Any stall ends with the saber on the chosen preset and the selection shown as saved, with no error. Record how many of the ten stalled, from the `paused` lines.
   - **Still identified:** the Armory shows hote2 as the same saber as before, not a new one.
+  - **Run with a battery, 2026-11-14** (owner; run log `hiltwright-20261114-124721.log`; not the no-battery check itself):
+    - Two connects, both sending `battery_voltage`. Both said `blade layout [132,1,2]: stored for this build`, so no `scanid` was sent. Both matched hote2's own record (b53c5735a826).
+    - The first connect read 1.41 V, the second 3.5 V: the battery went on between them.
+    - Eleven selections, with 34 s to 4 min between them. Ten were saved in 216-619 ms.
+    - One stalled, the selection of preset 2 at 12:52:08, 95 s after the last command, with the battery reading 3.5 V. The log shows `paused`, then `reconnected after 1863 ms`, then `ok after a pause: Select preset 2`.
+    - After the reopen, the saber printed the rest of that selection's reply (font scan, SmoothSwing). It went to the log as late lines.
+    - So the stall happens with a battery too, less often (1 in 11, against about half without). Power alone does not explain it.
 - [ ] 5.3 Hardware check by the owner on the V3, with and without a battery if one is to hand: the quiet and no-re-detection checks of 5.2, and the ten idle selections. Record whether the V3 stalls at all.
 - [ ] 5.4 After archive, tick roadmap task 3.24a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
