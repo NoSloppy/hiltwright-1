@@ -141,7 +141,7 @@
 
 ## 4. Checks
 
-- [ ] 4.1 Hardware check on the V2.2 hote2, from a development build, with a card reader beside it:
+- [x] 4.1 Hardware check on the V2.2 hote2, from a development build, with a card reader beside it:
   - **Share:** share hote2's card. Presets is read-only, Diagnostics and Install are off, each with the note, and the console still answers. Give it back: the log shows `SD Access OFF`, and Presets is live again without reconnecting.
   - **Already shared at connect:** share, quit the app without giving back, and start it again. The card shows as shared everywhere, and give-back works.
   - **Two cards:** with another card in the reader, Fonts & SD shows hote2's card marked as its own while shared. Switching to the reader's card works. With hote2 not sharing, the page asks which card.
@@ -177,7 +177,17 @@
     - **Interrupted copy** passed (owner). At 15:13:29 the font library's copy of `Crait` failed into `H:\.hiltwright-copy-Crait` when the card was pulled. Put back and copied again, it worked, with `Crait` listed once.
     - **Found:** the page showed Windows' raw error ("UNKNOWN: unknown error, copyfile …"). A failed copy now reads "The copy of <font> stopped part way: the card could not be written to (<code>). Nothing was left on the card under <font>. Check the card is in, then copy it again." The full error goes to the log, and `cardCopy.test.ts` checks the wording (commit c063985).
     - **Still to do:** the speed check.
+  - **Speed (SF22), 2026-11-14 (owner):** the same font took about 4 s to a card in a USB 3 reader and about 120 s to hote2's card shared over USB, some 30 times slower. Reading the shared card's 19 fonts took 9 s once and over 30 s twice.
+  - **Result, 2026-11-14: passed on hote2.** Every listed check passed, after the fixes found on the way, each recorded above:
+    - give-back no longer waits for a font reading
+    - give-back stops the app's own reading of the card, and the eject retries
+    - the Card list uses the app's own dropdown, and a switch shows the new card at once
+    - any card can be chosen (2.4)
+    - the font library replaces and looks again (2.5)
+    - a failed copy is said in plain words
 
   Record each result here.
-- [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.
+- [x] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.
+  - **Result, 2026-11-14.** Measurement 5 in `docs/00-plan.md` section 8 is struck through, with the share and give-back behaviour and the 4 s against 120 s copy.
+
 - [ ] 4.3 After archive, tick roadmap task 3.24 in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
