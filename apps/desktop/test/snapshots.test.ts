@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parsePresetsIni } from '@hiltwright/core';
+import { parsePresetsIni, planRestore } from '@hiltwright/core';
 import { Snapshots } from '../src/main/snapshots';
 
 let dir = '';
@@ -30,5 +30,14 @@ describe('snapshots', () => {
     expect(ini.presets).toEqual(presets);
     expect(await snaps.read('ea8dbea42e78', meta.file)).toEqual(presets);
     expect(await snaps.list('ea8dbea42e78')).toEqual([{ file: meta.file, at: '2026-09-25T20:00:00.000Z', label: 'Before: Edit preset', presets: 2 }]);
+  });
+
+  it('preset-history-restore: a snapshot read back from disk plans no change against the list it was taken from, and finds a moved, edited preset', async () => {
+    const snaps = new Snapshots(dir);
+    const meta = await snaps.save('ea8dbea42e78', 'Before: Font', presets);
+    const saved = await snaps.read('ea8dbea42e78', meta.file);
+    expect(planRestore(saved, presets).same).toBe(true);
+    const now = [{ ...presets[1], font: 'Other;common' }, presets[0]];
+    expect(planRestore(saved, now).single).toMatchObject({ at: 0, snapshotAt: 1, patch: { font: 'Valkyrie;common' } });
   });
 });

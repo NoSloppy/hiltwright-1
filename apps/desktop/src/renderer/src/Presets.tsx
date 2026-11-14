@@ -8,7 +8,7 @@
 // A plugged-in saber that cannot read its SD card is shown read-only: ProffieOS saves presets on the card.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { STARTER_LOOKS, argInfo, bankFromSaber, bankToModel, colorWordToHex, formatBuiltin, formatStyleArgs, hexToColorWord, lookSlots, parseStyleArgs, registerLookSim, starterLookFor, type LookDef, type PresetBank, type SaberConfigModel } from '@hiltwright/core';
+import { STARTER_LOOKS, argInfo, bankFromSaber, bankToModel, colorWordToHex, formatBuiltin, formatStyleArgs, hexToColorWord, lookSlots, parseStyleArgs, planRestore, registerLookSim, singleWords, starterLookFor, type LookDef, type PresetBank, type PresetRecord, type RestorePlan, type SaberConfigModel } from '@hiltwright/core';
 import { BladePreview, canSimulate } from './BladePreview';
 import { LookPreviewNote } from './PreviewNote';
 import { SaberControls } from './Controls';
@@ -16,7 +16,7 @@ import type { Board } from './board';
 import { Icon } from './Icon';
 import { ROLE_META } from './hardwareModel';
 import type { Workspace } from './workspace';
-import type { LibraryFont } from '../../shared/api';
+import type { LibraryFont, SnapshotMeta } from '../../shared/api';
 import { FontPicker } from './FontPicker';
 import { Select } from './Select';
 import { joinFont, splitFont } from './presetFields';
@@ -49,6 +49,9 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
   const [pending, setPending] = useState<Record<string, string>>({});
   const [library, setLibrary] = useState<LibraryFont[]>([]);
   const [picking, setPicking] = useState(false);
+  // History: the snapshot whose restore is being looked at, with its presets.
+  const [restoring, setRestoring] = useState<{ meta: SnapshotMeta; presets: PresetRecord[] } | null>(null);
+  useEffect(() => { setRestoring(null); }, [saber?.id, live]);
   // A colour is written once the picker has been still for half a second, or at once when it is left (F45).
   const colourTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   useEffect(() => () => { for (const t of colourTimers.current.values()) clearTimeout(t); }, []);
@@ -175,6 +178,12 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
     setIx(0);
     setNote({ tone: 'green', text: `"${bank.name}" is loaded: ${bank.presets.length} preset${bank.presets.length === 1 ? '' : 's'}, staged for the next install${live ? `, replacing what is on ${saber.name}` : ''}.` });
   };
+
+  // ---- history: what a restore changes is worked out against the list as it is now, and shown first (F33) ----
+  const showRestore = async (meta: SnapshotMeta) => {
+    try { setRestoring({ meta, presets: await board.readSnapshot(meta) }); } catch (err) { setNote({ tone: 'red', text: `That snapshot could not be read: ${String(err)}` }); }
+  };
+  const restorePlan = restoring ? planRestore(restoring.presets, info.presets) : null;
   const dropStaged = async () => { const { presetsFrom: _drop, ...rest } = model; await ws.saveModel(rest); setNote(null); };
 
   const fontFolders = [...new Set([...fonts, ...(cur ? [splitFont(cur.font).folder] : [])])].filter(Boolean);
@@ -337,13 +346,16 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
               <div className="list" style={{ overflow: 'auto' }}>
                 {board.snapshots.length === 0 && <div className="li hint" style={{ minHeight: 40 }}>No snapshots yet.</div>}
                 {board.snapshots.map((s, i) => (
-                  <div key={s.file} className="li" style={{ minHeight: 44, gap: 8 }}>
-                    <span className="col grow" style={{ gap: 0 }}><span className="ellip small">{s.label}</span><span className="hint mono" style={{ fontSize: 11 }}>{when(s.at)} · {s.presets} presets</span></span>
-                    <button type="button" className="holo" style={{ fontSize: 11.5, fontWeight: 600 }} disabled={busy} onClick={() => void board.restoreSnapshot(s)}>{i === 0 ? 'Undo' : 'Restore'}</button>
+                  <div key={s.file} className="col" style={{ gap: 0 }}>
+                    <div className="li" style={{ minHeight: 44, gap: 8 }}>
+                      <span className="col grow" style={{ gap: 0 }}><span className="ellip small">{s.label}</span><span className="hint mono" style={{ fontSize: 11 }}>{when(s.at)} · {s.presets} presets</span></span>
+                      <button type="button" className="holo" style={{ fontSize: 11.5, fontWeight: 600 }} disabled={busy || restoring?.meta.file === s.file} onClick={() => void showRestore(s)}>{i === 0 ? 'Undo' : 'Restore'}</button>
+                    </div>
+                    {restoring?.meta.file === s.file && restorePlan && <RestorePreview plan={restorePlan} busy={busy} onCancel={() => setRestoring(null)} onRestore={(kind) => void board.restoreSnapshot(s, kind, restorePlan).then(() => setRestoring(null))} />}
                   </div>
                 ))}
               </div>
-              <div className="hint" style={{ marginTop: 'auto', padding: '12px 18px', borderTop: '1px solid var(--line)' }}>A snapshot of the saber's presets is kept before every change written to it. Restore sends the earlier values back and waits for the saber to confirm them.</div>
+              <div className="hint" style={{ marginTop: 'auto', padding: '12px 18px', borderTop: '1px solid var(--line)' }}>A snapshot of the saber's presets is kept before every change written to it. Restore first shows what it will change, then sends the earlier values back and waits for the saber to confirm them.</div>
             </>
           )}
         </section>
@@ -367,6 +379,33 @@ function CommitField({ label, value, sync, list, choices, placeholder, mono, dis
       <span className={`input${mono ? '' : ' sans'}`}><input type="text" list={list} value={v} disabled={disabled} aria-label={label} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={commit} /></span>
       {list && choices && <datalist id={list}>{choices.map((c) => <option key={c} value={c} />)}</datalist>}
     </form>
+  );
+}
+
+/** What restoring a snapshot will change, said before anything is sent (preset-history-restore, F33). */
+function RestorePreview({ plan, busy, onRestore, onCancel }: { plan: RestorePlan; busy: boolean; onRestore: (kind: 'preset' | 'list') => void; onCancel: () => void }) {
+  // When the whole list comes to the same one write as the single preset, one button says it.
+  const wholeToo = !plan.wholeRefused && plan.steps.length > 0 && !(plan.single && plan.steps.length === 1);
+  return (
+    <div className="col" style={{ gap: 8, padding: '10px 14px 12px', borderBottom: '1px solid var(--line)' }}>
+      {plan.same && <span className="small">{"The saber's presets already match this snapshot. Nothing to restore."}</span>}
+      {plan.single && (
+        <div className="col" style={{ gap: 6 }}>
+          <span className="small">{singleWords(plan.single)}</span>
+          <span><button type="button" className="btn sm" disabled={busy} onClick={() => onRestore('preset')}><span className="b"><span className="i">Restore this preset</span></span></button></span>
+        </div>
+      )}
+      {!plan.same && plan.singleRefused && <span className="hint">{plan.singleRefused}</span>}
+      {wholeToo && (
+        <div className="col" style={{ gap: 6 }}>
+          <span className="small" style={{ fontWeight: 600 }}>Restoring the whole list makes {plan.steps.length === 1 ? 'this change' : `these ${plan.steps.length} changes`}:</span>
+          <ol className="small" style={{ margin: 0, paddingLeft: 18 }}>{plan.changes.map((c, k) => <li key={k}>{c}</li>)}</ol>
+          <span><button type="button" className="btn sm" disabled={busy} onClick={() => onRestore('list')}><span className="b"><span className="i">Restore the whole list</span></span></button></span>
+        </div>
+      )}
+      {plan.wholeRefused && <span className="hint">{plan.wholeRefused}</span>}
+      <span><button type="button" className="holo small" onClick={onCancel}>Cancel</button></span>
+    </div>
   );
 }
 

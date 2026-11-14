@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  BoardClient, currentPresetIndex, deleteCurrentPreset, diffPreset, duplicateCurrentPreset, editCurrentPreset, formatBuiltin, isEmptyPatch, isPresetBlockEnd, listPresets, parseBuiltin, patchShown,
-  moveCurrentPreset, parseInteger, parseList, parsePresetBlocks, parseScanId, parseVersion, presetCommands, selectPreset, wasRejected,
-  type ListResult, type PresetPatch, type PresetRecord, type Response, type VersionInfo,
+  BoardClient, currentPresetIndex, deleteCurrentPreset, duplicateCurrentPreset, editCurrentPreset, formatBuiltin, isEmptyPatch, isPresetBlockEnd, listPresets, parseBuiltin, patchShown,
+  moveCurrentPreset, parseInteger, parseList, parsePresetBlocks, parseScanId, parseVersion, planRestore, presetCommands, runRestore, sameList, selectPreset, wasRejected,
+  type ListChange, type ListResult, type PresetPatch, type PresetRecord, type Response, type RestorePlan, type VersionInfo,
   type SaberConfigModel,
 } from '@hiltwright/core';
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
@@ -557,37 +557,80 @@ export function useBoard() {
     }, true, true, () => { const p = infoRef.current?.presets[index]; return !!p && patchShown(p, patch); });
   }, [run, replacePreset]);
 
-  // The list as it was when each list operation's turn came, for judging it after a stall (D5).
+  // A list change is reported as made only when the list read back is the one it should have made (F34); whatever the
+  // saber read back is shown either way. The list as it was when the turn came also judges it after a stall (D5).
+  const applyReadBack = useCallback((r: ListChange) => {
+    if (r.presets.length) applyList({ presets: r.presets, current: r.current ?? infoRef.current?.currentPreset ?? null });
+  }, [applyList]);
+  const NO_CURRENT = 'The saber has not said which preset is in use. Choose one, then try again.';
   const movePreset = useCallback((to: number) => {
     let before: PresetRecord[] = []; let from = -1;
-    return run(`Move to position ${to + 1}`, async (c) => { before = infoRef.current?.presets ?? []; from = infoRef.current?.currentPreset ?? -1; applyList(await moveCurrentPreset(c, to)); return { ok: true }; }, true, true, () => moveShown(before, infoRef.current?.presets ?? [], from, to));
-  }, [run, applyList]);
+    return run(`Move to position ${to + 1}`, async (c) => {
+      before = infoRef.current?.presets ?? []; from = infoRef.current?.currentPreset ?? -1;
+      if (from < 0) return { ok: false, error: NO_CURRENT };
+      const r = await moveCurrentPreset(c, before, from, to);
+      applyReadBack(r);
+      return { ok: r.ok, error: r.error };
+    }, true, true, () => moveShown(before, infoRef.current?.presets ?? [], from, to));
+  }, [run, applyReadBack]);
   const duplicatePreset = useCallback(() => {
     const i = infoRef.current;
     const pos = (i?.currentPreset ?? 0) + 1;
     let before: PresetRecord[] = [];
-    return run('Duplicate preset', async (c) => { before = infoRef.current?.presets ?? []; applyList(await duplicateCurrentPreset(c, pos)); return { ok: true }; }, true, true, () => duplicateShown(before, infoRef.current?.presets ?? [], pos));
-  }, [run, applyList]);
+    return run('Duplicate preset', async (c) => {
+      before = infoRef.current?.presets ?? [];
+      const r = await duplicateCurrentPreset(c, before, pos - 1, pos);
+      applyReadBack(r);
+      return { ok: r.ok, error: r.error };
+    }, true, true, () => duplicateShown(before, infoRef.current?.presets ?? [], pos));
+  }, [run, applyReadBack]);
   const deletePreset = useCallback(() => {
     let before: PresetRecord[] = [];
-    return run('Delete preset', async (c) => { before = infoRef.current?.presets ?? []; applyList(await deleteCurrentPreset(c)); return { ok: true }; }, true, true, () => deleteShown(before, infoRef.current?.presets ?? []));
-  }, [run, applyList]);
+    return run('Delete preset', async (c) => {
+      before = infoRef.current?.presets ?? [];
+      const at = infoRef.current?.currentPreset ?? -1;
+      if (at < 0) return { ok: false, error: NO_CURRENT };
+      const r = await deleteCurrentPreset(c, before, at);
+      applyReadBack(r);
+      return { ok: r.ok, error: r.error };
+    }, true, true, () => deleteShown(before, infoRef.current?.presets ?? []));
+  }, [run, applyReadBack]);
 
-  /** Put the current preset back the way a snapshot had it, with the fewest commands. */
-  const restoreSnapshot = useCallback(async (meta: SnapshotMeta) => {
-    const i = infoRef.current;
+  /** A snapshot's presets, to show what restoring it would change before anything is sent. */
+  const readSnapshot = useCallback(async (meta: SnapshotMeta): Promise<PresetRecord[]> => {
     const s = saberRef.current;
-    if (!i || !s || i.currentPreset == null) return;
-    const index = i.currentPreset;
+    if (!s) throw new Error('No saber connected.');
+    return api().snapshots.read(s.id, meta.file);
+  }, []);
+
+  /**
+   * Restore a snapshot: one preset (`preset`) or the whole list (`list`), as planRestore works it out (F33). `shown` is
+   * the plan the owner read; it is worked out again from the list as it is when the restore's turn comes, and if that
+   * is not what was shown, nothing is sent. Goes through `run` like every write: snapshot first, the shared-card
+   * refusal, stall recovery, and a read-back of the whole list at the end.
+   */
+  const restoreSnapshot = useCallback(async (meta: SnapshotMeta, kind: 'preset' | 'list', shown: RestorePlan): Promise<boolean> => {
+    const s = saberRef.current;
+    if (!s) return false;
     let saved: PresetRecord[];
-    try { saved = await api().snapshots.read(s.id, meta.file); } catch (err) { setSave({ kind: 'failed', what: 'Restore', error: String(err) }); return; }
-    const from = i.presets[index];
-    const to = saved[index];
-    if (!from || !to) { setSave({ kind: 'failed', what: 'Restore', error: 'That snapshot has no preset at this position.' }); return; }
-    const patch = diffPreset(from, to);
-    if (isEmptyPatch(patch)) { setSave({ kind: 'saved', what: 'Nothing to restore', ms: 0, at: Date.now() }); return; }
-    await editPreset(patch, `Restore "${meta.label}"`);
-  }, [editPreset]);
+    try { saved = await api().snapshots.read(s.id, meta.file); } catch (err) { setSave({ kind: 'failed', what: 'Restore', error: String(err) }); return false; }
+    let expected: PresetRecord[] = saved;
+    const what = kind === 'preset' && shown.single ? `Restore "${shown.single.name.replace(/\s*\n\s*/g, ' ')}" from "${meta.label}"` : `Restore "${meta.label}"`;
+    return run(what, async (c) => {
+      const now = infoRef.current?.presets ?? [];
+      const plan = planRestore(saved, now);
+      const refused = kind === 'list' ? plan.wholeRefused : plan.single ? null : plan.singleRefused ?? 'Nothing to restore.';
+      if (refused) return { ok: false, error: `Not sent: ${refused}` };
+      const steps = kind === 'preset' ? [plan.single!.step] : plan.steps;
+      const shownSteps = kind === 'preset' ? (shown.single ? [shown.single.step] : []) : shown.steps;
+      if (JSON.stringify(steps) !== JSON.stringify(shownSteps)) return { ok: false, error: 'Not sent: the saber\'s presets changed since this restore was shown. Look at it again.' };
+      if (!steps.length) return { ok: true, note: 'nothing to change' };
+      expected = kind === 'preset' ? plan.single!.expected : plan.expected;
+      const r = await runRestore(c, now, steps, expected);
+      applyReadBack(r);
+      return { ok: r.ok, error: r.error };
+    }, true, true, () => sameList(infoRef.current?.presets ?? [], expected));
+  }, [run, applyReadBack]);
 
   /** The current preset as of this instant (state in closures can be a render behind after a queued write). */
   /** Write blade styles to preset `index`, selecting it first when it is not the current one. Resolves to whether the saber confirmed. */
@@ -727,7 +770,7 @@ export function useBoard() {
     };
   }, []);
 
-  return { card, cardShared, cardGivenBack, cardLostWhileShared, status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, reachNext, currentSaber, restartSaber, currentPresets, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
+  return { card, cardShared, cardGivenBack, cardLostWhileShared, status, error, portName, info, saber, library, lines, snapshots, save, busy, connect, disconnect, send, identify, choosePreset, editPreset, setPresetStyles, movePreset, duplicatePreset, deletePreset, readSnapshot, restoreSnapshot, renameSaber, updateSaber, expectAfterInstall, reachNext, currentSaber, restartSaber, currentPresets, planSaber, adoptPlan, currentPresetNow, refreshLibrary, isPresetBlockEnd, rebootToBootloader };
 }
 
 export type Board = ReturnType<typeof useBoard>;
