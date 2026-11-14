@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkFontDir, copyFont, listFonts, listTracks, readVoicePack } from '../src/main/sd';
+import { checkFontDir, copyFont, listFonts, listTracks, parseRemovableDrives, readVoicePack } from '../src/main/sd';
 
 /** A minimal 16-bit mono 44.1 kHz PCM wav header with no samples. */
 function wav(): Buffer {
@@ -118,5 +118,30 @@ describe('sd-card audit', () => {
     await listTracks(root);
     await readVoicePack(root);
     expect(await tree(root)).toEqual(before);
+  });
+});
+
+describe("which removable drive is a saber's own card (card-safety D3)", () => {
+  it('a drive under a Proffieboard carries its serial; a card reader slot and a malformed entry do not', () => {
+    // The shape the PowerShell walk prints. H: as hote2 sharing its card is constructed; D: and E: are as captured
+    // from the owner's Multi-Reader, 2026-11-14 (empty slots), with E: given a card.
+    const out = JSON.stringify([
+      { DeviceID: 'D:', VolumeName: null, FreeSpace: null, Size: null, Owner: null },
+      { DeviceID: 'E:', VolumeName: 'KYLO', FreeSpace: 21_000_000_000, Size: 31_900_000_000, Owner: null },
+      { DeviceID: 'H:', VolumeName: '', FreeSpace: 7_000_000_000, Size: 7_900_000_000, Owner: '209133815232' },
+      { VolumeName: 'no drive letter', Owner: '209133815232' },
+      { DeviceID: 'J:', Owner: 'not a serial; rm -rf' },
+    ]);
+    expect(parseRemovableDrives(out)).toEqual([
+      { root: 'D:\\', label: null, free: null, total: null, saberSerial: null },
+      { root: 'E:\\', label: 'KYLO', free: 21_000_000_000, total: 31_900_000_000, saberSerial: null },
+      { root: 'H:\\', label: null, free: 7_000_000_000, total: 7_900_000_000, saberSerial: '209133815232' },
+      { root: 'J:\\', label: null, free: null, total: null, saberSerial: null },
+    ]);
+  });
+  it('one drive printed as an object, and nothing at all, both read', () => {
+    expect(parseRemovableDrives(JSON.stringify({ DeviceID: 'H:', Owner: '209133815232' }))[0].saberSerial).toBe('209133815232');
+    expect(parseRemovableDrives('')).toEqual([]);
+    expect(parseRemovableDrives('not json')).toEqual([]);
   });
 });

@@ -14,6 +14,8 @@ export interface CardInfo {
   /** Looks like a ProffieOS card: has presets.ini or at least one font folder. */
   proffie: boolean;
   hasPresetsIni: boolean;
+  /** The USB serial of the Proffieboard this drive belongs to: the saber is sharing its own card (card-safety D3). */
+  saberSerial: string | null;
 }
 
 export interface FontEntry {
@@ -30,23 +32,56 @@ async function exists(p: string): Promise<boolean> {
   try { await stat(p); return true; } catch { return false; }
 }
 
+type Candidate = { root: string; label: string | null; free: number | null; total: number | null; saberSerial: string | null };
+
+/**
+ * Windows' removable drives, each followed through its partition and disk drive up the PnP tree. A drive whose
+ * ancestors include `USB\VID_1209&PID_6668\<serial>` is a Proffieboard sharing its own card (card-safety D3).
+ */
+const DRIVES_SCRIPT = [
+  '$out = @()',
+  'foreach ($ld in Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 2 }) {',
+  '  $owner = $null',
+  '  try {',
+  '    $disk = Get-CimAssociatedInstance -InputObject $ld -ResultClassName Win32_DiskPartition | ForEach-Object { Get-CimAssociatedInstance -InputObject $_ -ResultClassName Win32_DiskDrive } | Select-Object -First 1',
+  '    $id = $disk.PNPDeviceID',
+  '    for ($i = 0; $i -lt 4 -and $id; $i++) {',
+  "      if ($id -match '^USB\\\\VID_1209&PID_6668\\\\([^\\\\]+)$') { $owner = $Matches[1]; break }",
+  '      $id = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Parent -ErrorAction Stop).Data',
+  '    }',
+  '  } catch {}',
+  '  $out += [pscustomobject]@{ DeviceID = $ld.DeviceID; VolumeName = $ld.VolumeName; FreeSpace = $ld.FreeSpace; Size = $ld.Size; Owner = $owner }',
+  '}',
+  'ConvertTo-Json -InputObject @($out)',
+].join('\n');
+
+/** The drive list the script prints: one object or a list, with the Proffieboard serial each drive belongs to, if any. */
+export function parseRemovableDrives(stdout: string): Candidate[] {
+  try {
+    const parsed = JSON.parse(stdout || '[]') as unknown;
+    const list = (Array.isArray(parsed) ? parsed : [parsed]) as { DeviceID?: unknown; VolumeName?: unknown; FreeSpace?: unknown; Size?: unknown; Owner?: unknown }[];
+    return list.filter((d) => d && typeof d.DeviceID === 'string' && d.DeviceID).map((d) => ({
+      root: `${d.DeviceID as string}\\`,
+      label: typeof d.VolumeName === 'string' && d.VolumeName ? d.VolumeName : null,
+      free: Number(d.FreeSpace) || null,
+      total: Number(d.Size) || null,
+      saberSerial: typeof d.Owner === 'string' && /^[0-9A-Za-z]+$/.test(d.Owner) ? d.Owner : null,
+    }));
+  } catch { return []; }
+}
+
 /** Candidate roots: removable volumes on Windows, /Volumes and /media elsewhere, plus an override for development. */
-async function candidateRoots(): Promise<{ root: string; label: string | null; free: number | null; total: number | null }[]> {
+async function candidateRoots(): Promise<Candidate[]> {
   const override = process.env.HILTWRIGHT_SD_ROOT;
-  if (override) return [{ root: override, label: 'dev override', free: null, total: null }];
+  if (override) return [{ root: override, label: 'dev override', free: null, total: null, saberSerial: null }];
   if (process.platform === 'win32') {
-    const script = `Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 2 } | Select-Object DeviceID, VolumeName, FreeSpace, Size | ConvertTo-Json`;
-    const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 8000, windowsHide: true }, (err, stdout) => resolve(err ? '' : stdout)));
-    try {
-      const parsed = JSON.parse(out || '[]') as { DeviceID: string; VolumeName: string; FreeSpace: number; Size: number } | { DeviceID: string; VolumeName: string; FreeSpace: number; Size: number }[];
-      const list = Array.isArray(parsed) ? parsed : [parsed];
-      return list.filter((d) => d.DeviceID).map((d) => ({ root: `${d.DeviceID}\\`, label: d.VolumeName || null, free: Number(d.FreeSpace) || null, total: Number(d.Size) || null }));
-    } catch { return []; }
+    const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', DRIVES_SCRIPT], { timeout: 8000, windowsHide: true }, (err, stdout) => resolve(err ? '' : stdout)));
+    return parseRemovableDrives(out);
   }
   const bases = process.platform === 'darwin' ? ['/Volumes'] : ['/media', '/run/media', '/mnt'];
-  const out: { root: string; label: string | null; free: number | null; total: number | null }[] = [];
+  const out: Candidate[] = [];
   for (const b of bases) {
-    try { for (const name of await readdir(b)) out.push({ root: join(b, name), label: name, free: null, total: null }); } catch { /* not present */ }
+    try { for (const name of await readdir(b)) out.push({ root: join(b, name), label: name, free: null, total: null, saberSerial: null }); } catch { /* not present */ }
   }
   return out;
 }
@@ -142,7 +177,7 @@ export async function locateCards(): Promise<CardInfo[]> {
         if (await isDir(p) && await looksLikeFont(p)) { fontDirs++; if (fontDirs >= 1) break; }
       }
     } catch { /* unreadable */ }
-    out.push({ root: c.root, label: c.label, freeBytes: c.free, totalBytes: c.total, proffie: hasPresetsIni || fontDirs > 0, hasPresetsIni });
+    out.push({ root: c.root, label: c.label, freeBytes: c.free, totalBytes: c.total, proffie: hasPresetsIni || fontDirs > 0, hasPresetsIni, saberSerial: c.saberSerial });
   }
   return out;
 }

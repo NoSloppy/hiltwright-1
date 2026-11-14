@@ -1,7 +1,7 @@
 // Fonts & SD: a ProffieOS card in a card reader. Lists fonts with the checks that catch the classic failures,
 // lists tracks, and copies a font folder from this computer onto the card after checking it.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VoicePackStatus } from '@hiltwright/core';
 import type { CardInfo, FontEntry, LibraryFont } from '../../shared/api';
 import type { Workspace } from './workspace';
@@ -10,6 +10,7 @@ import { XenoImport } from './XenoImport';
 import { fontsForPresets } from './fontNeeds';
 import { FEATURES } from './features';
 import { Icon } from './Icon';
+import { chooseCard } from './cardChoice';
 
 const api = () => window.hiltwright;
 
@@ -39,6 +40,13 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   const [usbNote, setUsbNote] = useState<string | null>(null);
   const [usbRoot, setUsbRoot] = useState<string | null>(null);
   useEffect(() => { if (!live) { setUsb('idle'); setUsbRoot(null); } }, [live]);
+  // Which card is shown and copied to (card-safety D3): the owner's pick, the saber's own while it shares it, or the
+  // only one. Read through refs so a scan started before a render uses the latest of each.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const serial = live ? board.saber?.identity.usbSerial ?? null : null;
+  const pickRef = useRef({ sharedRoot: usbRoot, saberSerial: serial, chosen });
+  pickRef.current = { sharedRoot: usbRoot, saberSerial: serial, chosen };
+  const choice = chooseCard(cards, { sharedRoot: usbRoot, saberSerial: serial, chosen });
   const mountUsb = async () => {
     setUsb('mounting'); setUsbNote(null);
     const before = new Set((await api().sd.locate()).map((c) => c.root));
@@ -50,7 +58,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     for (let i = 0; i < 40; i++) {
       await new Promise((res) => setTimeout(res, 500));
       const now = (await api().sd.locate()).find((c) => !before.has(c.root));
-      if (now) { setUsbRoot(now.root); setUsb('mounted'); await scan(); return; }
+      if (now) { setUsbRoot(now.root); pickRef.current = { ...pickRef.current, sharedRoot: now.root, chosen: null }; setChosen(null); setUsb('mounted'); await scan(); return; }
     }
     setUsb('idle'); setUsbNote('The saber said yes but no drive appeared in 20 seconds. If the blade was on or a sound was playing, wait for it to go quiet and try again.');
     try { await board.send('sd 0', { idleMs: 500 }); } catch { /* best effort */ }
@@ -71,7 +79,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     try {
       const found = await api().sd.locate();
       setCards(found);
-      const best = found.find((c) => c.proffie) ?? null;
+      const best = chooseCard(found, pickRef.current).card;
       setCard(best);
       if (best) {
         const [f, t, vp] = await Promise.all([api().sd.listFonts(best.root), api().sd.listTracks(best.root), api().sd.voicePack(best.root)]);
@@ -83,7 +91,8 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
         setFonts([]);
         setTracks([]);
         setVoice(null);
-        console.log(`[sd] no ProffieOS card among ${found.length} removable volume(s)`);
+        const proffie = found.filter((c) => c.proffie).length;
+        console.log(proffie > 1 ? `[sd] ${proffie} ProffieOS cards and none the saber's: asking which` : `[sd] no ProffieOS card among ${found.length} removable volume(s)`);
       }
     } finally { setBusy(false); }
   }, []);
@@ -136,9 +145,10 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
         <div className="row" style={{ padding: '12px 18px', gap: 16 }}>
           <span style={{ color: card ? 'var(--holo)' : 'var(--mute)', display: 'flex', width: 26, height: 26 }}><Icon name="sd" /></span>
           <div className="col grow" style={{ gap: 2 }}>
-            <h3>{card ? `ProffieOS card at ${card.root}${card.label ? ` (${card.label})` : ''}` : busy ? 'Looking for a card…' : 'No ProffieOS card found'}</h3>
+            <h3>{card ? `ProffieOS card at ${card.root}${card.label ? ` (${card.label})` : ''}${choice.own && card.root === choice.card?.root ? `: ${board.saber?.name ?? 'the saber'}'s own card` : ''}` : busy ? 'Looking for a card…' : choice.ask ? `${choice.choices.length} ProffieOS cards found. Which one is this saber's?` : 'No ProffieOS card found'}</h3>
             <div className="dim small">
               {card ? `${mb(card.freeBytes)} free of ${mb(card.totalBytes)} · ${fonts.length} fonts · ${tracks.length} tracks · presets.ini ${card.hasPresetsIni ? 'present' : 'not present'} · voice pack ${voice?.ini || voice?.menuSounds ? `version ${voice.version ?? 1}${voice.menuSounds ? '' : ', menu sounds missing'}` : 'not found'}`
+                : choice.ask ? 'Choose the card in the list. Nothing is copied until you do.'
                 : cards.length ? `${cards.length} removable volume${cards.length > 1 ? 's' : ''} seen, none with fonts on it. Put the saber's card in a reader.`
                 : live ? 'Put the card in a reader, or let the saber share it over USB: it stops playing while it does.' : 'Put the saber\'s SD card in a card reader, or plug the saber in and share its card over USB.'}
             </div>
@@ -146,6 +156,14 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
           {usb === 'mounted'
             ? <button type="button" className="btn sm warn" disabled={busy || usbBusy} onClick={() => void ejectUsb()}><span className="b"><span className="i"><Icon name="eject" />Give the card back</span></span></button>
             : <button type="button" className="btn sm pri" disabled={!live || busy || usbBusy || usb === 'unsupported'} title={live ? 'The saber releases its card and it appears as a drive. The blade goes off and sound stops until you give it back.' : 'Plug the saber in first'} onClick={() => void mountUsb()}><span className="b"><span className="i"><Icon name="usb" />{usb === 'mounting' ? 'Waiting for the drive…' : usb === 'ejecting' ? 'Giving it back…' : 'Share the saber\u2019s card'}</span></span></button>}
+          {choice.choices.length > 1 && (
+            <label className="field" style={{ minWidth: 200 }}><span className="label">Card</span>
+              <span className="input sans"><select aria-label="Card" value={card?.root ?? ''} disabled={busy} onChange={(e) => { const root = e.target.value || null; pickRef.current = { ...pickRef.current, chosen: root }; setChosen(root); void scan(); }}>
+                {!card && <option value="">Choose a card…</option>}
+                {choice.choices.map((c) => <option key={c.root} value={c.root}>{c.root}{c.label ? ` ${c.label}` : ''}{(serial && c.saberSerial === serial) || c.root === usbRoot ? ` (${board.saber?.name ?? 'saber'}'s own)` : ''}</option>)}
+              </select></span>
+            </label>
+          )}
           <button type="button" className="btn sm" disabled={busy} onClick={() => void scan()}><span className="b"><span className="i"><Icon name="undo" />Look again</span></span></button>
         </div>
         {usb === 'mounted' && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The saber has handed its card to this computer{usbRoot ? ` (${usbRoot})` : ''}. It cannot play until you give the card back; do that here rather than unplugging, so nothing is left half written. Copying is slow this way, a big font can take minutes.</span></div></div>}

@@ -26,10 +26,15 @@
 
 ## 2. Which card (main and renderer)
 
-- [ ] 2.1 Add `saberSerial` to `CardInfo`, found by the PnP walk in `locateCards()`'s PowerShell call. Parse it with a pure `parseVolumeOwners(json)` (design D3). Verify:
+- [x] 2.1 Add `saberSerial` to `CardInfo`, found by the PnP walk in `locateCards()`'s PowerShell call. Parse it with a pure `parseVolumeOwners(json)` (design D3). Verify:
   - `apps/desktop/test/sdLayout.test.ts`: `parseVolumeOwners` on captured JSON, with one drive on a Proffieboard, one on a card reader, and a malformed entry
   - `npm run typecheck`
-- [ ] 2.2 Add `renderer/src/cardChoice.ts` with `chooseCard(cards, { sharedRoot, saberSerial, chosen })` (design D3), and use it in `Fonts.tsx`:
+  - **Result, 2026-11-14.** `CardInfo.saberSerial`, in main and `shared/api.ts`. `locateCards()`'s PowerShell call now follows each removable drive through its partition and disk drive, then up to four PnP parents, looking for `USB\VID_1209&PID_6668\<serial>`. The parser is `parseRemovableDrives(stdout)`, one function for the whole drive list rather than a separate `parseVolumeOwners`. It accepts a serial only if it is alphanumeric.
+    - **Run on this PC:** both directly and through `execFile` as main calls it, in about 0.5 s. The four empty Multi-Reader slots gave no owner.
+    - **Tests:** two in `sdLayout.test.ts`, covering a constructed hote2 drive, reader slots, a malformed entry, a single object and empty or bad output (8 in the file). `npm run typecheck` passes.
+    - **Still to see:** a real shared drive carrying hote2's serial, in 4.1.
+
+- [x] 2.2 Add `renderer/src/cardChoice.ts` with `chooseCard(cards, { sharedRoot, saberSerial, chosen })` (design D3), and use it in `Fonts.tsx`:
   - a "Card" picker when there is more than one ProffieOS card
   - the saber's own card marked "<saber>'s own card"
   - nothing copied while the page is asking
@@ -39,6 +44,14 @@
   - the owner's choice kept while present, and dropped when gone
   - the only card
   - two cards and no saber → ask
+  - **Result, 2026-11-14.** `renderer/src/cardChoice.ts` has `chooseCard`. Its order: the owner's pick while that card is present, then the saber's own (by serial or by the shared root, counted even with no fonts on it), then the only ProffieOS card, otherwise ask. `apps/desktop/test/cardChoice.test.ts` passes (7 tests).
+    - `Fonts.tsx` scans with it.
+    - The heading marks "<saber>'s own card", or asks "N ProffieOS cards found. Which one is this saber's?".
+    - A "Card" list appears when there is more than one choice.
+    - Starting a share clears the owner's pick.
+    - While asking there is no card, so copying is off.
+
+    `npm run typecheck` passes; `npm test` 650 passed (gated skipped). On screen with two cards: 4.1.
 
 ## 3. The shared card on every page (renderer)
 
