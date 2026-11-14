@@ -130,6 +130,10 @@
     - The first cycle still reported "not released" at 14:37:41, apparently before the retry was loaded, and ejected on the next click.
     - The second cycle was one click: share at 14:38:00 (`SD Access ON`), give back at 14:38:30, the reading stopped, then `ejected (try 2)`, `SD Access OFF`, and back to `H:`. The owner confirmed one click.
     - In neither cycle did reading the shared card's fonts finish in about 30 s.
+  - **Run 4, 2026-11-14:**
+    - **Already shared at connect** passed: shared, the app closed without giving back, and started again. Every page treated the card as shared, and give-back worked (owner).
+    - **Pages locked while shared** passed (owner).
+    - **Found:** the "Card" list on Fonts & SD was a blank box. It used the browser's `<select>`, which the app's field styling hides. It now uses the app's own `Select`. It was also off while fonts were being read, which on a shared card hardly ever ends, so it now waits only for a copy.
 
   Record each result here.
 - [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.

@@ -11,6 +11,7 @@ import { fontsForPresets } from './fontNeeds';
 import { FEATURES } from './features';
 import { Icon } from './Icon';
 import { chooseCard, rememberCardChoice, rememberedCardChoice } from './cardChoice';
+import { Select } from './Select';
 import { parseSdAccess } from './boardOps';
 
 const api = () => window.hiltwright;
@@ -207,10 +208,10 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
             : <button type="button" className="btn sm pri" disabled={!live || busy || usbBusy || usb === 'unsupported'} title={live ? 'The saber releases its card and it appears as a drive. The blade goes off and sound stops until you give it back.' : 'Plug the saber in first'} onClick={() => void mountUsb()}><span className="b"><span className="i"><Icon name="usb" />{usb === 'mounting' ? 'Waiting for the drive…' : usb === 'ejecting' ? 'Giving it back…' : 'Share the saber\u2019s card'}</span></span></button>}
           {choice.choices.length > 1 && (
             <label className="field" style={{ minWidth: 200 }}><span className="label">Card</span>
-              <span className="input sans"><select aria-label="Card" value={card?.root ?? ''} disabled={working} onChange={(e) => { const root = e.target.value || null; pickRef.current = { ...pickRef.current, chosen: root }; setChosen(root); void scan(); }}>
+              <span className="input sans"><Select aria-label="Card" value={card?.root ?? ''} disabled={busy} onChange={(e) => { const root = e.target.value || null; pickRef.current = { ...pickRef.current, chosen: root }; setChosen(root); void scan(); }}>
                 {!card && <option value="">Choose a card…</option>}
                 {choice.choices.map((c) => <option key={c.root} value={c.root}>{c.root}{c.label ? ` ${c.label}` : ''}{(serial && c.saberSerial === serial) || c.root === usbRoot ? ` (${board.saber?.name ?? 'saber'}'s own)` : ''}</option>)}
-              </select></span>
+              </Select></span>
             </label>
           )}
           <button type="button" className="btn sm" disabled={working} onClick={() => void scan()}><span className="b"><span className="i"><Icon name="undo" />Look again</span></span></button>
