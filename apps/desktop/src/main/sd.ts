@@ -232,7 +232,11 @@ export async function locateCards(): Promise<CardInfo[]> {
 export async function inBatches<T, R>(items: T[], n: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } }));
+  // Every worker is waited for, even after one fails: a stopped reading of a card must have let go of every file
+  // before the caller hears of it, or Windows cannot eject the card.
+  const done = await Promise.allSettled(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } }));
+  const failed = done.find((d): d is PromiseRejectedResult => d.status === 'rejected');
+  if (failed) throw failed.reason;
   return out;
 }
 
