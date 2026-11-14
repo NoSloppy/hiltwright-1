@@ -16,6 +16,8 @@ export interface CardInfo {
   hasPresetsIni: boolean;
   /** The USB serial of the Proffieboard this drive belongs to: the saber is sharing its own card (card-safety D3). */
   saberSerial: string | null;
+  /** The file system Windows reports for the card (FAT32, exFAT, NTFS...), or null when it does not say. */
+  fileSystem: string | null;
   /** Nothing on it but the system's own files: a blank card fonts can be copied onto (card-safety 2.4). */
   empty: boolean;
 }
@@ -41,7 +43,7 @@ async function exists(p: string): Promise<boolean> {
   try { await stat(p); return true; } catch { return false; }
 }
 
-type Candidate = { root: string; label: string | null; free: number | null; total: number | null; saberSerial: string | null };
+type Candidate = { root: string; label: string | null; free: number | null; total: number | null; saberSerial: string | null; fileSystem: string | null };
 
 /**
  * Windows' removable drives, each followed through its partition and disk drive up the PnP tree. A drive whose
@@ -59,7 +61,7 @@ const DRIVES_SCRIPT = [
   '      $id = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Parent -ErrorAction Stop).Data',
   '    }',
   '  } catch {}',
-  '  $out += [pscustomobject]@{ DeviceID = $ld.DeviceID; VolumeName = $ld.VolumeName; FreeSpace = $ld.FreeSpace; Size = $ld.Size; Owner = $owner }',
+  '  $out += [pscustomobject]@{ DeviceID = $ld.DeviceID; VolumeName = $ld.VolumeName; FreeSpace = $ld.FreeSpace; Size = $ld.Size; FileSystem = $ld.FileSystem; Owner = $owner }',
   '}',
   'ConvertTo-Json -InputObject @($out)',
 ].join('\n');
@@ -68,12 +70,13 @@ const DRIVES_SCRIPT = [
 export function parseRemovableDrives(stdout: string): Candidate[] {
   try {
     const parsed = JSON.parse(stdout || '[]') as unknown;
-    const list = (Array.isArray(parsed) ? parsed : [parsed]) as { DeviceID?: unknown; VolumeName?: unknown; FreeSpace?: unknown; Size?: unknown; Owner?: unknown }[];
+    const list = (Array.isArray(parsed) ? parsed : [parsed]) as { DeviceID?: unknown; VolumeName?: unknown; FreeSpace?: unknown; Size?: unknown; FileSystem?: unknown; Owner?: unknown }[];
     return list.filter((d) => d && typeof d.DeviceID === 'string' && d.DeviceID).map((d) => ({
       root: `${d.DeviceID as string}\\`,
       label: typeof d.VolumeName === 'string' && d.VolumeName ? d.VolumeName : null,
       free: Number(d.FreeSpace) || null,
       total: Number(d.Size) || null,
+      fileSystem: typeof d.FileSystem === 'string' && d.FileSystem.trim() ? d.FileSystem.trim() : null,
       saberSerial: typeof d.Owner === 'string' && /^[0-9A-Za-z]+$/.test(d.Owner) ? d.Owner : null,
     }));
   } catch { return []; }
@@ -82,7 +85,7 @@ export function parseRemovableDrives(stdout: string): Candidate[] {
 /** Candidate roots: removable volumes on Windows, /Volumes and /media elsewhere, plus an override for development. */
 async function candidateRoots(): Promise<Candidate[]> {
   const override = process.env.HILTWRIGHT_SD_ROOT;
-  if (override) return [{ root: override, label: 'dev override', free: null, total: null, saberSerial: null }];
+  if (override) return [{ root: override, label: 'dev override', free: null, total: null, saberSerial: null, fileSystem: null }];
   if (process.platform === 'win32') {
     // 15 s: while a card shared over USB is being read, Windows answers slowly, and a silent empty list reads as "no card".
     const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', DRIVES_SCRIPT], { timeout: 15000, windowsHide: true }, (err, stdout) => {
@@ -94,7 +97,7 @@ async function candidateRoots(): Promise<Candidate[]> {
   const bases = process.platform === 'darwin' ? ['/Volumes'] : ['/media', '/run/media', '/mnt'];
   const out: Candidate[] = [];
   for (const b of bases) {
-    try { for (const name of await readdir(b)) out.push({ root: join(b, name), label: name, free: null, total: null, saberSerial: null }); } catch { /* not present */ }
+    try { for (const name of await readdir(b)) out.push({ root: join(b, name), label: name, free: null, total: null, saberSerial: null, fileSystem: null }); } catch { /* not present */ }
   }
   return out;
 }
@@ -223,7 +226,7 @@ export async function locateCards(): Promise<CardInfo[]> {
         if (await isDir(p) && await looksLikeFont(p)) { fontDirs++; if (fontDirs >= 1) break; }
       }
     } catch { /* unreadable */ }
-    out.push({ root: c.root, label: c.label, freeBytes: c.free, totalBytes: c.total, proffie: hasPresetsIni || fontDirs > 0, hasPresetsIni, saberSerial: c.saberSerial, empty: isEmptyCard(names) });
+    out.push({ root: c.root, label: c.label, freeBytes: c.free, totalBytes: c.total, proffie: hasPresetsIni || fontDirs > 0, hasPresetsIni, saberSerial: c.saberSerial, fileSystem: c.fileSystem, empty: isEmptyCard(names) });
   }
   return out;
 }

@@ -133,11 +133,20 @@ describe("which removable drive is a saber's own card (card-safety D3)", () => {
       { DeviceID: 'J:', Owner: 'not a serial; rm -rf' },
     ]);
     expect(parseRemovableDrives(out)).toEqual([
-      { root: 'D:\\', label: null, free: null, total: null, saberSerial: null },
-      { root: 'E:\\', label: 'KYLO', free: 21_000_000_000, total: 31_900_000_000, saberSerial: null },
-      { root: 'H:\\', label: null, free: 7_000_000_000, total: 7_900_000_000, saberSerial: '209133815232' },
-      { root: 'J:\\', label: null, free: null, total: null, saberSerial: null },
+      { root: 'D:\\', label: null, free: null, total: null, saberSerial: null, fileSystem: null },
+      { root: 'E:\\', label: 'KYLO', free: 21_000_000_000, total: 31_900_000_000, saberSerial: null, fileSystem: null },
+      { root: 'H:\\', label: null, free: 7_000_000_000, total: 7_900_000_000, saberSerial: '209133815232', fileSystem: null },
+      { root: 'J:\\', label: null, free: null, total: null, saberSerial: null, fileSystem: null },
     ]);
+  });
+  it("the file system Windows reports for each drive is read, and a drive with none stays unknown", () => {
+    // The shape Windows prints (ConvertTo-Json of Win32_LogicalDisk): a 64 GB card as exFAT, a 16 GB card as FAT32,
+    // an empty reader slot with a null file system.
+    const out = '[{"DeviceID":"E:","VolumeName":"KYLO","FreeSpace":61000000000,"Size":63800000000,"FileSystem":"exFAT","Owner":null},'
+      + '{"DeviceID":"F:","VolumeName":"SABER","FreeSpace":15000000000,"Size":15900000000,"FileSystem":"FAT32","Owner":null},'
+      + '{"DeviceID":"G:","VolumeName":null,"FreeSpace":null,"Size":null,"FileSystem":null,"Owner":null},'
+      + '{"DeviceID":"H:","VolumeName":"X","FileSystem":"  ","Owner":null}]';
+    expect(parseRemovableDrives(out).map((d) => d.fileSystem)).toEqual(['exFAT', 'FAT32', null, null]);
   });
   it("a card with only the system's own entries is empty; one file of the owner's makes it not", () => {
     expect(isEmptyCard([])).toBe(true);
