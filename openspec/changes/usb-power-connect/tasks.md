@@ -102,5 +102,11 @@
     - One stalled, the selection of preset 2 at 12:52:08, 95 s after the last command, with the battery reading 3.5 V. The log shows `paused`, then `reconnected after 1863 ms`, then `ok after a pause: Select preset 2`.
     - After the reopen, the saber printed the rest of that selection's reply (font scan, SmoothSwing). It went to the log as late lines.
     - So the stall happens with a battery too, less often (1 in 11, against about half without). Power alone does not explain it.
+  - **Run with no battery, 2026-11-14** (owner; same run log, from 13:08):
+    - One connect, with `battery_voltage` reading 0.51 V, which is under 2 V, so "No battery". It said `blade layout [132,1,2]: stored for this build`, so no `scanid` was sent, and it matched hote2's own record.
+    - Ten selections, 41 s to 1.5 min apart. Nine were saved in 223-331 ms.
+    - One stalled, preset 7 at 13:12:36. The log shows `paused`, then `reconnected after 1642 ms`, then `ok after a pause: Select preset 7`, with no error.
+    - So today: 1 stall in 10 without a battery, and 1 in 11 with one. On 2026-10-25 it was about half, without a battery.
+    - Still to confirm from the owner: no spoken voltage; the header's "No battery" and the Armory note; and the `scanid` after a Build & Install.
 - [ ] 5.3 Hardware check by the owner on the V3, with and without a battery if one is to hand: the quiet and no-re-detection checks of 5.2, and the ten idle selections. Record whether the V3 stalls at all.
 - [ ] 5.4 After archive, tick roadmap task 3.24a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
