@@ -122,9 +122,10 @@ describe('copies onto the card are all or nothing (card-safety D5)', () => {
 
   it('giving the card back stops a reading of it, so its files are let go (4.1, 2026-11-14)', async () => {
     const root = await card(true);
-    const listing = listFonts(root);
+    // Listen for the rejection straight away: the reading can fail while stopReading is still being awaited.
+    const listing = expect(listFonts(root)).rejects.toThrow('Stopped: the card is being given back.');
     await stopReading(root);
-    await expect(listing).rejects.toThrow('Stopped: the card is being given back.');
+    await listing;
     // Once stopped, a new reading works again.
     expect((await listFonts(root)).map((f) => f.name)).toEqual(['Kylo', 'Vader']);
   });
