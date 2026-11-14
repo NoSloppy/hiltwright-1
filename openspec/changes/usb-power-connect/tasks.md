@@ -90,7 +90,7 @@
 - [x] 5.1 Record `battery_voltage` on hote2 as `packages/core/test/transcripts/os8/36-battery_voltage.txt` with `tools/record-transcripts.ps1`. Check PnP first that the board is hote2 (serial 209133815232), and get the owner's go-ahead. Add it to the recorded-transcripts tests in `protocol.test.ts`. Verify that `npm test` passes and the transcript parses to the voltage the board printed.
   - **Result, 2026-11-14.** PnP showed one Proffieboard: hote2, serial 209133815232, on COM8. The owner gave the go-ahead. Recorded `battery_voltage` plain (`36-battery_voltage.txt`, `3.50` CRLF) and tagged (`37-tagged_battery_voltage.txt`, `1,4,b1|3.50`), and added both to `index.json`. The saber did not speak. A test in `protocol.test.ts` reads 3.5 from each (36 tests pass). hote2 read 3.50 V because a battery was connected this time (owner, 2026-11-14). On 2026-10-25, with none, it read 0.03-1.48 V.
 
-- [ ] 5.2 Hardware check by the owner on the V2.2 hote2 with no battery, from a development build:
+- [x] 5.2 Hardware check by the owner on the V2.2 hote2 with no battery, from a development build:
   - **Quiet:** connect, then press Read again. The saber does not speak its voltage. The header shows "No battery", and the Armory shows the USB-power note.
   - **No re-detection:** unplug and plug in again. The run log shows no `scanid`. After a Build & Install, the first connect shows one `scanid`, and the next shows none.
   - **Stalls:** wait 30 s, then select a preset; repeat ten times. Any stall ends with the saber on the chosen preset and the selection shown as saved, with no error. Record how many of the ten stalled, from the `paused` lines.
@@ -107,6 +107,8 @@
     - Ten selections, 41 s to 1.5 min apart. Nine were saved in 223-331 ms.
     - One stalled, preset 7 at 13:12:36. The log shows `paused`, then `reconnected after 1642 ms`, then `ok after a pause: Select preset 7`, with no error.
     - So today: 1 stall in 10 without a battery, and 1 in 11 with one. On 2026-10-25 it was about half, without a battery.
-    - Still to confirm from the owner: no spoken voltage; the header's "No battery" and the Armory note; and the `scanid` after a Build & Install.
+    - The owner confirmed: no voltage was spoken on connect or Read again, and the header showed "No battery" with the Armory note.
+    - The owner accepted the unit test for "one `scanid` after a Build & Install". That is the new-install-stamp case of `storedLayout` in `boardOps.test.ts`. It was not run on hardware.
+  - **Result, 2026-11-14:** passed on hote2.
 - [ ] 5.3 Hardware check by the owner on the V3, with and without a battery if one is to hand: the quiet and no-re-detection checks of 5.2, and the ten idle selections. Record whether the V3 stalls at all.
 - [ ] 5.4 After archive, tick roadmap task 3.24a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
