@@ -12,4 +12,4 @@ export * from './banks';
 export * from './voicepack';
 export * from './xenopixel';
 export { parsePresetsIni, emitPresetsIni, type PresetsIni } from './presetsIni';
-export { parseWavHeader, classifySound, checkFont, EFFECT_NAMES, type WavInfo, type FontFile, type FontIssue, type FontReport } from './fonts';
+export { parseWavHeader, classifySound, checkFont, checkFontListing, classifyFontFile, isTrackPath, EFFECT_NAMES, OTHER_FILES, WAV_HEADER_BYTES, CORE_SOUNDS_TEXT, type WavInfo, type FontFile, type FontIssue, type FontReport, type FontListingEntry, type FontSoundFact, type FontCheck } from './fonts';

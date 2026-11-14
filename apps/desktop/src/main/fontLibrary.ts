@@ -3,11 +3,12 @@
 // folder, untouched; what the owner says about it (display name, maker, notes) lives in one index file beside them,
 // kept by the safe store (jsonStore.ts), so a font folder copied onto a card carries nothing extra.
 
-import { cp, mkdir, open, readFile, readdir, rename, rm, rmdir, stat } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rename, rm, rmdir, stat } from 'node:fs/promises';
 import { statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { checkFont, classifySound, parseWavHeader, type FontFile, type FontReport } from '@hiltwright/core';
-import { copyFont, looksLikeFont, readFontSounds, type CopyOptions, type FontEntry, type FontSounds } from './sd';
+import { CORE_SOUNDS_TEXT, OTHER_FILES, checkFontListing, classifyFontFile, type FontReport } from '@hiltwright/core';
+export { classifyFontFile };
+import { copyFont, inBatches, looksLikeFont, readFontListing, readFontSounds, type CopyOptions, type FontEntry, type FontSounds } from './sd';
 import { extractZip, listZip } from './unzip';
 import { JsonStore } from './jsonStore';
 
@@ -66,114 +67,18 @@ export interface LibraryFontDetail extends LibraryFont {
 
 export interface ImportResult { added: string[]; skipped: { name: string; why: string }[] }
 
-/** Names ProffieOS does not have in EFFECT_NAMES, gathered under one label each. */
-const EXTRA: [RegExp, string][] = [
-  [/^(swingl|swingh|lswing|hswing)$/, 'smoothswing'],
-  [/^(lb|bgnlb|endlb)$/, 'lightning block'],
-  [/^(bgndrag|enddrag)$/, 'drag'],
-  [/^(bgnmelt|endmelt)$/, 'melt'],
-  [/^(tr|trloop|tron|troff)$/, 'blade transitions'],
-  [/^(quote|quotes)$/, 'quotes'],
-  [/^(ccbegin|ccend|ccchange|color|colour)$/, 'colour change'],
-  [/^(blast)$/, 'blaster'],
-  [/^(fastout|fastin)$/, 'fast ignition'],
-  [/^(bgnauto|endauto|auto)$/, 'blaster auto'],
-  [/^(lowbatt)$/, 'low battery'],
-  [/^(battery|vmbegin|vmend|volup|voldown|volmin|volmax|mnum|mselect|mclick|mstart|mend|menu)$/, 'menu voice'],
-];
 const BASIC = new Set(['hum', 'ignition', 'retraction', 'swing', 'clash', 'font name', 'boot', 'smoothswing']);
-
-/**
- * The name ProffieOS would treat a file as. Inside an effect's folder any numbering goes (`clsh/001.wav`,
- * `clsh/clsh1.wav`, `tr/001/000.wav`), and the file belongs to that folder's effect; it is renamed to the flat
- * form (`clsh01.wav`) so the checker sees the same thing the saber does.
- */
-function soundName(rel: string): { checker: string; base: string } {
-  const parts = rel.split('/');
-  const file = parts[parts.length - 1];
-  const stem = file.toLowerCase().replace(/\.wav$/, '');
-  if (parts.length > 1) {
-    const folder = parts[0].toLowerCase();
-    const m = /^([a-z_]*?)(\d*)$/.exec(stem);
-    if (m && (m[1] === '' || m[1] === folder)) return { checker: `${folder}${m[2] ? m[2].padStart(2, '0') : ''}.wav`, base: folder };
-  }
-  return { checker: file, base: stem.replace(/\d+$/, '') };
-}
-
-export function classifyFontFile(rel: string): { effect: string; kind: FontSound['kind']; checker: string } {
-  const { checker, base } = soundName(rel);
-  const c = classifySound(checker);
-  if (c.kind !== 'other') return { effect: c.effect, kind: c.kind, checker };
-  for (const [re, label] of EXTRA) if (re.test(base)) return { effect: label, kind: 'other', checker };
-  return { effect: base || 'other', kind: 'other', checker };
-}
-
-const isTrack = (rel: string) => rel.split('/').slice(0, -1).some((p) => /^tracks?$/i.test(p));
 
 async function isDir(p: string): Promise<boolean> {
   try { return (await stat(p)).isDirectory(); } catch { return false; }
 }
 
-async function wavInfo(p: string): Promise<ReturnType<typeof parseWavHeader>> {
-  try {
-    const fh = await open(p, 'r');
-    try {
-      const buf = new Uint8Array(512);
-      const { bytesRead } = await fh.read(buf, 0, 512, 0);
-      return parseWavHeader(buf.subarray(0, bytesRead));
-    } finally { await fh.close(); }
-  } catch { return null; }
-}
-
-/** `fn` over every item, `n` at a time, results in the items' order. */
-async function inBatches<T, R>(items: T[], n: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } }));
-  return out;
-}
-
-/** Every wav in a font folder, three levels deep, as paths within it. */
-async function walkWavs(dir: string, prefix = '', depth = 0): Promise<string[]> {
-  const out: string[] = [];
-  let names: string[] = [];
-  try { names = await readdir(dir); } catch { return out; }
-  for (const n of names) {
-    if (n.startsWith('.')) continue;
-    const p = join(dir, n);
-    if (/\.wav$/i.test(n)) out.push(prefix + n);
-    else if (depth < 3 && (await isDir(p))) out.push(...(await walkWavs(p, `${prefix}${n}/`, depth + 1)));
-  }
-  return out;
-}
-
-/** Look over one font folder: every sound and track, what the font supports, and the usual checks. */
+/** Look over one font folder: every sound and track, what the font supports, and the usual checks (the same ones the card gets). */
 export async function scanFont(dir: string): Promise<{ sounds: FontSound[]; tracks: FontSound[]; report: FontReport; support: FontSupport; bytes: number; hasSmoothswIni: boolean }> {
-  const sounds: FontSound[] = [];
-  const tracks: FontSound[] = [];
-  const checked: FontFile[] = [];
-  let bytes = 0;
-  // Sizes and headers are read many at a time: a font is a hundred small files, and the first look at a library
-  // of dozens of fonts is otherwise seconds of waiting.
-  const rels = (await walkWavs(dir)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const facts = await inBatches(rels, 24, async (rel) => {
-    const p = join(dir, ...rel.split('/'));
-    try { return { size: (await stat(p)).size, wav: await wavInfo(p) }; } catch { return null; }
-  });
-  for (let i = 0; i < rels.length; i++) {
-    const rel = rels[i]; const f = facts[i];
-    if (!f) continue;
-    const { size, wav } = f;
-    bytes += size;
-    if (isTrack(rel)) { tracks.push({ path: rel, effect: 'track', kind: 'other', seconds: wav?.seconds ?? null, size }); continue; }
-    const c = classifyFontFile(rel);
-    sounds.push({ path: rel, effect: c.effect, kind: c.kind, seconds: wav?.seconds ?? null, size });
-    checked.push({ name: c.checker, size, wav });
-  }
-  const report = checkFont(checked);
+  const { sounds, tracks, report, bytes } = checkFontListing(await readFontListing(dir));
   let hasSmoothswIni = false;
   try { hasSmoothswIni = (await readdir(dir)).some((n) => n.toLowerCase() === 'smoothsw.ini'); } catch { /* unreadable */ }
-  const effects = [...new Set(sounds.map((s) => s.effect))].sort();
+  const effects = [...new Set(sounds.map((s) => s.effect).filter((e) => e !== OTHER_FILES))].sort();
   const smoothSwing = effects.includes('smoothswing');
   return {
     sounds, tracks, report, bytes, hasSmoothswIni,
@@ -404,14 +309,14 @@ export class FontLibrary {
       if (/\.zip$/i.test(src)) {
         staging = join(this.root, `.incoming-${Date.now().toString(36)}`);
         const entries = await listZip(src);
-        const wavs = entries.filter((e) => /\.wav$/i.test(e.name)).length;
+        const wavs = entries.filter((e) => /\.wav$/i.test(e.name) && !isJunk(e.name)).length;
         if (!wavs) throw new Error(`${basename(src)} has no sounds in it. Is it a sound font package?`);
         onLine?.(`Unpacking ${basename(src)} (${wavs} sounds)…`);
         await extractZip(src, staging, (n) => !isJunk(n), (_n, done, total) => { if (done % 100 === 0 || done === total) onLine?.(`Unpacked ${done} of ${total} files`); });
         top = staging;
       } else if (!(await isDir(src))) throw new Error('Choose a font folder or a .zip package');
       const found = await findFontDirs(top);
-      if (!found.length) throw new Error(`No sound font found in ${basename(src)}. A font folder has hum sounds in it (hum.wav, hum01.wav or hum/…).`);
+      if (!found.length) throw new Error(`No sound font found in ${basename(src)}. A font folder holds at least one of the core sounds (${CORE_SOUNDS_TEXT}), as files like hum.wav or hum01.wav, or in folders like hum/.`);
       const { keep: dirs, dropped } = chooseVariants(top, found);
       for (const x of dropped) result.skipped.push({ name: basename(x.dir), why: `the copy in "${x.board}" is for another board, not Proffie` });
       for (const d of dirs) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkFont, classifySound, parseWavHeader } from '../src';
+import { checkFont, checkFontListing, classifySound, parseWavHeader } from '../src';
 
 function wav(sampleRate: number, channels = 1, bits = 16, format = 1, dataBytes = 44100 * 2): Uint8Array {
   const b = new Uint8Array(44 + 8);
@@ -55,5 +55,41 @@ describe('font checks', () => {
   it('flags 48 kHz, stereo, 24-bit and a missing hum', () => {
     const r = checkFont([{ name: 'clsh01.wav', size: 1, wav: parseWavHeader(wav(48000, 2, 24)) }]);
     expect(r.issues.map((i) => i.kind).sort()).toEqual(['bits', 'missing-hum', 'rate', 'stereo']);
+  });
+});
+
+describe('one checker over a listing (font-check-alignment)', () => {
+  const entry = (path: string, header: Uint8Array | null = wav(44100)) => ({ path, size: 1000, header });
+  it('gives flat and per-sound-folder layouts the same verdict, however the files are numbered', () => {
+    const flat = checkFontListing(['hum01.wav', 'out01.wav', 'in01.wav', 'clsh01.wav', 'clsh02.wav'].map((p) => entry(p)));
+    const padded = checkFontListing(['hum/hum01.wav', 'out/out01.wav', 'in/in01.wav', 'clsh/clsh01.wav', 'clsh/clsh02.wav'].map((p) => entry(p)));
+    const plain = checkFontListing(['hum/hum1.wav', 'out/out1.wav', 'in/in1.wav', 'clsh/clsh1.wav', 'clsh/clsh2.wav'].map((p) => entry(p)));
+    const numbered = checkFontListing(['hum/001.wav', 'out/001.wav', 'in/001.wav', 'clsh/001.wav', 'clsh/002.wav'].map((p) => entry(p)));
+    for (const other of [padded, plain, numbered]) expect(other.report).toEqual(flat.report);
+    expect(flat.report.issues).toEqual([]);
+    expect(plain.report.effects.hum).toBeTruthy();
+    expect(plain.report.effects.clash?.poly).toBe(2);
+  });
+  it('leaves tracks out of the sound checks but counts their size', () => {
+    const r = checkFontListing([entry('hum01.wav'), entry('tracks/theme.wav', wav(48000, 2, 24)), entry('tracks/hum1.wav')]);
+    expect(r.report.issues).toEqual([]);
+    expect(r.report.files).toBe(1);
+    expect(r.tracks.map((t) => t.path)).toEqual(['tracks/hum1.wav', 'tracks/theme.wav']);
+    expect(r.bytes).toBe(3000);
+  });
+  it('shows unrecognised wav names as other files, not as effects', () => {
+    const r = checkFontListing([entry('hum01.wav'), entry('readme.wav'), entry('lock01.wav')]);
+    expect(r.sounds.find((s) => s.path === 'readme.wav')).toMatchObject({ effect: 'other files', kind: 'other' });
+    expect(r.sounds.find((s) => s.path === 'lock01.wav')?.effect).toBe('lockup');
+  });
+  it('finds the format after a long extra chunk before fmt', () => {
+    const fmt = wav(48000, 2, 16).subarray(12);
+    const head = new Uint8Array(12 + 8 + 300 + fmt.length);
+    head.set(wav(48000).subarray(0, 12));
+    head.set([76, 73, 83, 84], 12);
+    new DataView(head.buffer).setUint32(16, 300, true);
+    head.set(fmt, 12 + 8 + 300);
+    const r = checkFontListing([entry('hum01.wav', head)]);
+    expect(r.report.issues.map((i) => i.kind).sort()).toEqual(['rate', 'stereo']);
   });
 });

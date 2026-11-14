@@ -4,7 +4,7 @@
 import { execFile } from 'node:child_process';
 import { copyFile, mkdir, open, readFile, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
 import { basename, dirname, join, relative } from 'node:path';
-import { checkFont, classifySound, hasMenuSounds, parseVoicePackIni, parseWavHeader, type FontFile, type FontReport, type VoicePackStatus } from '@hiltwright/core';
+import { WAV_HEADER_BYTES, checkFontListing, classifySound, hasMenuSounds, parseVoicePackIni, type FontListingEntry, type FontReport, type VoicePackStatus } from '@hiltwright/core';
 
 export interface CardInfo {
   root: string;
@@ -228,38 +228,57 @@ export async function locateCards(): Promise<CardInfo[]> {
   return out;
 }
 
-/** The font's wavs: those in the folder itself, and those one level down in an effect's subfolder. */
-async function readFontFiles(dir: string, stopped: () => boolean = () => false): Promise<FontFile[]> {
-  const files: FontFile[] = [];
-  const entries: { name: string; p: string }[] = [];
-  for (const name of await readdir(dir)) {
-    const p = join(dir, name);
-    if (/\.wav$/i.test(name)) { entries.push({ name, p }); continue; }
-    if (name.startsWith('.') || !(await isDir(p))) continue;
-    // A subfolder's files are named for the folder so the checker sees `hum/001.wav` as a hum: ProffieOS does the same.
-    try { for (const f of await readdir(p)) if (/\.wav$/i.test(f)) entries.push({ name: /^\d+\.wav$/i.test(f) ? `${name}${f}` : f, p: join(p, f) }); } catch { /* unreadable */ }
+/** `fn` over every item, `n` at a time, results in the items' order. */
+export async function inBatches<T, R>(items: T[], n: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } }));
+  return out;
+}
+
+/** Every wav in a font folder, three levels deep, as paths within it. Hidden entries and packaging junk are not looked into. */
+async function walkWavs(dir: string, prefix = '', depth = 0): Promise<string[]> {
+  const out: string[] = [];
+  let names: string[] = [];
+  try { names = await readdir(dir); } catch { return out; }
+  for (const n of names) {
+    if (n.startsWith('.') || n === '__MACOSX') continue;
+    const p = join(dir, n);
+    if (/\.wav$/i.test(n)) out.push(prefix + n);
+    else if (depth < 3 && (await isDir(p))) out.push(...(await walkWavs(p, `${prefix}${n}/`, depth + 1)));
   }
-  for (const { name, p } of entries) {
+  return out;
+}
+
+/**
+ * The listing both fonts pages feed the one checker (core's checkFontListing): every wav of a font with its size and
+ * first bytes. Sizes and headers are read many at a time: a font is a hundred small files.
+ */
+export async function readFontListing(dir: string, stopped: () => boolean = () => false): Promise<FontListingEntry[]> {
+  const rels = await walkWavs(dir);
+  const found = await inBatches(rels, 24, async (rel): Promise<FontListingEntry | null> => {
     if (stopped()) throw new Error(STOPPED);
-    const s = await stat(p);
-    if (!s.isFile()) continue;
-    let wav = null;
+    const p = join(dir, ...rel.split('/'));
     try {
-      const fh = await open(p, 'r');
+      const s = await stat(p);
+      if (!s.isFile()) return null;
+      let header: Uint8Array | null = null;
       try {
-        const buf = new Uint8Array(256);
-        const { bytesRead } = await fh.read(buf, 0, 256, 0);
-        wav = parseWavHeader(buf.subarray(0, bytesRead));
-      } finally { await fh.close(); }
-    } catch { /* unreadable file */ }
-    files.push({ name, size: s.size, wav });
-  }
-  return files;
+        const fh = await open(p, 'r');
+        try {
+          const buf = new Uint8Array(WAV_HEADER_BYTES);
+          const { bytesRead } = await fh.read(buf, 0, WAV_HEADER_BYTES, 0);
+          header = buf.subarray(0, bytesRead);
+        } finally { await fh.close(); }
+      } catch { /* unreadable file */ }
+      return { path: rel, size: s.size, header };
+    } catch { return null; }
+  });
+  return found.filter((e): e is FontListingEntry => !!e);
 }
 
 export async function checkFontDir(dir: string, stopped?: () => boolean): Promise<FontEntry> {
-  const files = await readFontFiles(dir, stopped);
-  return { name: basename(dir), path: dir, report: checkFont(files) };
+  return { name: basename(dir), path: dir, report: checkFontListing(await readFontListing(dir, stopped)).report };
 }
 
 export async function listFonts(root: string): Promise<FontEntry[]> {
