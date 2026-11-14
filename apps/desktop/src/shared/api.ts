@@ -261,6 +261,8 @@ export interface HiltwrightApi {
     listFonts(root: string): Promise<FontEntry[]>;
     /** Flush and dismount the card's volume, as 'Safely remove' does. Before the saber takes its card back. */
     eject(root: string): Promise<{ ok: boolean; detail: string }>;
+    /** Whether a folder of this name is on the card at `root`. */
+    hasFolder(root: string, name: string): Promise<boolean>;
     /** A font's playable sounds, from a known card. Slow over the saber's USB link. */
     readFont(root: string, fontName: string): Promise<FontSounds>;
     /** Progress of readFont and fontLibrary.readFont. */

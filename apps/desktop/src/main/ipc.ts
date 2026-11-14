@@ -12,7 +12,7 @@ import type { LookDef } from '@hiltwright/core';
 import { Snapshots } from './snapshots';
 import { lookUpWanted, proffieSerials } from './usb';
 import { activeWant, wantSerial } from './serialGate';
-import { checkFontDir, copyFont, listFonts, listTracks, locateCards, readVoicePack, ejectVolume, readFontSounds } from './sd';
+import { checkFontDir, copyFont, listFonts, listTracks, locateCards, readVoicePack, ejectVolume, readFontSounds, hasFolder } from './sd';
 import { cancelSetup, ensureToolchainRoot, installToolchain, lockFolder, plannedToolchainRoot, setupOnce, toolchainStatus, userBuildRoot } from './toolchain';
 import { listPacks, packFont, packMesh, userPacksDir } from './packs';
 import { FontLibrary, type ImportResult } from './fontLibrary';
@@ -146,6 +146,7 @@ export function registerIpc(): void {
   handle('sd:locate', async () => { const cards = await locateCards(); knownRoots = new Set(cards.map((c) => c.root)); return cards; });
   handle('sd:listFonts', (_e, r: unknown) => listFonts(root(r)));
   handle('sd:eject', (_e, r: unknown) => ejectVolume(root(r)));
+  handle('sd:hasFolder', (_e, r: unknown, name: unknown) => hasFolder(root(r), str(name, 200)));
   // The font library: fonts the owner added, in a folder of their choosing (default userData/fonts). Where it is lives
   // in fontlibrary.json, kept by the safe store; every font library request waits until that has been read.
   interface LibSettings { root?: string; legacyDismissed?: boolean }

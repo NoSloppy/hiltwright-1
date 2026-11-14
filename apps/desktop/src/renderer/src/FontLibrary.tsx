@@ -85,7 +85,15 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
     void api().app.storeProblems().then((ps) => setProblems(ps.filter((x) => x.place === 'fonts')), () => undefined);
     setSelected((s) => (s && list.some((f) => f.folder === s) ? s : list[0]?.folder ?? null));
   }, []);
-  useEffect(() => { void refresh(); void api().sd.locate().then(setCards).catch(() => undefined); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  // The drive list, again whenever a saber shares its card or takes it back (card-safety 2.5).
+  const [looking, setLooking] = useState(true);
+  useEffect(() => {
+    let live = true;
+    setLooking(true);
+    void api().sd.locate().then((cs) => { if (live) setCards(cs); }, () => undefined).finally(() => { if (live) setLooking(false); });
+    return () => { live = false; };
+  }, [board.card.shared, board.card.root]);
   useEffect(() => api().fontLibrary.onProgress(setProgress), []);
   useEffect(() => {
     setDetail(null);
@@ -259,14 +267,14 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
         </section>
       </div>
 
-      {sel ? <FontDetail key={sel.folder} font={sel} detail={detail} card={card} askCard={pick.ask} player={player} onSetLogo={(m) => void setLogo(m)} onClearLogo={(m) => void clearLogo(m)} onDemo={onDemo} onChanged={onChanged} onRemoved={() => { player.stop(); void refresh(); }} />
+      {sel ? <FontDetail key={sel.folder} font={sel} detail={detail} card={card} askCard={pick.ask} looking={looking} player={player} onSetLogo={(m) => void setLogo(m)} onClearLogo={(m) => void clearLogo(m)} onDemo={onDemo} onChanged={onChanged} onRemoved={() => { player.stop(); void refresh(); }} />
         : <section className="panel"><div className="pb hint">Pick a font to see and hear what is in it.</div></section>}
     </div>
   );
 }
 
-function FontDetail({ font, detail, card, askCard, player, onSetLogo, onClearLogo, onDemo, onChanged, onRemoved }: {
-  font: LibraryFont; detail: LibraryFontDetail | null; card: CardInfo | null; askCard: boolean; player: ReturnType<typeof useSoundPlayer>;
+function FontDetail({ font, detail, card, askCard, looking, player, onSetLogo, onClearLogo, onDemo, onChanged, onRemoved }: {
+  font: LibraryFont; detail: LibraryFontDetail | null; card: CardInfo | null; askCard: boolean; looking: boolean; player: ReturnType<typeof useSoundPlayer>;
   onSetLogo: (maker: string) => void; onClearLogo: (maker: string) => void;
   onDemo: (folder: string) => void; onChanged: (f: LibraryFont) => void; onRemoved: () => void;
 }) {
@@ -279,6 +287,15 @@ function FontDetail({ font, detail, card, askCard, player, onSetLogo, onClearLog
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [note, setNote] = useState<{ tone: 'green' | 'amber' | 'red'; text: string; replace?: boolean } | null>(null);
   const [copying, setCopying] = useState(false);
+  // Replace on card, when this font's folder is already there; two clicks, as on Fonts & SD (card-safety 2.5).
+  const [onCard, setOnCard] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setOnCard(false); setConfirmReplace(false);
+    if (card) void api().sd.hasFolder(card.root, font.folder).then((v) => { if (live) setOnCard(v); }, () => undefined);
+    return () => { live = false; };
+  }, [card?.root, font.folder]);
   const save = async (patch: { name?: string; maker?: string; notes?: string; bundle?: string }) => {
     const same = (patch.name ?? font.meta.name) === font.meta.name && (patch.maker ?? font.meta.maker) === font.meta.maker && (patch.notes ?? font.meta.notes) === font.meta.notes && (patch.bundle ?? font.meta.bundle ?? '') === (font.meta.bundle ?? '');
     if (same) return;
@@ -292,8 +309,10 @@ function FontDetail({ font, detail, card, askCard, player, onSetLogo, onClearLog
   }, [detail]);
   const copy = async (replace: boolean) => {
     if (!card) return;
+    if (replace && !confirmReplace) { setConfirmReplace(true); return; }
+    setConfirmReplace(false);
     setCopying(true); setNote(null);
-    try { const e = await api().fontLibrary.copyToCard(font.folder, card.root, replace); setNote({ tone: 'green', text: `Copied to the card at ${card.root} as ${e.name} (${e.report.files} sounds).` }); }
+    try { const e = await api().fontLibrary.copyToCard(font.folder, card.root, replace); setOnCard(true); setNote({ tone: 'green', text: `${replace ? 'Replaced on' : 'Copied to'} the card at ${card.root} as ${e.name} (${e.report.files} sounds).` }); }
     catch (err) { const t = cleanErr(err); setNote({ tone: /already on the card/.test(t) ? 'amber' : 'red', text: t, replace: /already on the card/.test(t) }); }
     finally { setCopying(false); }
   };
@@ -396,7 +415,7 @@ function FontDetail({ font, detail, card, askCard, player, onSetLogo, onClearLog
       <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }}>
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}{note.replace && <> <button type="button" className="holo" disabled={copying} onClick={() => void copy(true)}>Replace it</button></>}</span></div>}
         <div className="row" style={{ gap: 8 }}>
-          <button type="button" className="btn sm pri" disabled={!card || copying} title={card ? `Copy this font's folder onto the card at ${card.root}` : askCard ? 'More than one ProffieOS card is in. Choose which one on Fonts & SD first.' : 'No ProffieOS card found. Put one in a reader, or share the saber’s card on Fonts & SD.'} onClick={() => void copy(false)}><span className="b"><span className="i"><Icon name="sd" />{copying ? 'Copying…' : card ? `Copy to card ${card.root}` : askCard ? 'Choose the card on Fonts & SD' : 'No card'}</span></span></button>
+          <button type="button" className="btn sm pri" disabled={!card || copying} title={card ? `Copy this font's folder onto the card at ${card.root}` : askCard ? 'More than one ProffieOS card is in. Choose which one on Fonts & SD first.' : 'No ProffieOS card found. Put one in a reader, or share the saber’s card on Fonts & SD.'} onClick={() => void copy(onCard)}><span className="b"><span className="i"><Icon name="sd" />{copying ? 'Copying…' : card ? (onCard ? (confirmReplace ? `Really replace ${font.folder}?` : `Replace on card ${card.root}`) : `Copy to card ${card.root}`) : looking ? 'Looking for a card…' : askCard ? 'Choose the card on Fonts & SD' : 'No card'}</span></span></button>
           <button type="button" className="btn sm ghost" onClick={() => void api().fontLibrary.open(font.folder)}><span className="b"><span className="i">Show files</span></span></button>
           {confirmRemove
             ? <button type="button" className="btn sm danger" style={{ marginLeft: 'auto' }} onClick={() => void api().fontLibrary.remove(font.folder).then(onRemoved, (err) => setNote({ tone: 'red', text: cleanErr(err) }))}><span className="b"><span className="i"><Icon name="trash" />Yes, remove</span></span></button>

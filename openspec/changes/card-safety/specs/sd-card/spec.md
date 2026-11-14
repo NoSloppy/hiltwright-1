@@ -55,6 +55,8 @@ The owner SHALL be able to choose a font folder on the computer. They SHALL see 
 
 **Replacing** SHALL ask the owner to confirm, naming the font. Once confirmed, the font on the card SHALL end up with exactly the new folder's files, none of the old ones mixed in.
 
+The font library SHALL offer the same replace (added at the owner's request, 2026-11-14). When the selected font's folder is already on the chosen card, its button SHALL read "Replace on card" instead of "Copy to card", with the same confirmation.
+
 #### Scenario: Copying a new font
 - **WHEN** the owner chooses a font folder and copies it to a card that does not have it
 - **THEN** the font appears on the card under the same folder name, and the original folder is unchanged
@@ -71,6 +73,10 @@ The owner SHALL be able to choose a font folder on the computer. They SHALL see 
 #### Scenario: Replace needs a confirmation
 - **WHEN** the owner clicks Replace once
 - **THEN** nothing is copied until they confirm, and choosing another font cancels the confirmation
+
+#### Scenario: Replacing from the font library
+- **WHEN** the owner selects a library font whose folder is already on the chosen card
+- **THEN** its button reads "Replace on card"; the first click asks "Really replace <name>?", and the second replaces it
 
 #### Scenario: A name ProffieOS cannot use
 - **WHEN** the owner chooses a folder named `Kylo;old`

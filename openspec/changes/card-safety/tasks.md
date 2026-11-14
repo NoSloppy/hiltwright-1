@@ -82,6 +82,22 @@
     - The closed Card field shows the chosen drive's name, and the list also appears when it is asking about a single drive.
     - Tests: `cardChoice.test.ts` (11) and `sdLayout.test.ts` (9) pass. `npm run typecheck` passes.
     - Offscreen screenshot with an empty scratch card: "No ProffieOS card found. Choose a card to use", with the list open on the card.
+- [x] 2.5 The font library (owner, 2026-11-14):
+  - **Replace on card:** when the selected font's folder is on the chosen card, the button reads "Replace on card", with the two-click confirmation. The check uses a new `sd:hasFolder(root, name)`.
+  - **Looking again:** the library looks for cards again when a card is shared or given back, and shows "Looking for a card…" meanwhile.
+  - **Logged failures:** main logs a drive list that fails or times out (raised from 8 s to 15 s), instead of returning nothing silently.
+
+  Verify:
+  - `npm run typecheck`
+  - an offscreen screenshot with a scratch card holding the selected font's folder, showing "Replace on card"
+  - the owner's look in 4.1
+  - **Result, 2026-11-14.**
+    - **Main:** `hasFolder(root, name)` with IPC `sd:hasFolder`, which accepts only the roots `sd.locate` found. The drive list's PowerShell call has 15 s, and a failure is logged (`[sd] the drive list failed: …`).
+    - **Font library:**
+      - It looks for cards again whenever `board.card.shared` or `board.card.root` changes, and shows "Looking for a card…" meanwhile.
+      - When the selected font's folder is on the chosen card, its button reads "Replace on card <root>", then "Really replace <folder>?", and a second click replaces it. Its note then says "Replaced on…".
+      - A library font whose folder name differs from the card's, such as `Ben-2` against `Ben`, is still a plain copy.
+    - `npm run typecheck` passes; `npm test` 659 passed (gated skipped). Offscreen screenshot with board access off, a scratch library holding `Kylo` and a scratch card already holding `Kylo`: the button reads "Replace on card …".
 
 ## 3. The shared card on every page (renderer)
 
@@ -152,6 +168,10 @@
     - **Pages locked while shared** passed (owner).
     - **Found:** the "Card" list on Fonts & SD was a blank box. It used the browser's `<select>`, which the app's field styling hides. It now uses the app's own `Select`. It was also off while fonts were being read, which on a shared card hardly ever ends, so it now waits only for a copy.
   - **Run 5, 2026-11-14:** with hote2 sharing and a card in the reader, two cards worked and switching worked (owner). But the list's shown choice changed only once the drive list and the new card's reading came back, which made the list seem not to work. Fixed: a switch shows the chosen card at once and clears the old card's lists, and its fonts load after.
+  - **Run 6, 2026-11-14:**
+    - **Replace from Fonts & SD** passed (owner).
+    - **The font library offered no replace,** and its Copy copied without asking. That copy was correct: the library's `Ben-2` beside the card's `Ben` is a different folder. Replace is now offered when the folder names match (2.5).
+    - **The font library showed "No card"** while Fonts & SD had `H:`. Most likely its single drive lookup came back empty, timed out while the shared card was being read. Fixed in 2.5: it looks again on share and give-back, says when it is looking, and the lookup is logged with 15 s to answer.
 
   Record each result here.
 - [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.

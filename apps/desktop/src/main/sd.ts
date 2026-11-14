@@ -84,7 +84,11 @@ async function candidateRoots(): Promise<Candidate[]> {
   const override = process.env.HILTWRIGHT_SD_ROOT;
   if (override) return [{ root: override, label: 'dev override', free: null, total: null, saberSerial: null }];
   if (process.platform === 'win32') {
-    const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', DRIVES_SCRIPT], { timeout: 8000, windowsHide: true }, (err, stdout) => resolve(err ? '' : stdout)));
+    // 15 s: while a card shared over USB is being read, Windows answers slowly, and a silent empty list reads as "no card".
+    const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', DRIVES_SCRIPT], { timeout: 15000, windowsHide: true }, (err, stdout) => {
+      if (err) console.log(`[sd] the drive list failed: ${String(err).slice(0, 200)}`);
+      resolve(err ? '' : stdout);
+    }));
     return parseRemovableDrives(out);
   }
   const bases = process.platform === 'darwin' ? ['/Volumes'] : ['/media', '/run/media', '/mnt'];
@@ -401,4 +405,9 @@ export async function copyFont(src: string, root: string, options: CopyOptions |
 
 export function soundKind(fileName: string): string {
   return classifySound(fileName).kind;
+}
+
+/** Whether a folder of this name is on the card: the font library offers Replace when it is (card-safety 2.5). */
+export async function hasFolder(root: string, name: string): Promise<boolean> {
+  return isDir(join(root, basename(name)));
 }

@@ -42,6 +42,7 @@ const api: HiltwrightApi = {
     locate: () => ipcRenderer.invoke('sd:locate'),
     listFonts: (root) => ipcRenderer.invoke('sd:listFonts', root),
     eject: (root) => ipcRenderer.invoke('sd:eject', root),
+    hasFolder: (root, name) => ipcRenderer.invoke('sd:hasFolder', root, name),
     readFont: (root, fontName) => ipcRenderer.invoke('sd:readFont', root, fontName),
     onReadFontProgress: (cb) => { const h = (_e: unknown, p: { file: string; done: number; total: number }) => cb(p); ipcRenderer.on('sd:readFont:progress', h); return () => ipcRenderer.off('sd:readFont:progress', h); },
     listTracks: (root) => ipcRenderer.invoke('sd:listTracks', root),
