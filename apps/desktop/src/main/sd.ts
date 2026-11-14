@@ -109,10 +109,12 @@ export async function looksLikeFont(dir: string): Promise<boolean> {
  * as "Safely remove". Done before the saber is told to take its card back, otherwise a half-written font is lost.
  */
 export async function ejectVolume(root: string): Promise<{ ok: boolean; detail: string }> {
+  // Hiltwright's own reading of the card holds files open, and Windows will not eject a drive with files open.
+  await stopReading(root);
   if (process.platform === 'win32') {
     const letter = root.replace(/[\\/]+$/, '');
     if (!/^[A-Za-z]:$/.test(letter)) return { ok: false, detail: `Not a drive letter: ${root}` };
-    const script = `$sh = New-Object -ComObject Shell.Application; $v = $sh.NameSpace(17).ParseName('${letter}'); if ($v -eq $null) { 'gone' } else { $v.InvokeVerb('Eject'); Start-Sleep -Milliseconds 1500; if (Test-Path '${letter}\\') { 'still-there' } else { 'ejected' } }`;
+    const script = `$sh = New-Object -ComObject Shell.Application; $v = $sh.NameSpace(17).ParseName('${letter}'); if ($v -eq $null) { 'gone' } else { $v.InvokeVerb('Eject'); for ($i = 0; $i -lt 16 -and (Test-Path '${letter}\\'); $i++) { Start-Sleep -Milliseconds 500 }; if (Test-Path '${letter}\\') { 'still-there' } else { 'ejected' } }`;
     const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 15000, windowsHide: true }, (err, stdout) => resolve(err ? `error ${String(err)}` : String(stdout).trim())));
     if (out === 'ejected' || out === 'gone') return { ok: true, detail: out };
     return { ok: false, detail: out === 'still-there' ? 'Windows did not release the drive. Close any window or program that has files on it open, then try again.' : out };
@@ -121,6 +123,29 @@ export async function ejectVolume(root: string): Promise<{ ok: boolean; detail: 
   const out = await new Promise<string>((resolve) => execFile(cmd[0], [...cmd[1]], { timeout: 15000 }, (err, stdout, stderr) => resolve(err ? `error ${String(stderr || err)}` : 'ejected')));
   return { ok: out === 'ejected', detail: out };
 }
+
+/**
+ * Reads of a card under way, so giving a shared card back can stop them: over USB, listing a card's fonts takes
+ * minutes, and the files it holds open stop Windows ejecting the drive (card-safety 4.1, 2026-11-14).
+ */
+const reads = new Map<string, { active: number; gen: number }>();
+const cardKey = (root: string) => root.replace(/[\\/]+$/, '').toUpperCase();
+function beginRead(root: string): { stopped: () => boolean; end: () => void } {
+  const k = cardKey(root);
+  const r = reads.get(k) ?? { active: 0, gen: 0 };
+  reads.set(k, r);
+  r.active++;
+  const gen = r.gen;
+  return { stopped: () => r.gen !== gen, end: () => { r.active = Math.max(0, r.active - 1); } };
+}
+/** Stop every read of this card and wait, up to 10 s, for them to let go of its files. */
+export async function stopReading(root: string, waitMs = 10_000): Promise<void> {
+  const r = reads.get(cardKey(root));
+  if (!r) return;
+  r.gen++;
+  for (const until = Date.now() + waitMs; r.active > 0 && Date.now() < until;) await new Promise((res) => setTimeout(res, 100));
+}
+const STOPPED = 'Stopped: the card is being given back.';
 
 /** The sounds a listen needs. Everything else in a font (tracks, ini files, quotes) stays on the card. */
 const PLAYABLE = /^(hum|humm|out|poweron|fastout|preon|in|poweroff|pwroff|pstoff|clsh|clash|blst|blaster|stab|force|font|boot|lock|lockup|bgnlock|endlock|drag|bgndrag|enddrag|lb|bgnlb|endlb|swingl|swingh|lswing|hswing|swng|swing|tr)$/i;
@@ -183,7 +208,7 @@ export async function locateCards(): Promise<CardInfo[]> {
 }
 
 /** The font's wavs: those in the folder itself, and those one level down in an effect's subfolder. */
-async function readFontFiles(dir: string): Promise<FontFile[]> {
+async function readFontFiles(dir: string, stopped: () => boolean = () => false): Promise<FontFile[]> {
   const files: FontFile[] = [];
   const entries: { name: string; p: string }[] = [];
   for (const name of await readdir(dir)) {
@@ -194,6 +219,7 @@ async function readFontFiles(dir: string): Promise<FontFile[]> {
     try { for (const f of await readdir(p)) if (/\.wav$/i.test(f)) entries.push({ name: /^\d+\.wav$/i.test(f) ? `${name}${f}` : f, p: join(p, f) }); } catch { /* unreadable */ }
   }
   for (const { name, p } of entries) {
+    if (stopped()) throw new Error(STOPPED);
     const s = await stat(p);
     if (!s.isFile()) continue;
     let wav = null;
@@ -210,20 +236,24 @@ async function readFontFiles(dir: string): Promise<FontFile[]> {
   return files;
 }
 
-export async function checkFontDir(dir: string): Promise<FontEntry> {
-  const files = await readFontFiles(dir);
+export async function checkFontDir(dir: string, stopped?: () => boolean): Promise<FontEntry> {
+  const files = await readFontFiles(dir, stopped);
   return { name: basename(dir), path: dir, report: checkFont(files) };
 }
 
 export async function listFonts(root: string): Promise<FontEntry[]> {
-  const out: FontEntry[] = [];
-  for (const name of (await readdir(root)).sort((a, b) => a.localeCompare(b))) {
-    if (name.startsWith('.') || name.startsWith('$') || /^(tracks|system volume information)$/i.test(name)) continue;
-    const p = join(root, name);
-    if (!(await isDir(p)) || !(await looksLikeFont(p))) continue;
-    out.push(await checkFontDir(p));
-  }
-  return out;
+  const read = beginRead(root);
+  try {
+    const out: FontEntry[] = [];
+    for (const name of (await readdir(root)).sort((a, b) => a.localeCompare(b))) {
+      if (read.stopped()) throw new Error(STOPPED);
+      if (name.startsWith('.') || name.startsWith('$') || /^(tracks|system volume information)$/i.test(name)) continue;
+      const p = join(root, name);
+      if (!(await isDir(p)) || !(await looksLikeFont(p))) continue;
+      out.push(await checkFontDir(p, read.stopped));
+    }
+    return out;
+  } finally { read.end(); }
 }
 
 /** The Fett263 voice pack in the card's common folder: voicepack.ini and the menu number sounds. */
@@ -237,14 +267,18 @@ export async function readVoicePack(root: string): Promise<VoicePackStatus> {
 }
 
 export async function listTracks(root: string): Promise<{ name: string; size: number }[]> {
-  const dir = join(root, 'tracks');
-  if (!(await isDir(dir))) return [];
-  const out: { name: string; size: number }[] = [];
-  for (const name of await readdir(dir)) {
-    if (!/\.wav$/i.test(name)) continue;
-    out.push({ name: `tracks/${name}`, size: (await stat(join(dir, name))).size });
-  }
-  return out.sort((a, b) => a.name.localeCompare(b.name));
+  const read = beginRead(root);
+  try {
+    const dir = join(root, 'tracks');
+    if (!(await isDir(dir))) return [];
+    const out: { name: string; size: number }[] = [];
+    for (const name of await readdir(dir)) {
+      if (read.stopped()) throw new Error(STOPPED);
+      if (!/\.wav$/i.test(name)) continue;
+      out.push({ name: `tracks/${name}`, size: (await stat(join(dir, name))).size });
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  } finally { read.end(); }
 }
 
 export interface CopyOptions {

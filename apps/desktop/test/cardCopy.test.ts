@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { copyFile, mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { copyFont, listFonts } from '../src/main/sd';
+import { copyFont, listFonts, stopReading } from '../src/main/sd';
 
 /** A minimal 16-bit PCM wav header, mono or stereo, padded to `extra` bytes of silence. */
 function wav(channels = 1, extra = 0): Buffer {
@@ -118,6 +118,15 @@ describe('copies onto the card are all or nothing (card-safety D5)', () => {
     await copyFont(await source('Grey'), root, {});
     expect((await readdir(root)).sort()).toEqual(['Grey', 'Kylo', 'Vader']);
     expect(await readFile(join(root, 'Kylo', 'hum.wav'))).toHaveLength(44);
+  });
+
+  it('giving the card back stops a reading of it, so its files are let go (4.1, 2026-11-14)', async () => {
+    const root = await card(true);
+    const listing = listFonts(root);
+    await stopReading(root);
+    await expect(listing).rejects.toThrow('Stopped: the card is being given back.');
+    // Once stopped, a new reading works again.
+    expect((await listFonts(root)).map((f) => f.name)).toEqual(['Kylo', 'Vader']);
   });
 
   it('progress counts every file up to the total', async () => {

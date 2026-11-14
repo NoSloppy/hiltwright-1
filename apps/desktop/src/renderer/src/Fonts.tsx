@@ -94,10 +94,12 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     setUsb('ejecting');
     if (root) {
       const e = await api().sd.eject(root);
+      console.log(`[sd] eject ${root}: ${e.ok ? e.detail : `not released (${e.detail})`}`);
       if (!e.ok) { setUsb('idle'); setUsbNote(e.detail); return; }
     }
     let access: boolean | null = null;
     try { access = parseSdAccess((await board.send('sd 0', { idleMs: 700 })).lines); } catch { /* the saber may have dropped serial briefly */ }
+    console.log(`[sd] gave the card back: the saber says ${access === false ? 'SD Access OFF' : access === true ? 'SD Access ON' : 'nothing about its card'}`);
     setUsb('idle'); setOwnerEjects(false);
     if (access === false) board.cardGivenBack();
     else setUsbNote('The saber did not confirm it took its card back. Try again, or unplug it and plug it back in.');

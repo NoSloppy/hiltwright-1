@@ -116,6 +116,11 @@
   - **Interrupted copy:** pull the reader's card during a copy, put it back, and copy again. The font is listed once, whole.
   - **Speed (SF22):** time one font copied over USB and the same font from the reader.
   - **Run 1, 2026-11-14:** share worked (`h9| sd 1` → `SD Access ON` at 14:20:16, `I:` marked "hotetest's own card"). But reading the card's fonts over USB was still running two minutes later, and that greyed out "Give the card back" (owner). Fixed: the scan is tracked apart from `busy` and goes stale on give-back, and Give back is off only during a copy. While reading, the line says "reading the fonts…" instead of "0 fonts · 0 tracks".
+  - **Run 1, continued:** with the button back, "Give the card back" failed twice with "Windows did not release the drive" (owner, with Explorer closed). The reading of the card's fonts was still running in main, 4 minutes on, with files open on `I:`. The renderer's stale flag had not stopped it. Fixed:
+    - `listFonts` and `listTracks` can be stopped between files (`stopReading(root)`), and `ejectVolume` stops them and waits up to 10 s for their files to close before it ejects.
+    - The eject now waits up to 8 s for Windows to drop the drive, where it used to wait 1.5 s.
+    - The page logs each eject and the saber's answer to `sd 0`.
+    - New test in `cardCopy.test.ts`: a listing stopped mid-way rejects, and a new one works.
 
   Record each result here.
 - [ ] 4.2 Strike through measurement 5 in `docs/00-plan.md` section 8, with the measured share, give-back and copy speeds from 4.1. Verify the plan states them.
