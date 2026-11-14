@@ -15,6 +15,7 @@ import { adoptOnce, asArrayBuffer } from './hiltStore';
 import { ContributorLogo, useContributors } from './credits';
 import type { Object3D } from 'three';
 import { Select } from './Select';
+import { LookPreviewNote } from './PreviewNote';
 
 // Hiltwright's own looks; the owner's saved looks (built or pasted) join them once loaded, when they can be simulated.
 /** The hilt the room opens with: a pack that ships inside the app. */
@@ -457,6 +458,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
                     <Select value={curId} aria-label={staff ? 'Staff blade style' : 'Style'} onChange={(e) => setId(e.target.value)}><optgroup label="Hiltwright">{STARTERS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</optgroup>{saved.length > 0 && <optgroup label="Your styles">{saved.map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}</option>)}</optgroup>}</Select></span>
                 </label>
                 <span className="hint" style={{ fontSize: 12 }}>{cur.description}</span>
+                <LookPreviewNote look={cur} />
                 {cols.length > 0 && (
                   <div className="col" style={{ gap: 6 }}>
                     <span className="label">Colours</span>

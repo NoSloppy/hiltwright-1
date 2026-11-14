@@ -2,7 +2,7 @@
 // so Presets, Styles and the demo room can preview them, and an edited style gets a fresh one.
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { BladeSim, canSimulateLook, defaultStyle, evaluateStyle, parseStyle, registerLookSim, registerStyleSim, unregisterStyleSim, type LookDef } from '../src';
+import { BladeSim, approximateWords, canSimulateLook, defaultStyle, defaultTree, evaluateStyle, lookPreviewReport, parseStyle, registerLookSim, registerStyleSim, unregisterStyleSim, type LookDef } from '../src';
 
 const N = 60;
 /** The last frame after igniting and waiting a second and a half. */
@@ -49,6 +49,17 @@ describe('saved styles in the simulator', () => {
     // The editor's save registers the new version under the same id (StyleEditor.tsx, registerStyleSim).
     registerStyleSim(mine.id, evaluateStyle(parseStyle('StylePtr<Blue>()')).make);
     expect(colourAt(lit(mine.id), 30)).toEqual([0, 0, 1]);
+  });
+
+  it('ST20 the report travels with a saved style, for every page that previews it', () => {
+    expect(lookPreviewReport(look({ code: 'StylePtr<Layers<Red, NoSuchLayerL<White>, InOutTrL<TrInstant,TrInstant>>>()' }))).toEqual({ unsupported: ['NoSuchLayerL'], approximate: [] });
+    expect(lookPreviewReport(look({ code: 'StylePtr<HwX>()', define: 'using HwX = Layers<RotateColorsX<Variation,Red>, InOutTrL<TrInstant,TrInstant>>;' }))).toEqual({ unsupported: [], approximate: ['Variation'] });
+    expect(lookPreviewReport(look({ source: 'built', code: 'StylePtr<HwT>()', style: defaultTree() } as Partial<LookDef>))).toEqual({ unsupported: [], approximate: [] });
+    // Nothing to say about the beginner editor's blocks, Hiltwright's own styles, or code that cannot be read.
+    expect(lookPreviewReport(look({ source: 'built', code: 'StylePtr<HwBuilt>()', style: defaultStyle('Mine') } as Partial<LookDef>))).toBeNull();
+    expect(lookPreviewReport(look({ source: 'library', code: 'StylePtr<HwBlade>()' } as Partial<LookDef>))).toBeNull();
+    expect(lookPreviewReport(look({ code: 'this is not a style' }))).toBeNull();
+    expect(approximateWords('Variation')).toMatch(/variation/);
   });
 
   it('2.13 registering an id again through registerLookSim keeps the simulator it has', () => {

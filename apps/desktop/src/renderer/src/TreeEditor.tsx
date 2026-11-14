@@ -9,9 +9,8 @@ import { RECIPES, cloneNode, composedName, firstColour, layerCue, newLayer, pars
 import { Icon } from './Icon';
 import { LayerCardView } from './LayerCard';
 import { NodeCard } from './NodeCard';
+import { PreviewNote } from './PreviewNote';
 import { describe, friendly, friendlyEnum, layerPickList } from './treeWords';
-
-const APPROX_WORDS = (n: string): string => ({ ClashImpactF: 'clash strength (soft, or hard with a swing behind it)', SoundLevel: 'sound level (a modelled hum)', WavLen: 'sound lengths (1 s)', VolumeLevel: 'volume', SwingAcceleration: 'swing acceleration', TwistAcceleration: 'twist acceleration', MarbleF: 'the marble (gravity from the tilt only)', OriginalBlastF: 'the original blast shape' } as Record<string, string>)[n] ?? friendly(n);
 
 /** A layer's name when it has not been given one: what the card calls it, or the template's name. */
 function defaultName(n: Node, card: LayerCard): string {
@@ -164,8 +163,7 @@ export function TreeEditor({ tree, labels, layerKeys, onChange, onPreview, onCue
 
   return (
     <div className="col" style={{ gap: 12 }}>
-      {unsupported.length > 0 && <div className="note amber"><Icon name="warn" /><span>The preview cannot show {unsupported.map(friendly).join(', ')} yet; they compile and run on the saber as written.</span></div>}
-      {approximate.length > 0 && <span className="hint">Modelled without the saber's sensors, so only roughly: {approximate.map(APPROX_WORDS).join(', ')}.</span>}
+      <PreviewNote report={{ unsupported, approximate }} />
       <div className="layerswrap"><div className="layers">
         <div className="stackcol">
           <div className="row between" style={{ padding: '2px 2px 8px' }}>

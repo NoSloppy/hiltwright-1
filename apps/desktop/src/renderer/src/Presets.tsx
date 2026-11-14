@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STARTER_LOOKS, argInfo, bankFromSaber, bankToModel, colorWordToHex, formatBuiltin, formatStyleArgs, hexToColorWord, lookSlots, parseStyleArgs, registerLookSim, starterLookFor, type LookDef, type PresetBank, type SaberConfigModel } from '@hiltwright/core';
 import { BladePreview, canSimulate } from './BladePreview';
+import { LookPreviewNote } from './PreviewNote';
 import { SaberControls } from './Controls';
 import type { Board } from './board';
 import { Icon } from './Icon';
@@ -278,6 +279,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
                           </Select></span>
                         {shownLook && !onSaber && <span className="chip warn" title="Goes on with the next Build & Install"><Icon name="clock" />Queued</span>}
                         {shownLook && canSimulate(shownLook.id) && <div style={{ width: ROLE_META[b.role].kind === 'pixel' ? 150 : 24, flex: 'none' }}><BladePreview lookId={shownLook.id} args={args} leds={ROLE_META[b.role].kind === 'pixel' ? Math.min(60, Math.max(4, Math.round(b.pixels / 3))) : 1} dot={ROLE_META[b.role].kind !== 'pixel'} size="sm" /></div>}
+                        {shownLook && canSimulate(shownLook.id) && <LookPreviewNote look={shownLook} compact />}
                       </div>
                       {shownLook && shownLook.args.length > 0 && (
                         <div className="row wrap" style={{ gap: 6 }}>

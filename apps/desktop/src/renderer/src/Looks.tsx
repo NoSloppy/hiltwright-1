@@ -10,6 +10,7 @@ import { ContributorLogo, CreditCard, NOT_A_CONTRIBUTOR, useContributors } from 
 import { BladePreview, canSimulate } from './BladePreview';
 import { installedLookIds, queuedLookIds } from './slotModel';
 import { modelAfterPutIn, planPutIn, putInResult, putInWords } from './styleToSaber';
+import { LookPreviewNote } from './PreviewNote';
 import type { Workspace } from './workspace';
 import { Select } from './Select';
 
@@ -228,6 +229,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
           </div>
           <div className="pb col scroll" style={{ gap: 14, overflowX: 'hidden' }}>
             <BladePreview key={sel.id} lookId={sel.id} args={triedArgs} fallbackColor={tried[1] ?? sel.preview} dot={isDot(sel)} hilt={!isDot(sel)} controls />
+            <LookPreviewNote look={sel} />
 
             {sel.args.length > 0 && (
               <div className="col" style={{ gap: 8 }}>

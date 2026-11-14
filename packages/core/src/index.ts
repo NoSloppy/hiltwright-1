@@ -7,7 +7,7 @@ export { BladeSim, CLASH_G, PROPS, propBehaviour, type PropBehaviour, SIMULATED_
 export * from './styleBuilder';
 export * from './styleTree';
 export * from './layerCard';
-export { registerLookSim } from './lookSim';
+export { approximateWords, lookPreviewReport, registerLookSim } from './lookSim';
 export * from './banks';
 export * from './voicepack';
 export * from './xenopixel';
