@@ -116,4 +116,4 @@
     - With no battery it read 3.17 V. The no-battery note therefore cannot show on a V3. The owner chose to keep the 2 V rule and record the gap: the spec now has a "V3 with no battery" scenario, and design D6 records it.
     - The ten-selection stall check on a configured V3 is now part of `v3-verification` (roadmap 3.37).
 
-- [ ] 5.4 After archive, tick roadmap task 3.24a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
+- [x] 5.4 After archive, tick roadmap task 3.24a in `openspec/changes/beta-1-roadmap/tasks.md`; verify the tick.
