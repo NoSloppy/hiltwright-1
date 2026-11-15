@@ -27,7 +27,7 @@ Blade ID and the Xenopixel import are hidden behind one switch. The code stays i
 
 The installer is unsigned, so Windows will warn you before it runs. The install guide covers each Windows barrier to unsigned software.
 
-Install guide: TODO(owner) link
+Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.1/docs/install-guide.md
 
 ## Licence and source
 
@@ -35,6 +35,6 @@ Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at h
 
 ## Report a problem
 
-TODO(owner): feedback channel
+Open an issue at https://github.com/safwyls/hiltwright/issues. Each report is answered: it is fixed, planned for a later release, or closed with a reason.
 
 When you report a problem, press "Save diagnostics" in the app and attach the file it saves.

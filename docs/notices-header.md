@@ -10,7 +10,7 @@ Hiltwright is licensed under GPL-3.0-or-later; the full text is in `LICENSE` at 
 - Licence: GPL-3.0 (the upstream LICENCE.txt, per `docs/01-proffieos-recon.md`).
 - Source: https://github.com/profezzorn/ProffieOS
 - Use in Hiltwright: the blade simulator is ported from ProffieOS's GPL headers. The firmware that Hiltwright compiles is built from ProffieOS pinned at tag `v8.10` (`PROFFIEOS_TAG` in `apps/desktop/src/main/toolchain.ts`), downloaded from https://github.com/profezzorn/ProffieOS/archive/refs/tags/v8.10.zip on first run.
-- TODO(owner): state where the source offer for the packaged app is published (the license-and-notices proposal asks for one) and whether the ProffieOS source and config are placed on the saber's SD card.
+- Source of Hiltwright itself: each release is built from the tag of the same name in the public repository, https://github.com/safwyls/hiltwright. The About page links to the exact tag. The firmware Hiltwright builds for a saber comes from the ProffieOS release above and the configuration the app shows on the Build & Install page.
 
 ## Tools downloaded at first run (not bundled)
 
@@ -27,33 +27,33 @@ Hiltwright does not ship these. The first-run toolchain install and the driver s
 - Source: board index https://profezzorn.github.io/arduino-proffieboard/package_proffieboard_index.json; core repository https://github.com/profezzorn/arduino-proffieboard.
 - Version: not pinned by Hiltwright. arduino-cli installs whatever version the index serves at install time (`docs/02-toolchain-usb-recon.md` recorded platform v4.6 in the index at the time of recon).
 - Basis: a fork of the Arduino STM32L4 core (`docs/01-proffieos-recon.md`).
-- Licence: TODO(owner): still unconfirmed. https://github.com/profezzorn/arduino-proffieboard shows no LICENSE file and no licence section in its README, and the upstream https://github.com/GrumpyOldPizza/arduino-STM32L4 shows none either. Ask the maintainer, or check the headers in the core's source, before any bundling.
+- Licence: its repository (https://github.com/profezzorn/arduino-proffieboard) and the project it is based on (https://github.com/GrumpyOldPizza/arduino-STM32L4) state no single licence; the source files carry their own notices. Hiltwright does not distribute it: arduino-cli downloads it from its publisher onto your computer.
 
 ### xPack arm-none-eabi-gcc 14.2.1-1.1
 
 - Installed as a dependency of the Proffieboard core (`docs/02-toolchain-usb-recon.md`).
 - Source: https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack (a binary distribution of GNU Arm Embedded GCC, by Liviu Ionescu).
-- Licence: the xPack packaging scripts are MIT (its README: "Unless otherwise stated, the original content is released under the terms of the MIT License"; read at the repository URL above). TODO(owner): the licences of the GCC and binutils binaries inside the package (GNU licences) were not stated on the pages read; confirm from the package's own licence files.
+- Licence: the xPack packaging is MIT; the compiler and tools inside are GNU software under their own licences (GPL and others), whose texts are in the package's own folder after it is downloaded. Hiltwright does not distribute it.
 
 ### dfu-util
 
 - Comes with the Proffieboard core's tools folder; Hiltwright locates it there (`findDfuUtil` in `apps/desktop/src/main/toolchain.ts`).
 - Source: https://sourceforge.net/p/dfu-util/dfu-util/ (git repository; project page https://dfu-util.sourceforge.net/).
-- Licence: GPL version 2 (the project page says "This software is licensed under the GPL version 2"; read at https://dfu-util.sourceforge.net/). The current upstream release listed there is 0.11. TODO(owner): which version the Proffieboard core's tools folder ships is not recorded.
+- Licence: GPL version 2 (https://dfu-util.sourceforge.net/). Hiltwright does not distribute it: it arrives with the Proffieboard core, and Hiltwright runs it as a separate program.
 
 ### Windows bootloader driver installer (`proffie-dfu-setup.exe`)
 
 - Author: ProffieOS's author. It is a small libwdi-based installer (`apps/desktop/src/main/driver.ts`).
 - Source: https://fredrik.hubbe.net/lightsaber/proffie-dfu-setup.exe. Hiltwright checks the download against a published size (3034643 bytes) and SHA-256 (4773c8693cf62777cd8da4c95441690e7ae7c4171e8c1d533b1f6225f3bdc29e), refuses any other file, and launches it elevated.
-- Licence: TODO(owner): the installer's licence is not recorded. `docs/00-plan.md` notes that libwdi's wdi-simple is LGPL v3 and that reuse of the installer depends on its licence; confirm which applies before bundling.
+- Licence: not stated by its publisher. Hiltwright does not distribute it: it is downloaded from the address above when you ask for the driver, and run as it is.
 
 ## Sound fonts
 
 No sound font is bundled in this repository. Font packs are made with `apps/desktop/scripts/hwpack.ts`, which records each pack's creator and licence in its manifest and shows them in the app. The free ProffieOS font packs are CC BY-SA 4.0 (the packer's documented example). Commercial sound fonts are never redistributed (`docs/01-proffieos-recon.md`).
 
-- TODO(owner): confirm whether the free ProffieOS font packs ship with Beta 1, and if so name their authors and give their source links.
+Beta 1 ships no sound fonts.
 
 ## Built-in PunkSaber hilt
 
-- Shipped as `apps/desktop/resources/builtin/punk-saber.hwpack`. Its manifest records name "Punk Saber", creator "safwyls", licence "All rights reserved", with demo playback allowed and copying to a card not allowed.
-- TODO(owner): the manifest's licence "All rights reserved" does not state permission to redistribute the hilt inside a GPL-3.0-or-later app. Confirm the licence and the author name with the hilt's creator before the first public build, and update the manifest.
+- Shipped as `apps/desktop/resources/builtin/punk-saber.hwpack`. Made by safwyls, the author of Hiltwright.
+- Licence: Creative Commons Attribution 4.0 International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/. You may reuse the model with credit to safwyls.
