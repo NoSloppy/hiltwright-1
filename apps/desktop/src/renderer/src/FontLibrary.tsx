@@ -159,13 +159,11 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
   };
   const row = (f: LibraryFont) => (
     <tr key={f.folder} className={f.folder === selected ? 'on' : ''} onClick={() => setSelected(f.folder)} style={{ cursor: 'pointer' }}>
-      <td><span className="col" style={{ gap: 0 }}><span style={{ fontWeight: 600 }}>{f.meta.name}</span>{(f.meta.name !== f.folder || (groupBy !== 'bundle' && f.meta.bundle)) && <span className="hint ellip" style={{ fontSize: 11, maxWidth: 190 }} title={f.meta.bundle}>{f.meta.name !== f.folder && <span className="mono">{f.folder}</span>}{f.meta.name !== f.folder && groupBy !== 'bundle' && f.meta.bundle ? ' · ' : ''}{groupBy !== 'bundle' && f.meta.bundle}</span>}</span></td>
-      <td className="dim">{f.meta.maker ? <span className="row" style={{ gap: 8 }}><ContributorLogo name={f.meta.maker} logo={people.logoFor(f.meta.maker)} size={20} /><span>{f.meta.maker}</span></span> : <span className="mute">—</span>}</td>
-      <td className="dim">{TYPE[f.support.type]}</td>
-      <td className="dim small">{[f.support.smoothSwing ? 'SmoothSwing' : null, f.support.special.length ? `${f.support.special.length} special` : null].filter(Boolean).join(' · ') || '—'}</td>
-      <td className="mono dim small">{f.support.tracks || '—'}</td>
+      <td className="fit"><span className="col" style={{ gap: 0, minWidth: 0 }}><span className="ellip" style={{ fontWeight: 600 }} title={f.meta.name}>{f.meta.name}</span>{(f.meta.name !== f.folder || (groupBy !== 'bundle' && f.meta.bundle) || f.meta.maker) && <span className="hint ellip" style={{ fontSize: 11 }} title={f.meta.bundle}>{f.meta.maker && <span className="maker-sub">{f.meta.maker}{f.meta.name !== f.folder || (groupBy !== 'bundle' && f.meta.bundle) ? ' · ' : ''}</span>}{f.meta.name !== f.folder && <span className="mono">{f.folder}</span>}{f.meta.name !== f.folder && groupBy !== 'bundle' && f.meta.bundle ? ' · ' : ''}{groupBy !== 'bundle' && f.meta.bundle}</span>}</span></td>
+      <td className="dim col-maker">{f.meta.maker ? <span className="row" style={{ gap: 8 }}><ContributorLogo name={f.meta.maker} logo={people.logoFor(f.meta.maker)} size={20} /><span>{f.meta.maker}</span></span> : <span className="mute">—</span>}</td>
+      <td className="dim small"><span style={{ display: 'block' }}>{TYPE[f.support.type]}{f.support.smoothSwing ? ' · SmoothSwing' : ''}</span><span className="hint" style={{ display: 'block', fontSize: 11 }}>{[f.support.special.length ? `${f.support.special.length} special` : null, f.support.tracks ? `${f.support.tracks} track${f.support.tracks === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ') || 'no extras'}</span></td>
       <td className="mono dim small nowrap">{mb(f.bytes)}</td>
-      <td>{f.report.issues.length ? <span className={`chip ${f.report.issues.some((i) => i.kind === 'mixed' || i.kind === 'missing-hum') ? 'err' : 'warn'}`}><Icon name="warn" />{f.report.issues.length} issue{f.report.issues.length > 1 ? 's' : ''}</span> : <span className="chip ok"><Icon name="check" />Ready</span>}</td>
+      <td className="nowrap">{f.report.issues.length ? <span className={`chip ${f.report.issues.some((i) => i.kind === 'mixed' || i.kind === 'missing-hum') ? 'err' : 'warn'}`}><Icon name="warn" />{f.report.issues.length} issue{f.report.issues.length > 1 ? 's' : ''}</span> : <span className="chip ok"><Icon name="check" />Ready</span>}</td>
     </tr>
   );
   const groupHead = (g: { key: string; fonts: LibraryFont[] }) => {
@@ -179,7 +177,7 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
     const byLine = shared ? `by ${shared}` : bundleMakers.length ? `by ${bundleMakers.join(', ')}; ${unnamed ? `${unnamed} without a maker` : 'more than one maker'}` : 'no maker given';
     return (
       <tr key={`g:${g.key}`} className="grp">
-        <td colSpan={7}>
+        <td colSpan={5}>
           <div className="row" style={{ gap: 10 }}>
             <button type="button" className="row grow" style={{ gap: 10, textAlign: 'left', minWidth: 0 }} aria-expanded={!shut} onClick={() => setFolded((s) => { const n = new Set(s); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; })}>
               <Icon name={shut ? 'chev' : 'down'} style={{ width: 14, height: 14, color: 'var(--mute)', flex: 'none' }} />
@@ -209,7 +207,7 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
   };
 
   return (
-    <div className="work" style={{ gridTemplateColumns: 'minmax(0,1fr) 440px' }}>
+    <div className="work" style={{ gridTemplateColumns: 'minmax(0,1fr) clamp(360px, 32vw, 440px)' }}>
       <div className="col" style={{ gap: 12, minHeight: 0 }}>
         <div className="toolbar">
           <label className="input sans" style={{ width: 200, height: 32 }}><Icon name="search" /><input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search fonts" aria-label="Search fonts" style={{ position: 'static', color: 'var(--text)' }} /></label>
@@ -243,14 +241,14 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}</span></div>}
 
         <section className="panel fill" aria-label="Fonts in the library">
-          <div className="scroll grow">
+          <div className="scroll grow ft">
             <table>
-              <thead><tr><th>Font</th><th>Maker</th><th>Type</th><th>Supports</th><th>Tracks</th><th>Size</th><th>Status</th></tr></thead>
+              <thead><tr><th>Font</th><th className="col-maker">Maker</th><th>Supports</th><th>Size</th><th>Status</th></tr></thead>
               <tbody>
                 {groups.map((g) => (groupBy === 'none' ? g.fonts.map(row) : [groupHead(g), ...(folded.has(g.key) ? [] : g.fonts.map(row))]))}
-                {!loaded && <tr><td colSpan={7} className="hint" style={{ padding: 24 }}><span className="row" style={{ gap: 10 }}><span className="spinner on" style={{ width: 16, height: 16 }}><Icon name="spin" /></span>Reading your fonts… the first look at a big library takes a few seconds.</span></td></tr>}
-                {loaded && fonts.length === 0 && !status?.missing && <tr><td colSpan={7} className="hint" style={{ padding: 24 }}>No fonts yet. Add a font package as you downloaded it (.zip), or a font folder. They are copied into the library; your originals are left alone.</td></tr>}
-                {fonts.length > 0 && visible.length === 0 && <tr><td colSpan={7} className="hint">No fonts match. Clear a filter.</td></tr>}
+                {!loaded && <tr><td colSpan={5} className="hint" style={{ padding: 24 }}><span className="row" style={{ gap: 10 }}><span className="spinner on" style={{ width: 16, height: 16 }}><Icon name="spin" /></span>Reading your fonts… the first look at a big library takes a few seconds.</span></td></tr>}
+                {loaded && fonts.length === 0 && !status?.missing && <tr><td colSpan={5} className="hint" style={{ padding: 24 }}>No fonts yet. Add a font package as you downloaded it (.zip), or a font folder. They are copied into the library; your originals are left alone.</td></tr>}
+                {fonts.length > 0 && visible.length === 0 && <tr><td colSpan={5} className="hint">No fonts match. Clear a filter.</td></tr>}
               </tbody>
             </table>
             <datalist id="hw-makers">{makerNames.map((m) => <option key={m} value={m} />)}</datalist>
@@ -414,8 +412,8 @@ function FontDetail({ font, detail, card, askCard, looking, player, onSetLogo, o
       </div>
       <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }}>
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}{note.replace && <> <button type="button" className="holo" disabled={copying} onClick={() => void copy(true)}>Replace it</button></>}</span></div>}
-        <div className="row" style={{ gap: 8 }}>
-          <button type="button" className="btn sm pri" disabled={!card || copying} title={card ? `Copy this font's folder onto the card at ${card.root}` : askCard ? 'More than one ProffieOS card is in. Choose which one on Fonts & SD first.' : 'No ProffieOS card found. Put one in a reader, or share the saber’s card on Fonts & SD.'} onClick={() => void copy(onCard)}><span className="b"><span className="i"><Icon name="sd" />{copying ? 'Copying…' : card ? (onCard ? (confirmReplace ? `Really replace ${font.folder}?` : `Replace on card ${card.root}`) : `Copy to card ${card.root}`) : looking ? 'Looking for a card…' : askCard ? 'Choose the card on Fonts & SD' : 'No card'}</span></span></button>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <button type="button" className="btn sm pri" style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '100%' }} disabled={!card || copying} title={card ? `Copy this font's folder onto the card at ${card.root}` : askCard ? 'More than one ProffieOS card is in. Choose which one on Fonts & SD first.' : 'No ProffieOS card found. Put one in a reader, or share the saber’s card on Fonts & SD.'} onClick={() => void copy(onCard)}><span className="b"><span className="i"><Icon name="sd" /><span className="ellip">{copying ? 'Copying…' : card ? (onCard ? (confirmReplace ? `Really replace ${font.folder}?` : `Replace on card ${card.root}`) : `Copy to card ${card.root}`) : looking ? 'Looking for a card…' : askCard ? 'Choose the card on Fonts & SD' : 'No card'}</span></span></span></button>
           <button type="button" className="btn sm ghost" onClick={() => void api().fontLibrary.open(font.folder)}><span className="b"><span className="i">Show files</span></span></button>
           {confirmRemove
             ? <button type="button" className="btn sm danger" style={{ marginLeft: 'auto' }} onClick={() => void api().fontLibrary.remove(font.folder).then(onRemoved, (err) => setNote({ tone: 'red', text: cleanErr(err) }))}><span className="b"><span className="i"><Icon name="trash" />Yes, remove</span></span></button>

@@ -199,6 +199,9 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
 
   const issues = fonts.flatMap((f) => f.report.issues.map((i) => ({ font: f.name, ...i })));
   const sel = fonts.find((f) => f.name === selected) ?? null;
+  // The right column is tabbed so the selected font gets the whole column: picking a font in the list opens its tab.
+  const [side, setSide] = useState<'presets' | 'add' | 'detail' | null>(null);
+  const tab: 'presets' | 'add' | 'detail' = side === 'presets' && needed.length === 0 ? 'add' : side ?? (needed.length > 0 ? 'presets' : 'add');
 
   return (
     <>
@@ -242,18 +245,16 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
         <section className="panel fill" aria-label="Fonts on the card">
           <div className="scroll">
           <table>
-            <thead><tr><th>Font</th><th>Type</th><th>Files</th><th>Size</th><th>Status</th></tr></thead>
+            <thead><tr><th>Font</th><th>Size</th><th>Status</th></tr></thead>
             <tbody>
               {fonts.map((f) => (
-                <tr key={f.name} className={f.name === selected ? 'on' : ''} onClick={() => setSelected(f.name)} style={{ cursor: 'pointer' }}>
-                  <td><span className="nowrap" style={{ fontWeight: 600 }}>{f.name}</span></td>
-                  <td className="dim">{f.report.type}</td>
-                  <td className="mono dim small">{f.report.files}</td>
-                  <td className="mono dim small">{mb(f.report.bytes)}</td>
-                  <td>{f.report.issues.length ? <span className={`chip ${f.report.issues.some((i) => i.kind === 'mixed' || i.kind === 'missing-hum') ? 'err' : 'warn'}`}><Icon name="warn" />{f.report.issues.length} issue{f.report.issues.length > 1 ? 's' : ''}</span> : <span className="chip ok"><Icon name="check" />Ready</span>}</td>
+                <tr key={f.name} className={f.name === selected ? 'on' : ''} onClick={() => { setSelected(f.name); setSide('detail'); }} style={{ cursor: 'pointer' }}>
+                  <td className="fit"><span className="ellip" style={{ fontWeight: 600, display: 'block' }} title={f.name}>{f.name}</span><span className="hint ellip" style={{ display: 'block', fontSize: 11.5 }}>{f.report.type} · {f.report.files} files</span></td>
+                  <td className="mono dim small nowrap">{mb(f.report.bytes)}</td>
+                  <td className="nowrap">{f.report.issues.length ? <span className={`chip ${f.report.issues.some((i) => i.kind === 'mixed' || i.kind === 'missing-hum') ? 'err' : 'warn'}`}><Icon name="warn" />{f.report.issues.length} issue{f.report.issues.length > 1 ? 's' : ''}</span> : <span className="chip ok"><Icon name="check" />Ready</span>}</td>
                 </tr>
               ))}
-              {fonts.length === 0 && <tr><td colSpan={5} className="hint">{card ? 'No font folders on this card.' : 'Nothing to show without a card.'}</td></tr>}
+              {fonts.length === 0 && <tr><td colSpan={3} className="hint">{card ? 'No font folders on this card.' : 'Nothing to show without a card.'}</td></tr>}
             </tbody>
           </table>
           {issues.length > 0 && (
@@ -267,11 +268,17 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
           </div>
         </section>
 
-        <aside className="col" style={{ gap: 20, minHeight: 0, overflow: 'auto' }}>
-          {needed.length > 0 && (
-            <section className="panel" aria-label="Fonts the presets use">
+        <aside className="panel fill" aria-label="Fonts: presets, adding, detail">
+          <div className="tabs" role="tablist">
+            {needed.length > 0 && <button type="button" role="tab" aria-selected={tab === 'presets'} className={tab === 'presets' ? 'on' : ''} onClick={() => setSide('presets')}>Preset fonts</button>}
+            <button type="button" role="tab" aria-selected={tab === 'add'} className={tab === 'add' ? 'on' : ''} onClick={() => setSide('add')}>Add a font</button>
+            <button type="button" role="tab" aria-selected={tab === 'detail'} className={tab === 'detail' ? 'on' : ''} onClick={() => setSide('detail')}>{sel ? 'Selected font' : 'Tracks'}</button>
+          </div>
+          <div className="scroll">
+          {tab === 'presets' && (
+            <section aria-label="Fonts the presets use">
               <div className="ph"><h2>Fonts the presets use</h2>{card && copyable.length > 1 && <button type="button" className="btn sm pri" disabled={working} onClick={() => void copyNeeded(copyable)}><span className="b"><span className="i"><Icon name="sd" />Copy all {copyable.length}</span></span></button>}</div>
-              <div className="list" style={{ maxHeight: 260, overflow: 'auto' }}>
+              <div className="list">
                 {needed.map((f) => {
                   const lib = inLibrary(f);
                   return (
@@ -288,8 +295,9 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
               {card && needed.some((f) => !inLibrary(f) && !onCard(f)) && <div className="pb hint" style={{ paddingTop: 10 }}>A font marked missing has to reach the card before the saber can play that preset. <button type="button" className="holo" onClick={() => go('library')}>Add it to the Font library</button>, then copy it from here.</div>}
             </section>
           )}
-          <section className="panel" aria-label="Add a font">
-            <div className="ph"><h2>Add a font</h2>{picked && (picked.report.issues.length ? <span className="chip warn"><Icon name="warn" />{picked.report.issues.length} issue{picked.report.issues.length > 1 ? 's' : ''}</span> : <span className="chip ok"><Icon name="check" />Looks good</span>)}</div>
+          {tab === 'add' && <>
+          <section aria-label="Add a font">
+            {picked && <div className="ph"><h2>{picked.name}</h2>{picked.report.issues.length ? <span className="chip warn"><Icon name="warn" />{picked.report.issues.length} issue{picked.report.issues.length > 1 ? 's' : ''}</span> : <span className="chip ok"><Icon name="check" />Looks good</span>}</div>}
             <div className="pb col" style={{ gap: 12 }}>
               {picked ? (
                 <>
@@ -313,9 +321,11 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
 
           {FEATURES.xenopixelImport && <XenoImport card={card} board={board} onChanged={() => void scan()} />}
 
-          <section className="panel" aria-label="Font detail" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div className="ph"><h2>{sel ? sel.name : 'Tracks'}</h2><span className="hint">{sel ? `${sel.report.type} · ${sel.report.files} files` : `${tracks.length} on the card`}</span></div>
-            <div className="list" style={{ overflow: 'auto' }}>
+          </>}
+
+          {tab === 'detail' && <section aria-label="Font detail">
+            <div className="ph"><h2 className="ellip">{sel ? sel.name : 'Tracks'}</h2><span className="hint nowrap">{sel ? `${sel.report.type} · ${sel.report.files} files` : `${tracks.length} on the card`}</span></div>
+            <div className="list">
               {sel
                 ? Object.entries(sel.report.effects).sort().map(([effect, v]) => (
                     <div key={effect} className="li" style={{ minHeight: 34 }}><span className="grow small">{effect}</span><span className="mono mute" style={{ fontSize: 11.5 }}>{v.poly ? `${v.poly} poly` : ''}{v.poly && v.mono ? ' · ' : ''}{v.mono ? `${v.mono} mono` : ''}</span></div>
@@ -323,7 +333,8 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
                 : tracks.map((t) => <div key={t.name} className="li" style={{ minHeight: 34 }}><span className="grow mono small">{t.name}</span><span className="mono mute" style={{ fontSize: 11.5 }}>{mb(t.size)}</span></div>)}
               {!sel && tracks.length === 0 && <div className="li hint" style={{ minHeight: 34 }}>No tracks folder.</div>}
             </div>
-          </section>
+          </section>}
+          </div>
         </aside>
       </div>
     </>

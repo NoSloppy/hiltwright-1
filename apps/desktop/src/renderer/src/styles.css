@@ -83,7 +83,9 @@ p{margin:0}
 .btn .b,.btn .i{clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px)}
 .btn .b{display:flex;padding:1px;background:var(--line2);height:100%;width:100%}
 .btn .i{display:flex;align-items:center;justify-content:center;gap:8px;padding:0 18px;background:var(--bg3);font-weight:600;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;width:100%}
-.btn .i svg{width:16px;height:16px}
+.btn .i svg{width:16px;height:16px;flex:none}
+.btn .b,.btn .i{min-width:0}
+td .chip,td .chip.err{white-space:nowrap;flex:none}
 .btn:hover .i{background:#233242}
 .btn.pri .b{background:var(--holo)}.btn.pri .i{background:var(--holo);color:var(--holo-ink)}
 .btn.pri:hover .i{background:#8fe1ff}
@@ -170,6 +172,14 @@ table{border-collapse:collapse;width:100%}
 th{text-align:left;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:600;padding:10px 14px;border-bottom:1px solid var(--line)}
 td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:13.5px}
 tr:last-child td{border-bottom:0}
+/* layout-fit: a table cell that takes the width the others leave and cuts its text with an ellipsis, so a table never
+   outgrows its panel. */
+td.fit{width:100%;max-width:0}
+/* The font library's table: tighter cells, and below 560px of panel width the maker moves under the font's name. */
+.ft{container-type:inline-size}
+.ft td,.ft th{padding-left:10px;padding-right:10px}
+.ft .maker-sub{display:none}
+@container (max-width:560px){.ft .col-maker{display:none}.ft .maker-sub{display:inline}}
 
 .note{padding:12px 14px;background:rgba(95,211,255,.06);border:1px solid rgba(95,211,255,.25);font-size:13px;color:var(--dim);display:flex;gap:10px;align-items:flex-start}
 .note svg{width:16px;height:16px;flex:none;color:var(--holo);margin-top:2px}
@@ -384,6 +394,7 @@ input.num{height:28px;width:84px;background:#0b1016;border:1px solid var(--line2
 .stack .li .onoff{display:inline-flex;width:12px;color:var(--dim)}
 .stack .li .onoff svg{width:14px;height:14px}
 @media (max-width:1500px){.edhint{display:none}}
+.edhead{flex-wrap:wrap}
 .edhead>.row:first-child{flex:1 1 auto;min-width:0}
 @media (max-width:1500px){.chiptext{display:none}.edhead .chip{padding:0 8px}}
 /* Set by the template: the pill reads the same but cannot be changed. */

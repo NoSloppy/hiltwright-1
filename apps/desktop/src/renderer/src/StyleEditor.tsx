@@ -241,7 +241,7 @@ function BlockCard({ title, hint, def, block, choices, index, onKind, onParam, o
         {index != null && <span className="nbox">{index + 1}</span>}
         <div className="col grow" style={{ gap: 2, minWidth: 0 }}>
           {choices ? (
-            <span className="input sans" style={{ height: 32, width: 260 }}><span className="ellip"><b style={{ fontWeight: 600 }}>{title}:</b> {def.name}</span><span className="caret"><Icon name="down" /></span>
+            <span className="input sans" style={{ height: 32, width: 260, maxWidth: '100%' }}><span className="ellip"><b style={{ fontWeight: 600 }}>{title}:</b> {def.name}</span><span className="caret"><Icon name="down" /></span>
               <Select value={block.kind} aria-label={title} onChange={(e) => onKind?.(e.target.value)}>{choices.map((c) => <option key={c.kind} value={c.kind}>{c.name}</option>)}</Select></span>
           ) : <b style={{ fontWeight: 600, fontSize: 13.5 }}>{title}</b>}
           <span className="hint">{choices ? def.description : hint}</span>
