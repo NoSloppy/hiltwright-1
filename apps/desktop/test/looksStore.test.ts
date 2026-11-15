@@ -53,4 +53,10 @@ describe('the style store', () => {
     expect(cleanLook({ ...look('look_x'), name: 'n'.repeat(121) })).toBeNull();
     expect(cleanLook({ id: '1bad', code: 'x' })).toBeNull();
   });
+
+  it('keeps who edited a style, and nothing odd in its place', () => {
+    expect(cleanLook(look('look_e', { by: 'Fett263', editedBy: 'you' }))).toMatchObject({ by: 'Fett263', editedBy: 'you' });
+    expect(cleanLook(look('look_e', { editedBy: '' }))).not.toHaveProperty('editedBy');
+    expect(cleanLook({ ...look('look_e'), editedBy: 5 })).not.toHaveProperty('editedBy');
+  });
 });

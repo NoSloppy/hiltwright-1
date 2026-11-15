@@ -39,6 +39,8 @@ export function cleanLook(v: unknown): LookDef | null {
     // A look built in the style editor: its alias define is what gets compiled, its layers let it be edited again.
     ...(define !== undefined ? { define } : {}),
     ...(l.usesFx ? { usesFx: true } : {}),
+    // Someone else's style the owner changed in the editor: kept so it keeps saying "edited by".
+    ...(typeof l.editedBy === 'string' && l.editedBy.trim() && l.editedBy.length <= 120 ? { editedBy: l.editedBy } : {}),
     ...(isStyleDoc(l.style) || isTreeDoc(l.style) ? { style: JSON.parse(JSON.stringify(l.style)) as unknown } : {}),
   } as LookDef;
 }

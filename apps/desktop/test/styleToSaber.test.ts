@@ -6,7 +6,7 @@ import { queuedLookIds, withSlotChoice } from '../src/renderer/src/slotModel';
 
 const main: ModelBlade = { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } };
 const crystal: ModelBlade = { id: 'b2', role: 'crystal', type: 'pixel', pixels: 2, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'blade2Pin', powerPins: ['bladePowerPin4'] } };
-const ember: LookDef = { id: 'look_ember', name: 'Ember', source: 'pasted', by: 'Fett263', code: 'StylePtr<Layers<RgbArg<BASE_COLOR_ARG,Red>>>()', header: null, roles: ['main', 'side'], args: [1, 9, 10], preview: '#ff0000', description: '' };
+const ember: LookDef = { id: 'look_ember', name: 'Ember', source: 'pasted', by: 'Hiltwright', code: 'StylePtr<Layers<RgbArg<BASE_COLOR_ARG,Red>>>()', header: null, roles: ['main', 'side'], args: [1, 9, 10], preview: '#ff0000', description: '' };
 const fire = STARTER_LOOKS.find((l) => l.id === 'hw_fire')!;
 
 const RED = '65535,0,0';

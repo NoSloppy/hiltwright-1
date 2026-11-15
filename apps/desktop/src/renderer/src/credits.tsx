@@ -4,6 +4,7 @@
 import { useEffect, useReducer, useState } from 'react';
 import type { ContributorInfo } from '../../shared/api';
 import { Icon } from './Icon';
+import { creditOf } from '@hiltwright/core';
 import appIcon from './assets/hiltwright-icon.svg';
 
 const api = () => window.hiltwright;
@@ -65,7 +66,7 @@ export function ContributorLogo({ name, logo, size = 22 }: { name: string; logo:
  * Credit for one person: their logo, name and link, with the means to add or change them. `onRename` makes the name
  * editable (for the owner's own looks, where the author was typed in by hand).
  */
-export function CreditCard({ name, label = 'By', onRename, onError }: { name: string; label?: string; onRename?: (name: string) => void | Promise<void>; onError?: (text: string) => void }) {
+export function CreditCard({ name, label = 'By', editedBy, onRename, onError }: { name: string; label?: string; /** The owner changed this style in the editor: say so under the author. */ editedBy?: boolean; onRename?: (name: string) => void | Promise<void>; onError?: (text: string) => void }) {
   const people = useContributors();
   const [editing, setEditing] = useState<'name' | 'url' | null>(null);
   const [draft, setDraft] = useState('');
@@ -95,9 +96,10 @@ export function CreditCard({ name, label = 'By', onRename, onError }: { name: st
         ) : (
           <>
             <span className="row" style={{ gap: 8, minWidth: 0 }}>
-              <b className="ellip" style={{ fontWeight: 600 }}>{credited ? name : 'You'}</b>
+              <b className="ellip" style={{ fontWeight: 600 }}>{credited ? name : creditOf(name).kind === 'unknown' ? 'Unknown' : 'You'}</b>
               {onRename && <button type="button" className="holo small" onClick={() => { setDraft(credited ? name : ''); setEditing('name'); }}>Edit</button>}
             </span>
+            {editedBy && <span className="hint">Edited by you</span>}
             {credited && (
               <span className="row wrap" style={{ gap: 10 }}>
                 {url && <button type="button" className="holo small ellip" style={{ maxWidth: 200 }} title={url} onClick={() => void people.open(name)}><Icon name="link" style={{ width: 12, height: 12, verticalAlign: -1 }} /> {url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</button>}

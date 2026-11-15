@@ -49,8 +49,10 @@ export interface LookDef {
   id: string;
   name: string;
   source: 'starter' | 'pasted' | 'built';
-  /** Attribution shown in the gallery ("Fett263", "you"). */
+  /** Attribution shown in the gallery: a name ("Fett263"), "you" for the owner's own work, or "unknown" (see creditOf). */
   by: string;
+  /** Set when the owner changed someone else's style in the style editor ("you"): shown as "edited by". */
+  editedBy?: string;
   /** The `StylePtr<...>()` expression (or any expression yielding a StyleFactory*) placed in the preset slot. */
   code: string;
   /** Copyright / library header kept verbatim above the style, as the library's licence asks. */
@@ -74,6 +76,52 @@ export interface LookDef {
   kb?: number;
   /** A look built in the style editor keeps its layers, so it can be edited again and simulated. */
   style?: unknown;
+}
+
+// ---------------- who made a style ----------------
+
+/** What `by` says. "unknown" is a style whose maker nobody knows: never the owner's own work. */
+export type Credit = { kind: 'own' } | { kind: 'unknown' } | { kind: 'named'; name: string };
+export const UNKNOWN_AUTHOR = 'unknown';
+
+export function creditOf(by: string | null | undefined): Credit {
+  const t = (by ?? '').trim();
+  if (!t || /^(you|me)$/i.test(t)) return { kind: 'own' };
+  if (/^unknown$/i.test(t)) return { kind: 'unknown' };
+  return { kind: 'named', name: t };
+}
+
+/**
+ * The author a pasted style is saved with: the name typed, or "unknown" when the owner said so. Null until one of them
+ * is given: a paste is never credited to anyone by default (ST13).
+ */
+export function pastedAuthor(typed: string, markedUnknown: boolean): string | null {
+  if (markedUnknown) return UNKNOWN_AUTHOR;
+  const t = typed.trim();
+  return t ? t : null;
+}
+
+/** A style's credit in the owner's words: "Fett263", "Fett263, edited by you", "Yours", "Unknown author". */
+export function creditWords(look: Pick<LookDef, 'by' | 'editedBy'>): string {
+  const c = creditOf(look.by);
+  if (c.kind === 'own') return 'Yours';
+  if (c.kind === 'unknown') return look.editedBy ? 'Unknown author, edited by you' : 'Unknown author';
+  return look.editedBy ? `${c.name}, edited by you` : c.name;
+}
+
+/** Where a style opened in the editor came from, so saving keeps its credit and header. */
+export interface StyleOrigin { by: string; header: string | null; editedBy?: string }
+
+/**
+ * A style built in the editor, credited to where it started. Someone else's style (or an unknown maker's) that the
+ * owner changed stays credited to them, with "edited by" the owner and its header kept (ST16); the owner's own
+ * stays theirs. With no origin it is the owner's own.
+ */
+export function withOrigin(built: LookDef, origin: StyleOrigin | null): LookDef {
+  if (!origin) return built;
+  const own = creditOf(origin.by).kind === 'own';
+  const { editedBy: _drop, ...rest } = built;
+  return { ...rest, by: origin.by || 'you', header: origin.header, ...(own ? {} : { editedBy: origin.editedBy ?? 'you' }) };
 }
 
 /** Runtime arguments and compiled default colours found in a piece of style C++. */

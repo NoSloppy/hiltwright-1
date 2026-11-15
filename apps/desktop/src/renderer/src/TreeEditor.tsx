@@ -5,7 +5,7 @@
 // prints back out as C++.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RECIPES, cloneNode, composedName, firstColour, layerCue, newLayer, parseStyle, readBase, readLayer, type Cue, type LayerCard, type Node } from '@hiltwright/core';
+import { RECIPES, analyzeStyleCode, cloneNode, composedName, firstColour, layerCue, newLayer, parseStyle, pastedAuthor, readBase, readLayer, type Cue, type LayerCard, type Node, type StyleOrigin } from '@hiltwright/core';
 import { Icon } from './Icon';
 import { LayerCardView } from './LayerCard';
 import { NodeCard } from './NodeCard';
@@ -229,19 +229,27 @@ export function TreeEditor({ tree, labels, layerKeys, onChange, onPreview, onCue
   );
 }
 
-/** Paste box: any style expression from the official editor or a library, parsed into a tree. */
-export function PasteStyle({ onParsed, onClose }: { onParsed: (t: Node) => void; onClose: () => void }) {
+/** Paste box: any style expression from the official editor or a library, parsed into a tree. It keeps the header comment and says who made it (ST16). */
+export function PasteStyle({ onParsed, onClose }: { onParsed: (t: Node, origin: StyleOrigin) => void; onClose: () => void }) {
   const [text, setText] = useState('');
   const [err, setErr] = useState<string | null>(null);
-  const go = () => { try { onParsed(parseStyle(text)); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } };
+  // Credited to nobody until the owner says who made it, or that nobody knows.
+  const [by, setBy] = useState('');
+  const [unknown, setUnknown] = useState(false);
+  const author = pastedAuthor(by, unknown);
+  const go = () => { if (author === null) return; try { onParsed(parseStyle(text), { by: author, header: analyzeStyleCode(text).header }); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } };
   return (
     <div className="col" style={{ gap: 8, padding: 12, border: '1px solid var(--holo)', background: '#0d131a' }}>
       <div className="row between"><span className="small" style={{ fontWeight: 600 }}>Paste a style</span><button type="button" className="chip" onClick={onClose}><Icon name="x" /></button></div>
       <textarea className="console mono" value={text} rows={6} spellCheck={false} aria-label="Style code" placeholder="StylePtr<Layers<Red, ResponsiveClashL<White>, InOutTrL<TrWipe<300>, TrWipeIn<500>>>>()" style={{ resize: 'vertical', fontSize: 12 }} onChange={(e) => { setText(e.target.value); setErr(null); }} />
       {err && <div className="note red"><Icon name="warn" /><span>{err}</span></div>}
+      <div className="row wrap" style={{ gap: 12 }}>
+        <label className="field" style={{ width: 200 }}><span className="label">Made by</span><span className="input sans"><input type="text" value={unknown ? '' : by} disabled={unknown} placeholder="Who made it" aria-label="Style author" onChange={(e) => setBy(e.target.value)} /></span></label>
+        <label className="row" style={{ gap: 6, alignSelf: 'end', height: 32 }}><input type="checkbox" checked={unknown} onChange={(e) => setUnknown(e.target.checked)} /><span className="small">Author unknown</span></label>
+      </div>
       <div className="row" style={{ gap: 8 }}>
-        <button type="button" className="btn sm pri" disabled={!text.trim()} onClick={go}><span className="b"><span className="i"><Icon name="import" />Open it in the editor</span></span></button>
-        <span className="hint">Anything from the official style editor or a style library works; the comment header is dropped.</span>
+        <button type="button" className="btn sm pri" disabled={!text.trim() || author === null} title={author === null ? 'Say who made it, or that the author is unknown' : undefined} onClick={go}><span className="b"><span className="i"><Icon name="import" />Open it in the editor</span></span></button>
+        <span className="hint">Anything from the official style editor or a style library works. The comment header and the author stay with it when you save, and it is saved as theirs, edited by you.</span>
       </div>
     </div>
   );

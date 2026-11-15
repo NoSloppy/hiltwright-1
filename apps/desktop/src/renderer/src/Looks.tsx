@@ -3,7 +3,7 @@
 // "queued" when it is in the build model but not yet installed, and "new" otherwise.
 
 import { useEffect, useMemo, useState } from 'react';
-import { STARTER_LOOKS, analyzeStyleCode, registerLookSim, argInfo, hexToColorWord, type BladeRole, type LookDef } from '@hiltwright/core';
+import { STARTER_LOOKS, UNKNOWN_AUTHOR, analyzeStyleCode, creditOf, creditWords, pastedAuthor, registerLookSim, argInfo, hexToColorWord, type BladeRole, type LookDef } from '@hiltwright/core';
 import type { Board } from './board';
 import { Icon } from './Icon';
 import { ContributorLogo, CreditCard, NOT_A_CONTRIBUTOR, useContributors } from './credits';
@@ -31,14 +31,18 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
   const [q, setQ] = useState('');
   const [onlyFirmware, setOnlyFirmware] = useState(false);
   const [roleFilter, setRoleFilter] = useState<BladeRole | null>(null);
-  // Who made it, matched regardless of case; the owner's own styles (no author, or 'you') count as one creator, You.
-  const creatorKey = (by: string) => (NOT_A_CONTRIBUTOR.test(by.trim()) ? '' : by.trim().toLowerCase());
+  // Who made it, matched regardless of case; the owner's own styles (no author, or 'you') count as one creator, You, and
+  // styles by nobody known as another, Unknown: never one under the other's name.
+  const creatorKey = (by: string) => { const c = creditOf(by); return c.kind === 'own' ? '' : c.kind === 'unknown' ? '?unknown' : c.name.toLowerCase(); };
   const [creator, setCreator] = useState<string | null>(() => (initialCreator != null ? creatorKey(initialCreator) : null));
   const [onlyMotion, setOnlyMotion] = useState(false);
   const [pasting, setPasting] = useState(false);
   const [code, setCode] = useState('');
   const [lookName, setLookName] = useState('');
-  const [lookBy, setLookBy] = useState('Fett263');
+  // A paste is credited to nobody until the owner says who made it, or that nobody knows (ST13).
+  const [lookBy, setLookBy] = useState('');
+  const [authorUnknown, setAuthorUnknown] = useState(false);
+  const author = pastedAuthor(lookBy, authorUnknown);
   const [targetPreset, setTargetPreset] = useState<number>(0);
   const [targetBlade, setTargetBlade] = useState<number>(1);
   const [note, setNote] = useState<{ tone: 'green' | 'red'; text: string } | null>(null);
@@ -62,7 +66,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
   const stateOf = (id: string): LookState => (compiled.has(id) ? 'compiled' : queued.has(id) ? 'queued' : 'new');
   const creators = useMemo(() => {
     const m = new Map<string, { name: string; count: number }>();
-    for (const l of looks) { const k = creatorKey(l.by); const c = m.get(k) ?? { name: k ? l.by.trim() : 'You', count: 0 }; c.count++; m.set(k, c); }
+    for (const l of looks) { const k = creatorKey(l.by); const c = m.get(k) ?? { name: k === '' ? 'You' : k === '?unknown' ? 'Unknown' : l.by.trim(), count: 0 }; c.count++; m.set(k, c); }
     return [...m.entries()].sort(([a, x], [b, y]) => y.count - x.count || (a ? 0 : 1) - (b ? 0 : 1) || x.name.localeCompare(y.name));
   }, [looks]);
   const visible = looks.filter((l) => {
@@ -82,16 +86,16 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
 
   const [pasteState, setPasteState] = useState<{ saving: boolean; error: string | null }>({ saving: false, error: null });
   const savePasted = async () => {
-    if (!analysis?.ok || pasteState.saving) return;
+    if (!analysis?.ok || pasteState.saving || author === null) return;
     const id = `look_${(lookName || 'pasted').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'pasted'}_${Date.now().toString(36)}`;
     const roles: BladeRole[] = ['main', 'side'];
-    const look: LookDef = { id, name: lookName.trim() || 'Pasted style', source: 'pasted', by: lookBy.trim() || 'unknown', code: analysis.expression, header: analysis.header, roles, args: analysis.args, preview: analysis.preview, defaults: analysis.defaults, description: analysis.header ? analysis.header.split('\n').map((l) => l.replace(/^\/\/\s?|\/\*|\*\//g, '').trim()).filter(Boolean).slice(0, 3).join(' · ') : 'Pasted style code.' };
+    const look: LookDef = { id, name: lookName.trim() || 'Pasted style', source: 'pasted', by: author, code: analysis.expression, header: analysis.header, roles, args: analysis.args, preview: analysis.preview, defaults: analysis.defaults, description: analysis.header ? analysis.header.split('\n').map((l) => l.replace(/^\/\/\s?|\/\*|\*\//g, '').trim()).filter(Boolean).slice(0, 3).join(' · ') : 'Pasted style code.' };
     setPasteState({ saving: true, error: null });
     try {
       registerLookSim(look);
       setPasted(await api().looks.add(look));
       setSelectedId(id);
-      setPasting(false); setCode(''); setLookName('');
+      setPasting(false); setCode(''); setLookName(''); setLookBy(''); setAuthorUnknown(false);
       setPasteState({ saving: false, error: null });
     } catch (err) {
       setPasteState({ saving: false, error: String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '') });
@@ -103,7 +107,8 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
   // After a rename, the old name's logo and link can be carried to the new one (copied: others may still credit it).
   const [carry, setCarry] = useState<{ from: string; to: string } | null>(null);
   const setAuthor = async (look: LookDef, by: string) => {
-    const to = by || 'you';
+    // Cleared on someone else's pasted style it becomes unknown, never "you": it is not the owner's work.
+    const to = by || (look.source === 'pasted' ? UNKNOWN_AUTHOR : 'you');
     const next = (await api().looks.update(look.id, { ...look, by: to })).looks;
     setPasted(next);
     registerLookSim(next.find((l) => l.id === look.id) ?? look);
@@ -177,8 +182,9 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
               )}
               <div className="row wrap" style={{ gap: 12 }}>
                 <label className="field grow"><span className="label">Name</span><span className="input sans"><input type="text" value={lookName} onChange={(e) => setLookName(e.target.value)} placeholder="Ember" aria-label="Style name" /></span></label>
-                <label className="field" style={{ width: 200 }}><span className="label">By</span><span className="input sans"><input type="text" value={lookBy} onChange={(e) => setLookBy(e.target.value)} aria-label="Style author" /></span></label>
-                <button type="button" className="btn pri" style={{ alignSelf: 'end' }} disabled={!analysis?.ok || pasteState.saving} onClick={() => void savePasted()}><span className="b"><span className="i"><Icon name="plus" />Save style</span></span></button>
+                <label className="field" style={{ width: 200 }}><span className="label">By</span><span className="input sans"><input type="text" value={authorUnknown ? '' : lookBy} disabled={authorUnknown} onChange={(e) => setLookBy(e.target.value)} placeholder="Who made it" aria-label="Style author" /></span></label>
+                <label className="row" style={{ gap: 6, alignSelf: 'end', height: 32 }}><input type="checkbox" checked={authorUnknown} onChange={(e) => setAuthorUnknown(e.target.checked)} /><span className="small">Author unknown</span></label>
+                <button type="button" className="btn pri" style={{ alignSelf: 'end' }} title={author === null ? 'Say who made it, or that the author is unknown' : undefined} disabled={!analysis?.ok || pasteState.saving || author === null} onClick={() => void savePasted()}><span className="b"><span className="i"><Icon name="plus" />Save style</span></span></button>
               </div>
             </div>
           </section>
@@ -211,7 +217,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
                 </div>
                 <div className="col" style={{ padding: '2px 14px 12px', gap: 4, width: '100%' }}>
                   <div className="row between" style={{ gap: 8 }}><b className="ellip" style={{ fontWeight: 600, fontSize: 14 }}>{l.name}</b>{stateOf(l.id) === 'compiled' ? <span className="green small nowrap">on the saber</span> : stateOf(l.id) === 'queued' ? <span className="amber small nowrap">queued</span> : null}</div>
-                  <div className="hint ellip row" style={{ gap: 6 }}>{people.logoFor(l.by) && <ContributorLogo name={l.by} logo={people.logoFor(l.by)} size={16} />}<span className="ellip">{l.source !== 'starter' ? `${l.by}, ` : ''}{ROLE_LABEL[l.roles[0]]}{l.roles.length > 1 ? ` +${l.roles.length - 1}` : ''}{l.kb != null ? `, ${l.kb.toFixed(1)} KB` : ''}</span></div>
+                  <div className="hint ellip row" style={{ gap: 6 }}>{people.logoFor(l.by) && <ContributorLogo name={l.by} logo={people.logoFor(l.by)} size={16} />}<span className="ellip">{l.source !== 'starter' ? `${creditWords(l)}, ` : ''}{ROLE_LABEL[l.roles[0]]}{l.roles.length > 1 ? ` +${l.roles.length - 1}` : ''}{l.kb != null ? `, ${l.kb.toFixed(1)} KB` : ''}</span></div>
                 </div>
               </button>
             ))}
@@ -223,7 +229,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
           <div className="ph">
             <div className="row" style={{ gap: 12, minWidth: 0 }}>
               {!NOT_A_CONTRIBUTOR.test(sel.by.trim()) && <ContributorLogo name={sel.by} logo={people.logoFor(sel.by)} size={34} />}
-              <div className="col" style={{ gap: 2, minWidth: 0 }}><h2 className="ellip">{sel.name}</h2><span className="hint ellip">{NOT_A_CONTRIBUTOR.test(sel.by.trim()) ? 'Yours' : `by ${sel.by}`}, for {sel.roles.map((r) => ROLE_LABEL[r]).join(' or ')}</span></div>
+              <div className="col" style={{ gap: 2, minWidth: 0 }}><h2 className="ellip">{sel.name}</h2><span className="hint ellip">{creditOf(sel.by).kind === 'named' ? `by ${creditWords(sel)}` : creditWords(sel)}, for {sel.roles.map((r) => ROLE_LABEL[r]).join(' or ')}</span></div>
             </div>
             <div className="row" style={{ gap: 8 }}>{canSimulate(sel.id) && !isDot(sel) && <button type="button" className="chip" title="Swing it in the demo room" onClick={() => onDemo(sel.id)}><Icon name="play" />Demo room</button>}{stateChip(selState)}</div>
           </div>
@@ -259,7 +265,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
               </div>
             )}
             <p className="dim" style={{ fontSize: 13 }}>{sel.description}</p>
-            <CreditCard key={`credit:${sel.id}`} name={sel.by} label={sel.source === 'starter' ? 'Made by' : sel.source === 'built' ? 'Built by' : 'Style by'} onRename={sel.source === 'starter' ? undefined : (by) => setAuthor(sel, by)} onError={(text) => setNote({ tone: 'red', text })} />
+            <CreditCard key={`credit:${sel.id}`} name={sel.by} editedBy={!!sel.editedBy} label={sel.source === 'starter' ? 'Made by' : sel.source === 'built' ? 'Built by' : 'Style by'} onRename={sel.source === 'starter' ? undefined : (by) => setAuthor(sel, by)} onError={(text) => setNote({ tone: 'red', text })} />
             {carry && carry.to.toLowerCase() === sel.by.trim().toLowerCase() && (
               <div className="note" role="dialog" aria-label="Carry the credit over"><Icon name="info" /><span className="col" style={{ gap: 8 }}>
                 <span>Give {carry.to} the logo and link of {carry.from}? {carry.from} keeps its own, in case other fonts or styles still credit it.</span>

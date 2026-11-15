@@ -6,7 +6,7 @@
 // gets compiled is the same kind of alias either way.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BASES, EFFECTS, TRANSITIONS, aliasFor, checkStyle, defaultStyle, defaultTree, evaluateStyle, isStyleDoc, isTreeDoc, newBlock, printStyle, registerStyleSim, sharedSettings, styleToCpp, styleToLook, styleToSim, treeFromCpp, treeToCpp, treeToLook, treeToSim, type Block, type BlockDef, type Cue, type Knob, type LookDef, type Node, type StyleDoc, type StyleProblem, type TreeDoc } from '@hiltwright/core';
+import { BASES, EFFECTS, TRANSITIONS, aliasFor, checkStyle, defaultStyle, defaultTree, evaluateStyle, isStyleDoc, isTreeDoc, newBlock, printStyle, registerStyleSim, sharedSettings, styleToCpp, styleToLook, withOrigin, styleToSim, treeFromCpp, treeToCpp, treeToLook, treeToSim, type Block, type BlockDef, type Cue, type Knob, type LookDef, type Node, type StyleDoc, type StyleOrigin, type StyleProblem, type TreeDoc } from '@hiltwright/core';
 import { BladePreview } from './BladePreview';
 import { useHistory } from './editorHistory';
 import { Icon } from './Icon';
@@ -56,6 +56,9 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
   const savingRef = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   // What the check before saving found wrong with a full-editor style, by layer (ST33). Cleared by the next edit.
+  // Where the style started, so saving keeps its author and header (ST16): from the style being edited, or from a paste
+  // here (which applies to the full editor's half only).
+  const [origin, setOrigin] = useState<{ o: StyleOrigin; pasted: boolean } | null>(() => (editing && (isStyleDoc(editing.style) || isTreeDoc(editing.style)) ? { o: { by: editing.by, header: editing.header, editedBy: editing.editedBy }, pasted: false } : null));
   const [problems, setProblems] = useState<StyleProblem[] | null>(null);
   useEffect(() => { setProblems(null); }, [tree]);
   // Colours of a Simple style that share one live setting on the saber (ST32).
@@ -100,7 +103,7 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
   const cpp = useMemo(() => (mode === 'tree' ? treeToCpp(tree, 'HwYourLook') : styleToCpp(doc, 'HwYourLook')), [mode, tree, doc]);
 
   const openAsTree = () => history.edit((s) => ({ ...s, tree: treeFromCpp(styleToCpp(s.doc, 'X'), s.doc.name), mode: 'tree', keys: undefined }), true);
-  const openParsed = (t: Node) => { history.edit((s) => ({ ...s, tree: { ...s.tree, tree: t, labels: [] }, mode: 'tree', keys: undefined }), true); setPasting(false); };
+  const openParsed = (t: Node, from: StyleOrigin) => { history.edit((s) => ({ ...s, tree: { ...s.tree, tree: t, labels: [] }, mode: 'tree', keys: undefined }), true); setOrigin({ o: from, pasted: true }); setPasting(false); };
 
   /** Save what the owner changed (see `target`). One at a time; a failure is shown and rethrown for the leave dialog. */
   const save = async (anyway = false) => {
@@ -118,8 +121,8 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
       newId.current ??= `look_${title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'built'}_${Date.now().toString(36)}`;
       const id = editingId ?? newId.current;
       const built = write === 'tree' ? treeToLook(tree, id, aliasFor(id)) : styleToLook(doc, id);
-      // The author set on Styles stays; a new style is credited to the owner.
-      const look: LookDef = { ...built, by: (editingId && editing?.by) || built.by };
+      // The author set on Styles stays, and a pasted style keeps its author and header, edited by the owner; a new style is the owner's own.
+      const look: LookDef = withOrigin(built, origin && (!origin.pasted || write === 'tree') ? origin.o : null);
       registerStyleSim(id, write === 'tree' ? treeToSim(tree) : styleToSim(doc));
       const sabers = editingId ? (await api().looks.update(id, look)).sabersUpdated : ((await api().looks.add(look)), 0);
       setSaved({ id, sabers }); setEditingId(id); setSavedMode(write); history.markSaved();

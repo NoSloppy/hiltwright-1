@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIBRARY_LOOKS, LOOK_FX, STARTER_LOOKS, analyzeStyleCode, lookFingerprint, scanStyleArgs, colorWordToHex, formatStyleArgs, generateConfig, hexToColorWord, lookAtSlot, lookSlots, parseStyleArgs, validateModel, type LookDef, type SaberConfigModel } from '../src';
+import { LIBRARY_LOOKS, LOOK_FX, STARTER_LOOKS, analyzeStyleCode, creditOf, creditWords, pastedAuthor, withOrigin, lookFingerprint, scanStyleArgs, colorWordToHex, formatStyleArgs, generateConfig, hexToColorWord, lookAtSlot, lookSlots, parseStyleArgs, validateModel, type LookDef, type SaberConfigModel } from '../src';
 
 const FETT263 = `// Hiltwright test look (header laid out like a library block)
 // Copyright 2026 Hiltwright contributors
@@ -160,7 +160,7 @@ describe('the Hiltwright look library', () => {
 
 describe('special abilities and the prop', () => {
   const code = 'StylePtr<Layers<Blue, TransitionEffectL<TrDoEffectX<TrInstant,EFFECT_TRANSITION_SOUND,Int<0>>,EFFECT_USER1>, InOutTrL<TrWipe<300>,TrWipeIn<500>>>>()';
-  const cortosis: LookDef = { ...analyzeStyleCode(code), id: 'cortosis', name: 'Cortosis', source: 'pasted', by: 'Fett263', code, roles: ['main'], description: '' };
+  const cortosis: LookDef = { ...analyzeStyleCode(code), id: 'cortosis', name: 'Cortosis', source: 'pasted', by: 'Hiltwright', code, roles: ['main'], description: '' };
   const model = (prop: SaberConfigModel['prop']): SaberConfigModel => ({
     name: 'hw_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop,
     blades: [{ id: 'main', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } }],
@@ -183,5 +183,40 @@ describe('special abilities and the prop', () => {
     const g = generateConfig(model('sa22c'));
     expect(g.text).not.toMatch(/SPECIAL_ABILITIES/);
     expect(g.warnings.some((w) => /no gesture/.test(w))).toBe(true);
+  });
+});
+
+describe('who made a style', () => {
+  it('tells the owner, an unknown maker and a name apart (ST14)', () => {
+    expect(creditOf('you')).toEqual({ kind: 'own' });
+    expect(creditOf('')).toEqual({ kind: 'own' });
+    expect(creditOf('Unknown')).toEqual({ kind: 'unknown' });
+    expect(creditOf(' Fett263 ')).toEqual({ kind: 'named', name: 'Fett263' });
+    expect(creditWords({ by: 'unknown' })).toBe('Unknown author');
+    expect(creditWords({ by: 'you' })).toBe('Yours');
+    expect(creditWords({ by: 'Fett263', editedBy: 'you' })).toBe('Fett263, edited by you');
+  });
+
+  it('gives a paste no author until one is given or it is marked unknown (ST13)', () => {
+    expect(pastedAuthor('', false)).toBeNull();
+    expect(pastedAuthor('   ', false)).toBeNull();
+    expect(pastedAuthor('', true)).toBe('unknown');
+    expect(pastedAuthor('typed', true)).toBe('unknown');
+    expect(pastedAuthor(' Fett263 ', false)).toBe('Fett263');
+  });
+
+  it('keeps the original author and header on a style the owner edited (ST16)', () => {
+    const built: LookDef = { id: 'look_x', name: 'X', source: 'built', by: 'you', code: 'StylePtr<A>()', header: null, roles: ['main'], args: [], preview: '#ffffff', description: '' };
+    const kept = withOrigin(built, { by: 'Fett263', header: '// Copyright Fett263' });
+    expect(kept).toMatchObject({ by: 'Fett263', header: '// Copyright Fett263', editedBy: 'you' });
+    expect(withOrigin(built, { by: 'unknown', header: null }).editedBy).toBe('you');
+    // The owner's own style stays theirs, and an edit already recorded is kept.
+    expect(withOrigin(built, { by: 'you', header: null }).editedBy).toBeUndefined();
+    expect(withOrigin({ ...built, editedBy: 'you' }, { by: 'you', header: null }).editedBy).toBeUndefined();
+    expect(withOrigin(built, null)).toBe(built);
+  });
+
+  it('credits every built-in style to Hiltwright, as the About statement does (ST40)', () => {
+    expect(STARTER_LOOKS.every((l) => l.by === 'Hiltwright')).toBe(true);
   });
 });
