@@ -485,8 +485,9 @@ export function setShape(layer: Node, card: Extract<LayerCard, { form: 'composed
   const colour = cloneNode(at(layer, card.colour)!);
   const w = card.where;
   const pos = w.shape === 'spot' || w.shape === 'hilt' || w.shape === 'tip' ? cloneNode(at(layer, w.pos)!) : null;
+  // A bare colour is only right as the base, or inside a transition or lockup; on its own in the stack it does not compile.
   const body: Node =
-    shape === 'whole' ? colour
+    shape === 'whole' ? (card.when.type === 'always' ? { name: 'AlphaL', args: [colour, int(FULL)] } : colour)
     : shape === 'spot' ? { name: 'AlphaL', args: [colour, { name: 'Bump', args: [pos ?? int(16384), int(8000)] }] }
     : { name: 'AlphaL', args: [colour, { name: 'SmoothStep', args: [pos ?? int(shape === 'tip' ? 26000 : 6000), int(shape === 'tip' ? 2000 : -2000)] }] };
   return setAt(layer, card.body, body);
@@ -504,7 +505,7 @@ export function setWhen(layer: Node, card: Extract<LayerCard, { form: 'composed'
   const w = card.when;
   const inTr = w.type !== 'always' ? cloneNode(at(layer, w.inTr)!) : { name: 'TrInstant', args: [] };
   const outTr = w.type !== 'always' ? cloneNode(at(layer, w.outTr)!) : { name: 'TrFade', args: [num(300)] };
-  if (type === 'always') return body;
+  if (type === 'always') return colourView(body) ? { name: 'AlphaL', args: [body, int(FULL)] } : body; // see setShape: a bare colour cannot stand alone in the stack
   if (type === 'lockup') return { name: 'LockupTrL', args: [body, inTr, outTr, { name: w.type === 'lockup' ? at(layer, w.lockup)!.name : 'SaberBase::LOCKUP_NORMAL', args: [] }] };
   return { name: 'TransitionEffectL', args: [{ name: 'TrConcat', args: [inTr, body, outTr] }, { name: w.type === 'effect' ? at(layer, w.effect)!.name : 'EFFECT_BLAST', args: [] }] };
 }
@@ -590,6 +591,11 @@ const LAYER_STARTS: Record<string, string> = {
   TransitionLoopWhileL: 'TransitionLoopWhileL<TrConcat<TrFade<600>,AlphaL<White,Int<12000>>,TrFade<600>>,TrFade<300>,Int<1>>',
   SequenceL: 'SequenceL<White,100,16,0b1010100000000000>',
   AlphaMixL: 'AlphaMixL<Sin<Int<20>>,Red,Blue>',
+  // These aliases take their numbers as types (Int<N>); the catalogue lists the slots as plain numbers, which does not compile.
+  BlinkingL: 'BlinkingL<White,Int<500>,Int<500>>',
+  BrownNoiseFlickerL: 'BrownNoiseFlickerL<White,Int<300>>',
+  PulsingL: 'PulsingL<White,Int<1000>>',
+  StrobeL: 'StrobeL<White,Int<15>,Int<1>>',
 };
 /** A new layer of `name` to add to a stack: its defaults, or a starting point that shows something where they would not. */
 export function newLayer(name: string): Node {

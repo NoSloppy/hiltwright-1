@@ -6,7 +6,7 @@
 // gets compiled is the same kind of alias either way.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BASES, EFFECTS, TRANSITIONS, aliasFor, defaultStyle, defaultTree, evaluateStyle, isStyleDoc, isTreeDoc, newBlock, printStyle, registerStyleSim, styleToCpp, styleToLook, styleToSim, treeFromCpp, treeToCpp, treeToLook, treeToSim, type Block, type BlockDef, type Cue, type Knob, type LookDef, type Node, type StyleDoc, type TreeDoc } from '@hiltwright/core';
+import { BASES, EFFECTS, TRANSITIONS, aliasFor, checkStyle, defaultStyle, defaultTree, evaluateStyle, isStyleDoc, isTreeDoc, newBlock, printStyle, registerStyleSim, sharedSettings, styleToCpp, styleToLook, styleToSim, treeFromCpp, treeToCpp, treeToLook, treeToSim, type Block, type BlockDef, type Cue, type Knob, type LookDef, type Node, type StyleDoc, type StyleProblem, type TreeDoc } from '@hiltwright/core';
 import { BladePreview } from './BladePreview';
 import { useHistory } from './editorHistory';
 import { Icon } from './Icon';
@@ -55,6 +55,11 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // What the check before saving found wrong with a full-editor style, by layer (ST33). Cleared by the next edit.
+  const [problems, setProblems] = useState<StyleProblem[] | null>(null);
+  useEffect(() => { setProblems(null); }, [tree]);
+  // Colours of a Simple style that share one live setting on the saber (ST32).
+  const shared = useMemo(() => sharedSettings(doc), [doc]);
   // A new style's id is made once, so a second press can never make a second style.
   const newId = useRef<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -98,8 +103,14 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
   const openParsed = (t: Node) => { history.edit((s) => ({ ...s, tree: { ...s.tree, tree: t, labels: [] }, mode: 'tree', keys: undefined }), true); setPasting(false); };
 
   /** Save what the owner changed (see `target`). One at a time; a failure is shown and rethrown for the leave dialog. */
-  const save = async () => {
+  const save = async (anyway = false) => {
     if (savingRef.current) return;
+    // A style that does not check out is not saved quietly: the owner is shown what is wrong, and can still save it.
+    if (target.write === 'tree' && !anyway) {
+      const found = checkStyle(tree.tree, tree.labels ?? []);
+      if (found.length) { setProblems(found); throw new Error(`The style has ${found.length === 1 ? 'a problem' : `${found.length} problems`}; see the note in the editor.`); }
+    }
+    setProblems(null);
     savingRef.current = true; setSaving(true); setSaveError(null);
     try {
       const write = target.write;
@@ -143,6 +154,13 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
         </div>
         <div className="pb col scroll" style={{ gap: 14 }}>
           {target.dropsOther && <div className="note amber"><Icon name="warn" /><span>Saving keeps the {mode === 'tree' ? 'Full' : 'Simple'} version. Your changes in {mode === 'tree' ? 'Simple' : 'Full'} are not kept.</span></div>}
+          {problems && problems.length > 0 && (
+            <div className="note red" role="alert"><Icon name="warn" /><span>
+              <b>Not saved: this style has {problems.length === 1 ? 'a problem' : `${problems.length} problems`}.</b> The build would probably stop on {problems.length === 1 ? 'it' : 'them'}.
+              <ul style={{ margin: '6px 0 6px 18px', padding: 0 }}>{problems.map((p, i) => <li key={i}><b>{p.where}:</b> {p.text}</li>)}</ul>
+              Fix {problems.length === 1 ? 'it' : 'them'} and save again, or <button type="button" className="holo" onClick={() => void save(true).catch(() => undefined)}>save it as it is</button> if you know better.
+            </span></div>
+          )}
           {saveError && <div className="note red" role="alert"><Icon name="x" /><span>Could not save the style: {saveError}</span></div>}
           {saved && <div className="note green"><Icon name="check" /><span>Saved. It is in your Styles now: add it to a preset there, and its live colours can be changed once installed.{saved.sabers > 0 ? ` ${saved.sabers === 1 ? "1 saber's plan now has" : `${saved.sabers} sabers' plans now have`} this version; it needs a build to reach the saber.` : ''} <button type="button" className="holo" onClick={() => onDemo(saved.id)}>Swing it in the demo room</button>.</span></div>}
           {pasting && <PasteStyle onParsed={openParsed} onClose={() => setPasting(false)} />}
@@ -152,6 +170,7 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
               layerKeys={history.present.keys} onChange={(t, labels, step, keys) => setTree((cur) => ({ ...cur, tree: t, labels }), step, keys)} onPreview={setPreviewTree} onCue={(c) => setCue((p) => ({ ...c, n: (p?.n ?? 0) + 1, at: Date.now() }))} />
           ) : (
             <>
+              {shared.map((x) => <div key={x.arg} className="note amber"><Icon name="warn" /><span>{x.text}</span></div>)}
               <div className="note"><Icon name="info" /><span>The simple editor covers a colour, a handful of effects and the ignition. For everything ProffieOS can do, <button type="button" className="holo" onClick={openAsTree}>open this style in the full editor</button>: every template, nested any way you like.</span></div>
               <div className="col" style={{ gap: 8 }}>
                 <div className="row between">

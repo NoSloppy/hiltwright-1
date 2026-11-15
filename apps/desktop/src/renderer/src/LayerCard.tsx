@@ -8,7 +8,8 @@ import {
   numberUnit, setAt, setShape, setStrength, setWhen, trNode, trView, unlockPair, type Cue, type Pair, type LayerCard as Card, type Pose, type Kind, type Node, type NumView, type Path, type SensorKey, type Shape, type Slot, type WhenType,
 } from '@hiltwright/core';
 import { Icon } from './Icon';
-import { NodeCard, retarget } from './NodeCard';
+import { NodeCard } from './NodeCard';
+import { PATTERNS, makePattern } from './patterns';
 import { CurveControl, NumControl, PairControl, PreviewPose, type Unit } from './NumControl';
 import { COLOR_ARGS, COLOUR_GROUPS, colourGroup, colourName, describe, friendly, friendlyDefault, friendlyEnum } from './treeWords';
 import { Select } from './Select';
@@ -28,8 +29,6 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
   );
 }
 
-// Patterns a colour slot can be, besides one plain colour. Switching keeps the colours that fit.
-const PATTERNS: [string, string][] = ([['AudioFlicker', 'Flickers with the sound'], ['Pulsing', 'Pulses between two colours'], ['RandomFlicker', 'Random flicker'], ['BrownNoiseFlicker', 'Restless drift'], ['HumpFlicker', 'Rolling humps'], ['Sparkle', 'Sparkles'], ['Mix', 'Blend of two colours'], ['Gradient', 'Gradient, hilt to tip'], ['StripesX', 'Moving stripes'], ['StyleFire', 'Fire'], ['Rainbow', 'Rainbow']] as [string, string][]).filter(([n]) => CATALOGUE[n]);
 /** A colour slot's choices, grouped: the plain colour, then the patterns under their colour-list groups. */
 function patternOptions(extra?: { value: string; label: string }) {
   return [
@@ -38,27 +37,6 @@ function patternOptions(extra?: { value: string; label: string }) {
     extra ? <optgroup key="written" label="As written"><option value={extra.value} disabled>{extra.label}</option></optgroup> : null,
   ];
 }
-const half = (hex: string): Node => { const v = parseInt(hex.slice(1), 16); return { name: 'Rgb', args: [(v >> 16) & 255, (v >> 8) & 255, v & 255].map((x) => ({ name: String(x >> 1), args: [] })) }; };
-
-/** The colour slot as a pattern template, carrying the current colour (and a darker second one) into it. */
-function makePattern(name: string, prev: Node): Node {
-  if (name === '') { const first = findColour(prev); return first ? cloneNode(first) : { name: 'White', args: [] }; }
-  if (CATALOGUE[prev.name]) { const r = retarget(prev, name); if (CATALOGUE[prev.name].params.some((p) => p.kind === 'COLOR')) return fillColours(r); }
-  const e = CATALOGUE[name];
-  const n = fillColours(newNode(name));
-  const cv = colourView(prev);
-  const colourSlots = n.args.map((_, i) => paramFor(e, i)?.kind === 'COLOR' ? i : -1).filter((i) => i >= 0);
-  if (cv && colourSlots.length) { n.args[colourSlots[0]] = cloneNode(prev); if (colourSlots[1] != null) n.args[colourSlots[1]] = half(cv.hex); }
-  return n;
-}
-/** Variadic colour templates (Mix, Gradient, StripesX) start with two colours. */
-function fillColours(n: Node): Node {
-  const e = CATALOGUE[n.name];
-  const last = e?.params[e.params.length - 1];
-  if (e?.variadic && last?.kind === 'COLOR') while (n.args.length < e.params.length + 1) n.args.push(n.args.length === e.params.length ? { name: 'Blue', args: [] } : { name: 'White', args: [] });
-  return n;
-}
-function findColour(n: Node): Node | null { if (colourView(n)) return n; for (const a of n.args) { const c = findColour(a); if (c) return c; } return null; }
 
 /** A colour: one plain colour (optionally a live setting changeable on Presets), or a pattern whose settings open below. */
 export function ColourControl({ node, def, label, liveArg, onChange, patterns = true }: { node: Node | undefined; def?: string | null; label: string; liveArg: string; onChange: (n: Node) => void; patterns?: boolean }) {
@@ -203,7 +181,7 @@ export function LayerCardView({ layer, card, base, pinned, name, defaultName, on
   const template = card.form === 'template' ? card.template : card.form === 'tree' ? layer.name : null;
 
   const sentence = (() => {
-    if (card.form === 'tree') return <>Hiltwright has no card for this layer, so it is shown as a tree. It compiles exactly as written.</>;
+    if (card.form === 'tree') return <>Hiltwright has no card for this layer, so it is shown as a tree. It is kept exactly as written.</>;
     if (card.form === 'template' && /^InOutTrL$/.test(card.template)) {
       const tr = (n: Node | undefined) => { const v = trView(n); if (!v) return <b>its own transition</b>; const w = (TR_CHOICES.find(([t]) => t === v.base)?.[1] ?? v.base).toLowerCase(); return v.ms == null ? <b>{w}</b> : <><b>{w}</b> over {v.ms} ms</>; };
       return <>Comes on with {tr(layer.args[0])} and goes out with {tr(layer.args[1])}.</>;

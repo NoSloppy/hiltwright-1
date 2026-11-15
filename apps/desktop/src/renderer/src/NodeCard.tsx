@@ -7,23 +7,12 @@ import { AngleGauge, NumberBox } from './NumControl';
 import { Icon } from './Icon';
 import { COLOR_ARGS, byColourGroup, choicesFor, describe, friendly, friendlyDefault, friendlyEnum, hexOf, summarise } from './treeWords';
 import { Select } from './Select';
+import { retarget } from './patterns';
 
 const PARAM_WORDS: Record<string, string> = { TR1: 'Begin', TR2: 'End', BEGINTR: 'Begin', ENDTR: 'End', BEGIN_TR: 'Begin', END_TR: 'End', OUTTR: 'Ignition', INTR: 'Retraction', OUT_TR: 'Ignition', IN_TR: 'Retraction', MILLIS: 'Milliseconds', MS: 'Milliseconds', RPM: 'Speed (rpm)', COLOR: 'Colour', BASE: 'Underneath', LAYER: 'Layer', F: 'Function', N: 'Number', OFF: 'Off colour', OFF_COLOR: 'Off colour', EFFECT: 'On which effect', LOCKUP_TYPE: 'Lockup type', CONDITION: 'Only when', TOP: 'Top limit', BOTTOM: 'Bottom limit', SIZE: 'Size', SIZE1: 'Size at rest', SIZE2: 'Size when twisted', LOCATION: 'Where', FADEOUT_MS: 'Fade out (ms)', WAVE_SIZE: 'Wave size', WAVE_MS: 'Wave speed (ms)', FADE: 'Fade (ms)', GRADE: 'Grade', SPEED: 'Speed', PERCENT: 'Percent', WIDTH: 'Width', MIN: 'Minimum', MAX: 'Maximum', DELAY_MS: 'Delay (ms)', PULSE_MILLIS: 'Pulse (ms)', SPARK_COLOR: 'Spark colour', SPARK_SIZE: 'Spark size', ARG: 'Setting', DEFAULT_COLOR: 'Starting colour', STRIPE_WIDTH: 'Stripe width', STRIPE_SPEED: 'Stripe speed', BLINK_MILLIS: 'Blink (ms)', BLINK_PROMILLE: 'On fraction (‰)', SPARK_CHANCE_PROMILLE: 'Spark chance (‰)', SPARK_INTENSITY: 'Spark intensity', HUMP_WIDTH: 'Hump width', ALPHA: 'Opacity', SPEED_MIN: 'Speed at least', SPEED_MAX: 'Speed at most' };
 export const friendlyParam = (p: string): string => PARAM_WORDS[p.toUpperCase()] ?? p.toLowerCase().replace(/_/g, ' ').replace(/\bms\b/, 'ms').replace(/^./, (c) => c.toUpperCase());
 
 export const rgbNode = (hex: string): Node => { const v = parseInt(hex.slice(1), 16); return { name: 'Rgb', args: [(v >> 16) & 255, (v >> 8) & 255, v & 255].map((x) => ({ name: String(x), args: [] })) }; };
-
-/** Swap a node for another template, keeping arguments whose kinds still fit their new slots. */
-export function retarget(old: Node, name: string): Node {
-  const next = newNode(name);
-  const e = CATALOGUE[name];
-  if (!e) return next;
-  for (let i = 0; i < next.args.length; i++) {
-    const p = paramFor(e, i); const prev = old.args[i];
-    if (p && prev && kindOf(prev) === p.kind) next.args[i] = cloneNode(prev);
-  }
-  return next;
-}
 
 /** One template and its parameters. Leaves (plain colours, numbers, enums) get a direct control; the rest nest. */
 export function NodeCard({ node, kind, label, hint, index, depth, onChange, onMove, onRemove, canUp, canDown, unit }: {

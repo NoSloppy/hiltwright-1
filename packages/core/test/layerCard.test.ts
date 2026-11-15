@@ -248,3 +248,20 @@ describe('wave widths', () => {
     expect([paramLabel('ResponsiveBlastL', 'SPEED'), numberUnit('ResponsiveBlastL', 'SPEED', 'FUNCTION')?.kind]).toEqual(['Wave travel time', 'ms']);
   });
 });
+
+describe('layers the toolchain refused (ST34)', () => {
+  it('a whole-blade layer that is always on stays see-through, never a bare colour in the stack', async () => {
+    const { readLayer, setShape, setWhen, newLayer } = await import('../src/layerCard');
+    const spot = P('AlphaL<White,Bump<Int<16384>,Int<8000>>>');
+    const card = readLayer(spot);
+    if (card.form !== 'composed') throw new Error('not composed');
+    expect(S(setShape(spot, card, 'whole'))).toBe('AlphaL<White,Int<32768>>');
+    const flash = P('TransitionEffectL<TrConcat<TrInstant,White,TrFade<300>>,EFFECT_FORCE>');
+    const fc = readLayer(flash);
+    if (fc.form !== 'composed') throw new Error('not composed');
+    expect(S(setWhen(flash, fc, 'always'))).toBe('AlphaL<White,Int<32768>>');
+    // The numbers of these aliases are types, so the starting layer wraps them in Int<>.
+    for (const n of ['BlinkingL', 'BrownNoiseFlickerL', 'PulsingL', 'StrobeL']) expect(S(newLayer(n)), n).toMatch(/Int</);
+  });
+});
+

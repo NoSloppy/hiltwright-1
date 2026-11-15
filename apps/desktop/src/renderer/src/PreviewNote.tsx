@@ -10,7 +10,7 @@ import { friendly } from './treeWords';
 export function previewNoteText(report: EvalReport | null): { missing: string | null; rough: string | null } | null {
   if (!report || (!report.unsupported.length && !report.approximate.length)) return null;
   return {
-    missing: report.unsupported.length ? `The preview cannot show ${report.unsupported.map(friendly).join(', ')} yet; they compile and run on the saber as written.` : null,
+    missing: report.unsupported.length ? `The preview cannot show ${report.unsupported.map(friendly).join(', ')} yet, so they are left out of it. They are kept as written, but only a build shows whether the saber accepts them.` : null,
     rough: report.approximate.length ? `The preview is only approximate for ${report.approximate.map(approximateWords).join(', ')}.` : null,
   };
 }
