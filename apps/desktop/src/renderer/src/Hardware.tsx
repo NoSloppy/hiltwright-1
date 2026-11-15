@@ -36,8 +36,8 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 280px', gap: 16 }}>
-      <div className="col" style={{ gap: 10 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 16 }}>
+      <div className="col" style={{ gap: 10, flex: '1 1 340px', minWidth: 0 }}>
         <div className="row" style={{ gap: 18 }}>
           <div className="row" style={{ gap: 0 }} role="group" aria-label="Number of blades">
             <button type="button" className="input" style={{ width: 38, justifyContent: 'center', padding: 0 }} aria-label="Fewer blades" disabled={locked || blades.length <= 1} onClick={() => setCount(blades.length - 1)}><Icon name="minus" /></button>
@@ -189,7 +189,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
         })}
       </div>
 
-      <aside className="col sticky" style={{ gap: 12 }}>
+      <aside className="col sticky" style={{ gap: 12, flex: '0 0 280px', maxWidth: '100%' }}>
         <div style={{ border: '1px solid var(--line)', background: '#0b1016', padding: 12 }} className="col">
           <div className="row" style={{ gap: 0, padding: '4px 0 10px' }}><Hilt crystal={crystal ? '#ff3d3d' : null} /><BladeBar color="#3d7bff" /></div>
           <div className="list" style={{ border: '1px solid var(--line)' }}>

@@ -11,3 +11,13 @@ export function saberCanReadFileSystem(fileSystem: string | null | undefined): C
   if (/^(EXFAT|NTFS|REFS|UDF)$/.test(fs)) return 'no';
   return 'unknown';
 }
+
+/** Whether copying onto a card formatted `fileSystem` must first ask "Copy anyway?": only when a saber cannot read it. */
+export function shouldAskBeforeCopy(fileSystem: string | null | undefined): boolean {
+  return saberCanReadFileSystem(fileSystem) === 'no';
+}
+
+/** The question shown before copying onto a card a saber cannot read (Fonts & SD and the Font library share it). */
+export function copyAnywayQuestion(what: string, root: string, fileSystem: string | null): string {
+  return `Copy ${what} to ${root} anyway? The card is ${fileSystem}, so a saber will not see it until the card is formatted as FAT32.`;
+}

@@ -58,7 +58,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
   // The saber panel's tab, and whether the controls legend is up; both remembered.
   type Tab = 'blade' | 'sound' | 'saber' | 'help';
   const toggleHelpRef = useRef(() => {});
-  const [tab, setTab] = useState<Tab>(() => { try { const t = localStorage.getItem('hiltwright.demo.tab'); return t === 'sound' || t === 'saber' || t === 'blade' ? t : 'help'; } catch { return 'help'; } }); // first visit opens on the controls
+  const [tab, setTab] = useState<Tab>(() => { try { const t = localStorage.getItem('hiltwright.demo.tab'); return t === 'sound' || t === 'saber' || t === 'blade' ? t : window.innerHeight < 800 ? 'blade' : 'help'; } catch { return window.innerHeight < 800 ? 'blade' : 'help'; } }); // opens on the controls, except in a short window, where their list would scroll
   const lastTab = useRef<Tab>('blade');
   useEffect(() => { if (tab !== 'help') lastTab.current = tab; try { localStorage.setItem('hiltwright.demo.tab', tab); } catch { /* private mode */ } }, [tab]);
   const toggleHelp = () => setTab((t) => (t === 'help' ? lastTab.current : 'help'));

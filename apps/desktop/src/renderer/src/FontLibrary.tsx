@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardInfo, FontLibraryStatus, FontSound, ImportResult, LibraryFont, LibraryFontDetail } from '../../shared/api';
+import { copyAnywayQuestion, shouldAskBeforeCopy } from '@hiltwright/core';
 import { Icon } from './Icon';
 import { ContributorLogo, useContributors } from './credits';
 import { chooseCard, rememberedCardChoice } from './cardChoice';
@@ -288,9 +289,11 @@ function FontDetail({ font, detail, card, askCard, looking, player, onSetLogo, o
   // Replace on card, when this font's folder is already there; two clicks, as on Fonts & SD (card-safety 2.5).
   const [onCard, setOnCard] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
+  // A card a saber cannot read (exFAT, NTFS) asks "Copy anyway?" first, as on Fonts & SD.
+  const [askFs, setAskFs] = useState(false);
   useEffect(() => {
     let live = true;
-    setOnCard(false); setConfirmReplace(false);
+    setOnCard(false); setConfirmReplace(false); setAskFs(false);
     if (card) void api().sd.hasFolder(card.root, font.folder).then((v) => { if (live) setOnCard(v); }, () => undefined);
     return () => { live = false; };
   }, [card?.root, font.folder]);
@@ -305,9 +308,11 @@ function FontDetail({ font, detail, card, askCard, looking, player, onSetLogo, o
     const order = ['font name', 'boot', 'ignition', 'hum', 'retraction', 'swing', 'smoothswing', 'clash'];
     return [...m.entries()].sort(([a], [b]) => { const ia = order.indexOf(a); const ib = order.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b); });
   }, [detail]);
-  const copy = async (replace: boolean) => {
+  const copy = async (replace: boolean, sure = false) => {
     if (!card) return;
     if (replace && !confirmReplace) { setConfirmReplace(true); return; }
+    if (shouldAskBeforeCopy(card.fileSystem) && !sure) { setAskFs(true); return; }
+    setAskFs(false);
     setConfirmReplace(false);
     setCopying(true); setNote(null);
     try { const e = await api().fontLibrary.copyToCard(font.folder, card.root, replace); setOnCard(true); setNote({ tone: 'green', text: `${replace ? 'Replaced on' : 'Copied to'} the card at ${card.root} as ${e.name} (${e.report.files} sounds).` }); }
@@ -411,6 +416,7 @@ function FontDetail({ font, detail, card, askCard, looking, player, onSetLogo, o
         )}
       </div>
       <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }}>
+        {askFs && card && <div className="note amber"><Icon name="warn" /><span>{copyAnywayQuestion(font.meta.name || font.folder, card.root, card.fileSystem)}</span><span className="row" style={{ gap: 8, marginLeft: 'auto' }}><button type="button" className="btn sm warn" onClick={() => void copy(onCard, true)}><span className="b"><span className="i">Copy anyway</span></span></button><button type="button" className="btn sm ghost" onClick={() => setAskFs(false)}><span className="b"><span className="i">Cancel</span></span></button></span></div>}
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}{note.replace && <> <button type="button" className="holo" disabled={copying} onClick={() => void copy(true)}>Replace it</button></>}</span></div>}
         <div className="row wrap" style={{ gap: 8 }}>
           <button type="button" className="btn sm pri" style={{ flex: '0 1 auto', minWidth: 0, maxWidth: '100%' }} disabled={!card || copying} title={card ? `Copy this font's folder onto the card at ${card.root}` : askCard ? 'More than one ProffieOS card is in. Choose which one on Fonts & SD first.' : 'No ProffieOS card found. Put one in a reader, or share the saber’s card on Fonts & SD.'} onClick={() => void copy(onCard)}><span className="b"><span className="i"><Icon name="sd" /><span className="ellip">{copying ? 'Copying…' : card ? (onCard ? (confirmReplace ? `Really replace ${font.folder}?` : `Replace on card ${card.root}`) : `Copy to card ${card.root}`) : looking ? 'Looking for a card…' : askCard ? 'Choose the card on Fonts & SD' : 'No card'}</span></span></span></button>

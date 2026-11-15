@@ -254,7 +254,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
                       );
                     }
                     return (
-                      <label key={n} className="row" style={{ gap: 8, height: 32 }} title={`Style argument ${n}`}>
+                      <label key={n} className="row" style={{ gap: 8, height: 32, gridColumn: '1 / -1' }} title={`Style argument ${n}`}>
                         <span className="small dim ellip grow">{a.name}</span>
                         <span className="input" style={{ width: 104, height: 28, flex: 'none' }}><input type="number" min={0} step={50} value={tried[n] ?? ''} placeholder="default" aria-label={`Try a ${a.name.toLowerCase()}`} onChange={(e) => setTried((t) => { const { [n]: _drop, ...rest } = t; return e.target.value === '' ? rest : { ...rest, [n]: String(Math.max(0, Math.round(Number(e.target.value)))) }; })} /></span>
                       </label>

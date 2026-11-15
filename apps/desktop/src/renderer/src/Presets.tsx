@@ -253,7 +253,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
           </div>
           {cur && (
             <div className="pb col" style={{ gap: 16, overflowY: 'auto', overflowX: 'hidden' }}>
-              <div className="grid2">
+              <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
                 <CommitField label="Name" value={cur.name} sync={board.save} disabled={busy} onCommit={(name) => void editPreset({ name }, 'Rename')} />
                 <div className="col" style={{ gap: 4, minWidth: 0 }}>
                   <CommitField label="Sound font" value={cf.folder} sync={board.save} list="hw-fonts" choices={fontFolders} placeholder="Folder name on the card" disabled={busy} onCommit={(folder) => void editPreset({ font: joinFont({ ...cf, folder }) }, `Font → ${folder}`)} />
@@ -288,9 +288,9 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
                   const label = ROLE_META[b.role].label;
                   return (
                     <div key={b.id} className="bcard col" style={{ gap: 8, padding: '10px 12px' }}>
-                      <div className="row" style={{ gap: 10 }}>
+                      <div className="row" style={{ gap: 6, columnGap: 10, flexWrap: 'wrap' }}>
                         <span className="small" style={{ width: 130, flex: 'none', fontWeight: 600 }}>{k + 1}. {label}</span>
-                        <span className="input sans grow" style={{ height: 30 }}><span className="ellip">{shownLook ? shownLook.name : liveStyle ? `${liveStyle} (not built here)` : isLive ? 'No style chosen' : `Saber’s default (uses ${starterLookFor(b.role).name})`}</span><span className="caret"><Icon name="down" /></span>
+                        <span className="input sans grow" style={{ height: 30, minWidth: 170 }}><span className="ellip">{shownLook ? shownLook.name : liveStyle ? `${liveStyle} (not built here)` : isLive ? 'No style chosen' : `Saber’s default (uses ${starterLookFor(b.role).name})`}</span><span className="caret"><Icon name="down" /></span>
                           <Select value={shownLook?.id ?? ''} disabled={busy} aria-label={`Style for blade ${k + 1}, ${label}`} onChange={(e) => void setLook(k + 1, lookById(e.target.value), null)}>
                             {/* "Saber's default" means no style chosen, which only a staged list can mean (F36). */}
                             {isLive ? <option value="" disabled>No style chosen</option> : <option value="">Saber's default (uses {starterLookFor(b.role).name})</option>}

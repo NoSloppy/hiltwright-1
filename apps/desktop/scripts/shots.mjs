@@ -29,8 +29,30 @@ const typeLine = /^type Page = ([^;]+);/m.exec(appSource);
 const allPages = typeLine ? [...typeLine[1].matchAll(/'([a-z-]+)'/g)].map((m) => m[1]) : [];
 if (!allPages.length) { console.error('Could not read the page ids from App.tsx.'); process.exit(2); }
 const wanted = process.argv.slice(3);
-const pages = wanted.length ? wanted : allPages;
-for (const p of pages) if (!allPages.includes(p)) { console.error(`Unknown page "${p}". Pages: ${allPages.join(', ')}`); process.exit(2); }
+
+// Extra states of a page (a toggle open, a dialog showing, a tab picked), each a snippet run in the page before the
+// shot. They are photographed too when no page or state is named: <folder>/<state>-<width>x<height>.png.
+const sleep = 'const sleep = (ms) => new Promise((r) => setTimeout(r, ms));';
+const click = "const click = (sel, text) => { const e = [...document.querySelectorAll(sel)].find((x) => !text || x.textContent.trim().toLowerCase().includes(text.toLowerCase())); if (!e) throw new Error('not found: ' + sel + ' ' + text); e.click(); return e; };";
+const typeInto = "const typeInto = (el, v) => { const set = Object.getOwnPropertyDescriptor(el.constructor.prototype, 'value').set; set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };";
+const run = (body) => `(async () => { ${sleep} ${click} ${typeInto} ${body} })()`;
+const STATES = {
+  'about-licence': { page: 'about', js: run("click('button', 'show the licence'); await sleep(900);") },
+  'about-notices': { page: 'about', js: run("click('button', 'show the third-party notices'); await sleep(900);") },
+  'looks-battery': { page: 'looks', js: run("click('button, li, [role=button]', 'Battery gauge'); await sleep(500);") },
+  'looks-paste': { page: 'looks', js: run("click('button', 'paste style code'); await sleep(500);") },
+  'presets-sets': { page: 'presets', js: run("click('[role=tab]', 'sets'); await sleep(400);") },
+  'presets-history': { page: 'presets', js: run("click('[role=tab]', 'history'); await sleep(600);") },
+  'editor-full': { page: 'editor', js: run("click('[role=tab]', 'full'); await sleep(700);") },
+  'fonts-preset': { page: 'fonts', js: run("click('[role=tab]', 'preset fonts'); await sleep(500);") },
+  'fonts-add': { page: 'fonts', js: run("click('[role=tab]', 'add a font'); await sleep(500);") },
+  'fonts-tracks': { page: 'fonts', js: run("click('[role=tab]', 'tracks'); await sleep(500);") },
+  'fonts-selected': { page: 'fonts', js: run("click('tbody tr:not(.grp)'); await sleep(400); click('[role=tab]', 'selected font'); await sleep(500);") },
+  'diag-reboot': { page: 'diag', js: run("const i = document.querySelector('input[placeholder=\"Type a command\"]'); i.focus(); typeInto(i, 'reboot'); await sleep(200); i.form.requestSubmit(); await sleep(600);") },
+};
+const allNames = [...allPages, ...Object.keys(STATES)];
+for (const p of wanted) if (!allNames.includes(p)) { console.error(`Unknown page or state "${p}". Pages: ${allPages.join(', ')}. States: ${Object.keys(STATES).join(', ')}`); process.exit(2); }
+const jobs = (wanted.length ? wanted : allNames).map((name) => (STATES[name] ? { name, ...STATES[name] } : { name, page: name }));
 
 // Fixtures: a saber remembered in the app's data folder, a font library, and a card, all made up.
 function wav(seconds = 0.1) {
@@ -103,11 +125,11 @@ const PICK_FIRST_ROW = "document.querySelector('tbody tr:not(.grp)')?.click()";
 const OPEN = { fonts: PICK_FIRST_ROW, library: PICK_FIRST_ROW };
 const viteBin = join(desktop, '../../node_modules/electron-vite/bin/electron-vite.js');
 
-function shoot(page, { w, h }) {
-  const file = resolve(outDir, `${page}-${w}x${h}.png`);
+function shoot({ name, page, js }, { w, h }) {
+  const file = resolve(outDir, `${name}-${w}x${h}.png`);
   return new Promise((done) => {
     const shotEnv = { ...env, HILTWRIGHT_W: String(w), HILTWRIGHT_H: String(h), HILTWRIGHT_PAGE: `fake:${page}`, HILTWRIGHT_SHOT: file };
-    if (OPEN[page]) shotEnv.HILTWRIGHT_SHOT_JS = OPEN[page];
+    if (js ?? OPEN[page]) shotEnv.HILTWRIGHT_SHOT_JS = js ?? OPEN[page];
     const child = spawn(process.execPath, [viteBin, 'dev'], { cwd: desktop, env: shotEnv });
     let log = '';
     let finished = false;
@@ -117,8 +139,8 @@ function shoot(page, { w, h }) {
       clearTimeout(timer);
       if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
       else child.kill('SIGKILL');
-      if (!ok) console.error(`${page} ${w}x${h}: failed\n${log.split('\n').slice(-15).join('\n')}`);
-      else console.log(`${page} ${w}x${h}: ${file}`);
+      if (!ok) console.error(`${name} ${w}x${h}: failed\n${log.split('\n').slice(-15).join('\n')}`);
+      else console.log(`${name} ${w}x${h}: ${file}`);
       setTimeout(() => done(ok), 1500);
     };
     const timer = setTimeout(() => finish(false), 120000);
@@ -131,7 +153,7 @@ function shoot(page, { w, h }) {
 
 let failed = 0;
 try {
-  for (const size of SIZES) for (const page of pages) if (!(await shoot(page, size))) failed++;
+  for (const size of SIZES) for (const job of jobs) if (!(await shoot(job, size))) failed++;
 } finally {
   rmSync(base, { recursive: true, force: true });
 }

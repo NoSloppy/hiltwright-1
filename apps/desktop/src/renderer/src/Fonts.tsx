@@ -2,7 +2,7 @@
 // lists tracks, and copies a font folder from this computer onto the card after checking it.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { saberCanReadFileSystem, type VoicePackStatus } from '@hiltwright/core';
+import { copyAnywayQuestion, saberCanReadFileSystem, shouldAskBeforeCopy, type VoicePackStatus } from '@hiltwright/core';
 import type { CardInfo, FontEntry, LibraryFont } from '../../shared/api';
 import type { Workspace } from './workspace';
 import type { Board } from './board';
@@ -162,7 +162,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   const copy = async (replace: boolean, sure = false) => {
     if (!picked || !card) return;
     if (replace && !confirmReplace) { setConfirmReplace(true); return; }
-    if (unreadable && !sure) { setAskFs({ what: picked.name, run: () => void copy(replace, true) }); return; }
+    if (shouldAskBeforeCopy(card.fileSystem) && !sure) { setAskFs({ what: picked.name, run: () => void copy(replace, true) }); return; }
     setAskFs(null);
     setConfirmReplace(false);
     setBusy(true); setProgress(null);
@@ -181,7 +181,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   const { needed, onCard, inLibrary, copyable } = fontsForPresets(ws.model?.presets ?? [], fonts, library);
   const copyNeeded = async (list: string[], sure = false) => {
     if (!card) return;
-    if (unreadable && !sure) { setAskFs({ what: list.length === 1 ? list[0] : `${list.length} fonts`, run: () => void copyNeeded(list, true) }); return; }
+    if (shouldAskBeforeCopy(card.fileSystem) && !sure) { setAskFs({ what: list.length === 1 ? list[0] : `${list.length} fonts`, run: () => void copyNeeded(list, true) }); return; }
     setAskFs(null);
     setBusy(true); setMessage(null);
     const done: string[] = []; const failed: string[] = [];
@@ -231,7 +231,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
           <button type="button" className="btn sm" disabled={working} onClick={() => void scan()}><span className="b"><span className="i"><Icon name="undo" />Look again</span></span></button>
         </div>
         {card && unreadable && !scanning && <div style={{ padding: '0 18px 12px' }}><div className="note red"><Icon name="warn" /><span><b style={{ fontWeight: 600 }}>A saber cannot read this card.</b> It is formatted {card.fileSystem}, and a saber reads only FAT32 cards. With fonts on it the saber will still find no fonts or presets. To use this card, back up anything you need from it, then format it as FAT32. Windows{'’'} own format only offers FAT32 for cards up to 32 GB; a larger card needs a FAT32 formatting tool. Formatting erases everything on the card.</span></div></div>}
-        {askFs && card && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>Copy {askFs.what} to {card.root} anyway? The card is {card.fileSystem}, so a saber will not see it until the card is formatted as FAT32.</span><span className="row" style={{ gap: 8, marginLeft: 'auto' }}><button type="button" className="btn sm warn" onClick={askFs.run}><span className="b"><span className="i">Copy anyway</span></span></button><button type="button" className="btn sm ghost" onClick={() => setAskFs(null)}><span className="b"><span className="i">Cancel</span></span></button></span></div></div>}
+        {askFs && card && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>{copyAnywayQuestion(askFs.what, card.root, card.fileSystem)}</span><span className="row" style={{ gap: 8, marginLeft: 'auto' }}><button type="button" className="btn sm warn" onClick={askFs.run}><span className="b"><span className="i">Copy anyway</span></span></button><button type="button" className="btn sm ghost" onClick={() => setAskFs(null)}><span className="b"><span className="i">Cancel</span></span></button></span></div></div>}
         {card && kind === 'empty' && !scanning && <div style={{ padding: '0 18px 12px' }}><div className="note"><Icon name="sd" /><span>This card is empty. Copy the fonts the presets use, or add a font, to start a saber card on it. A saber also needs its <span className="mono">common</span> folder and voice pack, which Hiltwright does not put on the card yet.</span></div></div>}
         {card && kind === 'other' && !scanning && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>This drive has other files on it and no fonts or <span className="mono">presets.ini</span>, so it is not a saber card. Copying a font adds its folder beside those files and changes nothing else.</span></div></div>}
         {shared && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The saber has handed its card to this computer{usbRoot ? ` (${usbRoot})` : ''}. It cannot play until you give the card back; do that here rather than unplugging, so nothing is left half written. Copying is slow this way, a big font can take minutes.</span></div></div>}
