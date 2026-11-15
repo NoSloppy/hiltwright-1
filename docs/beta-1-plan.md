@@ -65,32 +65,32 @@ The roadmap left these to the end. They are the only items that can still move t
 Lanes share few files. Each runs in its own worktree and I merge.
 
 **Lane A, presets and the saber (Opus).** Wrong here writes the wrong thing to a saber.
-- [ ] A1 style-to-saber-fixes
-- [ ] A2 preset-history-restore
-- [ ] A3 sets-safety (trimmed, Sonnet)
+- [x] A1 style-to-saber-fixes
+- [x] A2 preset-history-restore
+- [x] A3 sets-safety (trimmed, Sonnet)
 
 **Lane B, styles and preview (Opus, then Sonnet).**
-- [ ] B1 preview-honesty (trimmed, Opus: simulator and evaluator)
-- [ ] B2 editor-output-safety (Sonnet: catalogue check and compile tests)
-- [ ] B3 style-attribution (Sonnet)
+- [x] B1 preview-honesty (trimmed, Opus: simulator and evaluator)
+- [x] B2 editor-output-safety (Sonnet: catalogue check and compile tests)
+- [x] B3 style-attribution (Sonnet)
 
 **Lane C, fonts, card and demo (Sonnet, one Opus item).**
-- [ ] C1 font-check-alignment (Sonnet)
-- [ ] C2 card file system warning (Sonnet)
-- [ ] C3 layout-fit (Sonnet, judged from offscreen screenshots)
-- [ ] C4 demo-sound-fidelity (Opus: a port of `hybrid_font.h` behaviour)
-- [ ] C5 demo-room SR12 (Sonnet)
+- [x] C1 font-check-alignment (Sonnet)
+- [x] C2 card file system warning (Sonnet)
+- [x] C3 layout-fit (Sonnet, judged from offscreen screenshots)
+- [x] C4 demo-sound-fidelity (Opus: a port of `hybrid_font.h` behaviour)
+- [x] C5 demo-room SR12 (Sonnet)
 
 **Lane D, release (Haiku and Sonnet).**
-- [ ] D1 fix the unhandled rejection in `cardCopy.test.ts` (Sonnet)
-- [ ] D2 `LICENSE`, third-party notices generated from dependencies, pack font credits (Haiku)
-- [ ] D3 About screen with licence and tagged-source link (Sonnet)
-- [ ] D4 diagnostics-feedback (trimmed, Sonnet)
-- [ ] D5 install guide and blocked-tool message, from the spike's notes (Sonnet)
-- [ ] D6 version `0.2.0-beta.1`, release notes, what is hidden (Haiku)
-- [ ] D7 Later list: one line per deferred finding, from the open proposals (Haiku)
+- [x] D1 fix the unhandled rejection in `cardCopy.test.ts` (Sonnet)
+- [x] D2 `LICENSE`, third-party notices generated from dependencies, pack font credits (Haiku)
+- [x] D3 About screen with licence and tagged-source link (Sonnet)
+- [x] D4 diagnostics-feedback (trimmed, Sonnet)
+- [ ] D5 (waits on the Smart App Control spike) install guide and blocked-tool message, from the spike's notes (Sonnet)
+- [x] D6 version `0.2.0-beta.1`, release notes, what is hidden (Haiku)
+- [x] D7 Later list: one line per deferred finding, from the open proposals (Haiku)
 
-### Step 2: one hardware session on hote2 (owner, with a checklist I write)
+### Step 2: one hardware session on hote2 (owner; the checklist is `docs/beta-1-hardware-checklist.md`)
 
 - [ ] The promise path end to end from a packaged build
 - [ ] Each Lane A fix: "Use it in" staged and live, move then restore, a set with a missing style
