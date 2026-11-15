@@ -178,3 +178,10 @@ Work deferred past Beta 1, one line per item. Copied from the open OpenSpec prop
 
 - SignPath signing: sign the Windows installer with SignPath. (Beta 2)
 - Blade ID: verify it on hardware and show it again in the app. (Beta 2)
+
+## Found on 2026-11-14
+
+- Built-in previews: drag and lightning block on the 32 HwFx styles do not follow twist and blade angle as the compiled styles do; `hw_heartbeat` drifts in timing. Listed in `packages/core/test/builtinParity.test.ts`. (Beta 2)
+- Style catalogue: some number slots are typed wrongly, and `BatteryLevelStyle`, `FanShade` and `VUMeterStyle1` are missing, so the save check flags them. (Beta 2)
+- Font engine: accent swings inside SmoothSwing, SmoothSwing V1, and monophonic lockups replacing the hum are not played as the firmware plays them. (Beta 2)
+- Layout: the Presets middle column has its own scroll bar at 700 px high, and the Styles filter chips take three rows at 1180 px wide. (Beta 2)
