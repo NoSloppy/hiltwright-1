@@ -1,0 +1,192 @@
+---
+title: Features
+description: What every page of Hiltwright does: wiring, presets, fonts and the SD card, build and install, styles, the style editor, the font library and the demo room.
+nav: features
+---
+<section class="pagehead">
+  <div class="wrap">
+    <p class="eyebrow">Features</p>
+    <h1>Everything between a bare board and a finished saber.</h1>
+    <p class="lede">Hiltwright has two halves. The saber path takes one saber from a plan to installed firmware. The workshop is where you browse, build and try styles and fonts for any saber.</p>
+    <nav class="jump" aria-label="On this page">
+      <a href="#saber-path">The saber path</a><a href="#workshop">The workshop</a><a href="#safety">Safety</a><a href="#not-yet">Not in the beta</a>
+    </nav>
+  </div>
+</section>
+
+<section class="band" id="saber-path">
+  <div class="wrap">
+    <p class="eyebrow">The saber path</p>
+    <h2>One saber, four numbered steps.</h2>
+  </div>
+
+  <div class="wrap feature" id="armory">
+    <div>
+      <h3>Armory</h3>
+      <p>Every saber Hiltwright has seen is remembered, plugged in or not. Choose the one you are working on and see how far it has got.</p>
+      <ul class="points">
+        <li>Plug a saber in with a USB data cable and it connects by itself.</li>
+        <li>"New saber" plans one ahead: wiring, presets and styles, ready to install.</li>
+        <li>When the real saber is plugged in, Hiltwright asks whether it is the one you planned.</li>
+      </ul>
+      <a class="more" href="docs/armory.html">Armory in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-07.png" width="1480" height="980" alt="The Armory: a list of remembered sabers and the four steps for the one being worked on"></figure>
+  </div>
+
+  <div class="wrap feature flip" id="wiring">
+    <div>
+      <h3>1 Wiring</h3>
+      <p>Tell Hiltwright what is in the hilt: which Proffieboard, how many buttons, which prop file, and what each blade is wired to.</p>
+      <ul class="points">
+        <li>A blade is anything the saber lights or runs: main blade, crystal chamber, accent LED, motor.</li>
+        <li>The pin table shows which pins each blade uses, and any clash between them.</li>
+        <li>Nothing is installed until you confirm the wiring. A wrong power pin can damage hardware.</li>
+      </ul>
+      <a class="more" href="docs/wiring.html">Wiring in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-11.png" width="1480" height="980" alt="The Wiring page: board, buttons and prop at the top, then the blades and the pin table"></figure>
+  </div>
+
+  <div class="wrap feature" id="presets">
+    <div>
+      <h3>2 Presets</h3>
+      <p>A preset is one setup you switch to with the buttons: a sound font, a music track and a style for each blade.</p>
+      <ul class="points">
+        <li>With the saber plugged in, a change is written at once and shows as saved when the saber reads it back.</li>
+        <li>With no saber plugged in, changes are staged and go on at the next install.</li>
+        <li>Save a whole preset list as a set, and load it on another saber.</li>
+        <li>History lists what changed. Undo the newest change, or restore an older one.</li>
+      </ul>
+      <a class="more" href="docs/presets.html">Presets in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-14.png" width="1480" height="980" alt="The Presets page: the preset list on the left, and one preset's font, track and blade styles on the right"></figure>
+  </div>
+
+  <div class="wrap feature flip" id="fonts-sd">
+    <div>
+      <h3>3 Fonts &amp; SD</h3>
+      <p>Sound fonts live on the saber's SD card. Hiltwright copies them there and checks them.</p>
+      <ul class="points">
+        <li>Use a card reader, or press "Share the saber's card" and the saber lends its card over USB.</li>
+        <li>Every font on the card is checked for the usual faults, such as a missing hum.</li>
+        <li>A font a preset names but the card lacks can be copied from your library in one click.</li>
+        <li>Six free ProffieOS fonts come with Hiltwright, ready to copy.</li>
+      </ul>
+      <a class="more" href="docs/fonts-and-sd.html">Fonts &amp; SD in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-22.png" width="1480" height="980" alt="The Fonts and SD page: fonts on the card with their verdicts, and the fonts the presets use"></figure>
+  </div>
+
+  <div class="wrap feature" id="build-install">
+    <div>
+      <h3>4 Build &amp; Install</h3>
+      <p>This turns the wiring, presets and styles into firmware, and installs it over USB.</p>
+      <ul class="points">
+        <li>The compiler is a one-time download of about 360 MB. After that a build takes about a minute.</li>
+        <li>Install reads the saber's whole firmware into a backup file first.</li>
+        <li>Every backup is kept. "Put back" writes one onto the saber exactly as it was.</li>
+        <li>If a step fails, "Save diagnostics" writes one file to attach to a report.</li>
+      </ul>
+      <a class="more" href="docs/build-and-install.html">Build &amp; Install in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-28.png" width="1480" height="980" alt="Build and Install with the Backups tab open, listing firmware backups that can be put back"></figure>
+  </div>
+</section>
+
+<section class="band alt" id="workshop">
+  <div class="wrap">
+    <p class="eyebrow">The workshop</p>
+    <h2>Styles and fonts, for any saber.</h2>
+  </div>
+
+  <div class="wrap feature" id="styles">
+    <div>
+      <h3>Styles</h3>
+      <p>A style is what a blade does: its colour, flicker, ignition, and how it reacts to clashes and swings.</p>
+      <ul class="points">
+        <li>Dozens of Hiltwright's own styles, for main blades, crystals, accents and motors.</li>
+        <li>The preview simulates the style LED by LED. Where it can only be approximate, a note says so.</li>
+        <li>Each style says whether it is on the saber, queued, or needs a build.</li>
+        <li>"Paste style code" takes a style from the Fett263 style library or anywhere else, with its credit.</li>
+      </ul>
+      <a class="more" href="docs/styles.html">Styles in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-29.png" width="1480" height="980" alt="The Styles page: a searchable grid of blade styles, each with a preview"></figure>
+  </div>
+
+  <div class="wrap feature flip" id="style-editor">
+    <div>
+      <h3>Style editor</h3>
+      <p>Build a style without writing ProffieOS style code.</p>
+      <ul class="points">
+        <li>Simple: a blade underneath, effects stacked on top, then the ignition and retraction.</li>
+        <li>Full: every ProffieOS layer. Pick a layer, then say what it shows, where on the blade, and when.</li>
+        <li>Open a Simple style in Full at any time.</li>
+        <li>"Save as a style" adds it to your Styles, ready for any preset.</li>
+      </ul>
+      <a class="more" href="docs/style-editor.html">The editor in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-34.png" width="1480" height="980" alt="The Style editor in Simple mode: stacked blocks for the blade, effects, ignition and retraction"></figure>
+  </div>
+
+  <div class="wrap feature" id="demo-room">
+    <div>
+      <h3>Demo room</h3>
+      <p>Try any style with any font on a saber in a dark room, before it goes near a real one.</p>
+      <ul class="points">
+        <li>Ignite with Space. Drag to swing, and scroll to twist the hilt.</li>
+        <li>Clash, blast, lockup, drag, melt, lightning block and special abilities, each with its key.</li>
+        <li>The sound follows ProffieOS: SmoothSwing, pre-on and post-off, begin and end sounds.</li>
+        <li>Load a preset from your saber: its style, colours and font, as they are on the saber.</li>
+      </ul>
+      <a class="more" href="docs/demo-room.html">The demo room in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-41.png" width="1480" height="980" alt="The demo room: a lit saber on a 3D hilt, with style, colour and effect controls"></figure>
+  </div>
+
+  <div class="wrap feature flip" id="font-library">
+    <div>
+      <h3>Font library and Contributors</h3>
+      <p>Keep your sound fonts in one place on this computer, and see whose work you are using.</p>
+      <ul class="points">
+        <li>Add a font as you downloaded it (.zip), or as a folder. Your originals are left alone.</li>
+        <li>Play a font's sounds, note who made it, and copy it to a card.</li>
+        <li>Contributors lists font makers, style authors and hilt makers, each with a link.</li>
+      </ul>
+      <a class="more" href="docs/font-library.html">The font library in the docs</a>
+    </div>
+    <figure class="frame"><img loading="lazy" src="assets/shots/clean-39.png" width="1480" height="980" alt="The Font library with one font open: its sounds, its maker and a button to copy it to a card"></figure>
+  </div>
+</section>
+
+<section class="band" id="safety">
+  <div class="wrap">
+    <p class="eyebrow">Safety</p>
+    <h2>Built so a mistake can be undone.</h2>
+    <div class="cards three">
+      <div class="card"><h3>Backup before install</h3><p>The saber's whole firmware is read into a file before anything is written. Putting it back is one button.</p></div>
+      <div class="card"><h3>Wiring is confirmed</h3><p>Nothing is installed until you have checked the pins and turned the confirm switch on. Any wiring change turns it off again.</p></div>
+      <div class="card"><h3>Presets have a history</h3><p>A copy of the saber's own presets is kept before staged ones replace them. Each restore lists what it will change first.</p></div>
+      <div class="card"><h3>Fonts are checked</h3><p>Before a build, Hiltwright warns if a preset names a font that is not on the card. Your original font files are never changed.</p></div>
+      <div class="card"><h3>Risky commands ask first</h3><p>In Diagnostics, a command that restarts the saber or changes its files asks before it is sent.</p></div>
+      <div class="card"><h3>Diagnostics stay with you</h3><p>"Save diagnostics" writes one file on your computer and sends nothing. You choose whether to attach it to a report.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band alt" id="not-yet">
+  <div class="wrap narrow">
+    <p class="eyebrow">Honest limits</p>
+    <h2>Not in this beta.</h2>
+    <ul class="points">
+      <li>macOS and Linux. Beta 1 is Windows only.</li>
+      <li>Code signing. Windows warns about the installer, and Smart App Control must be off.</li>
+      <li>Card formatting. Hiltwright warns about a card in the wrong format, but does not format it.</li>
+      <li>Building fonts from sounds.</li>
+      <li>Blade ID and the Xenopixel import are hidden for now.</li>
+    </ul>
+    <p>The full list is in the <a href="docs/release-notes.html">release notes</a>.</p>
+    <div class="cta"><a class="btn primary" href="download.html">Get the beta</a><a class="btn" href="walkthrough.html">Take the walkthrough</a></div>
+  </div>
+</section>

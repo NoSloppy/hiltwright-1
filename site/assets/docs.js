@@ -1,0 +1,49 @@
+// Docs pages: search, and the "on this page" marker.
+(() => {
+  const q = document.getElementById('q');
+  const hits = document.getElementById('hits');
+  let index = null;
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  async function search() {
+    const words = q.value.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+    if (!words.length) { hits.hidden = true; return; }
+    index ??= await fetch('search.json').then((r) => r.json()).catch(() => []);
+    const found = [];
+    for (const e of index) {
+      const hay = `${e.p} ${e.h} ${e.t}`.toLowerCase();
+      if (!words.every((w) => hay.includes(w))) continue;
+      const head = `${e.p} ${e.h}`.toLowerCase();
+      found.push({ e, score: words.filter((w) => head.includes(w)).length });
+    }
+    found.sort((a, b) => b.score - a.score);
+    hits.hidden = false;
+    if (!found.length) { hits.innerHTML = '<div class="none">Nothing found. Try one word, such as "backup" or "font".</div>'; return; }
+    hits.innerHTML = found.slice(0, 12).map(({ e }) => {
+      const at = Math.max(0, e.t.toLowerCase().indexOf(words[0]) - 40);
+      let snip = esc(e.t.slice(at, at + 130));
+      for (const w of words) snip = snip.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), (m) => `<mark>${m}</mark>`);
+      return `<a href="${e.u}"><b>${esc(e.p)}${e.h ? ` · ${esc(e.h)}` : ''}</b><span>${at ? '…' : ''}${snip}…</span></a>`;
+    }).join('');
+  }
+  if (q) {
+    q.addEventListener('input', search);
+    q.addEventListener('keydown', (e) => { if (e.key === 'Escape') { q.value = ''; hits.hidden = true; } });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.docsearch')) hits.hidden = true; });
+    document.addEventListener('keydown', (e) => { if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) { e.preventDefault(); q.focus(); } });
+  }
+  // On a small screen the page list starts closed.
+  const menu = document.querySelector('.docmenu');
+  if (menu && matchMedia('(max-width:900px)').matches) menu.open = false;
+
+  const links = [...document.querySelectorAll('.toc a')];
+  if (links.length) {
+    const heads = links.map((a) => document.getElementById(a.getAttribute('href').slice(1)));
+    const mark = () => {
+      let on = 0;
+      heads.forEach((h, i) => { if (h && h.getBoundingClientRect().top < 120) on = i; });
+      links.forEach((a, i) => a.classList.toggle('on', i === on));
+    };
+    addEventListener('scroll', mark, { passive: true });
+    mark();
+  }
+})();

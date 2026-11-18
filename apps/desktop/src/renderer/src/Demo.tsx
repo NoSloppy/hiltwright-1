@@ -346,6 +346,8 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
     let room: DemoScene;
     try { room = new DemoScene(el, canSimulateLook(lookId) ? lookId : STARTERS[0].id); } catch (err) { setFailed(String(err)); return; }
     scene.current = room;
+    // Dev aid: the room itself, for the website's picture of the hilt (site/scripts/hilt.mjs).
+    if (import.meta.env.DEV) (window as unknown as { hiltwrightDemoScene?: DemoScene }).hiltwrightDemoScene = room;
     room.setControlMode(control);
     room.setProp(propBehaviour(propKey));
     room.applySettings(look3d);

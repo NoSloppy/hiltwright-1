@@ -1,0 +1,72 @@
+---
+title: Download
+description: Download the Hiltwright beta for Windows. What you need, what Windows will warn you about, and how to build it from source.
+nav: download
+---
+<section class="pagehead">
+  <div class="wrap dl">
+    <div>
+      <p class="eyebrow">Download</p>
+      <h1>Hiltwright {{version}}</h1>
+      <p class="lede">A closed beta for Windows 10 and 11, for a Proffieboard V2.2 or V3. Free and open source.</p>
+      <div class="cta">
+        <a class="btn primary big" href="{{releases}}">Get the installer on GitHub</a>
+        <a class="btn" href="docs/install.html">Read the install guide first</a>
+      </div>
+      <p class="fine">The file is <code>Hiltwright-{{version}}-setup.exe</code>, about 205 MB. It installs for your account only and does not ask for administrator approval.</p>
+    </div>
+    <div class="card warn">
+      <h2>Check Smart App Control first</h2>
+      <p>Hiltwright Beta 1 is not signed. If Smart App Control is <b>On</b>, Windows blocks both the installer and the installed app, and there is no way to allow them. It has to be off while you use this beta.</p>
+      <p>Look before you download: Windows Security, App &amp; browser control, Smart App Control settings.</p>
+      <a class="more" href="docs/install.html#3-smart-app-control">What to check, step by step</a>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2>What you need</h2>
+    <div class="cards three">
+      <div class="card"><h3>A Windows PC</h3><p>Windows 10 or 11, 64-bit. Windows in S mode is not supported. About 2.5 GB of free disk space.</p></div>
+      <div class="card"><h3>A Proffieboard</h3><p>A V2.2 or a V3, in a saber or on the bench, and the installer's notes on how it is wired.</p></div>
+      <div class="card"><h3>A USB data cable</h3><p>Some cables only charge. If the saber is not seen, try another cable first.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap">
+    <h2>What to expect</h2>
+    <ol class="path three">
+      <li><span class="num">1</span><h3>Windows warns you</h3><p>The browser asks whether to keep the file, and SmartScreen shows a blue warning when you run it. The install guide shows each one and what to press.</p></li>
+      <li><span class="num">2</span><h3>A one-time setup download</h3><p>The first build needs the compiler: about 360 MB, into Hiltwright's own folder. After that nothing more is downloaded.</p></li>
+      <li><span class="num">3</span><h3>One driver approval</h3><p>The first install to a saber asks Windows for a USB driver, once. Then the tour in the app shows you around.</p></li>
+    </ol>
+    <p class="center"><a class="btn" href="docs/install.html">Open the install guide</a> <a class="btn" href="docs/quick-start.html">Then the quick start</a></p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap two">
+    <div>
+      <h2>Build it from source</h2>
+      <p>Hiltwright is licensed under GPL-3.0-or-later. The source for each release is tagged on GitHub. You need Node.js and git.</p>
+<pre><code>git clone {{repo}}.git
+cd hiltwright
+npm install
+npm run dev     # run the app from source
+npm run dist    # build the Windows installer</code></pre>
+      <p class="fine">A build run from source this way is not blocked by Smart App Control.</p>
+      <a class="more" href="{{repo}}">Source on GitHub</a>
+    </div>
+    <div>
+      <h2>Found a problem?</h2>
+      <p>Press "Save diagnostics" in the app. It writes one file on your computer and sends nothing. Then open an issue on GitHub and attach that file.</p>
+      <p>Each report is answered: it is fixed, planned for a later release, or closed with a reason.</p>
+      <a class="more" href="{{issues}}">Report a problem</a><br>
+      <a class="more" href="docs/troubleshooting.html">Troubleshooting</a><br>
+      <a class="more" href="docs/release-notes.html">Release notes</a>
+    </div>
+  </div>
+</section>

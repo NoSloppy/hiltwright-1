@@ -1,0 +1,16 @@
+{
+  "name": "hiltwright-site",
+  "private": true,
+  "type": "module",
+  "description": "The Hiltwright website: promo pages, the walkthrough and the user docs. Built to site/dist and published with GitHub Pages.",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs && node serve.mjs",
+    "capture": "node scripts/capture.mjs",
+    "hilt": "node scripts/hilt.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "marked": "^15.0.0"
+  }
+}

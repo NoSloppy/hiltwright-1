@@ -1,0 +1,67 @@
+---
+title: FAQ
+summary: Short answers to the questions beta testers ask most, from which boards work to what Hiltwright sends over the internet.
+section: Help
+order: 3
+---
+## Which boards and systems does it support?
+
+The Proffieboard V2.2 and V3, running ProffieOS 8.x. Hiltwright runs on Windows 10 or 11, 64-bit. Windows in S mode is not supported.
+
+## Is it free? Is it open source?
+
+Yes to both. Hiltwright is licensed under GPL-3.0-or-later. You may use, change and share it under those terms. The source of each build is on GitHub, and the [About page](diagnostics.html) links to the source of the exact build you run.
+
+## Do I need Arduino or to write code?
+
+No. Hiltwright writes the settings file for you, builds the firmware and installs it over USB. You never need to read C++. The Config tab on Build & Install shows what it wrote, if you are curious.
+
+The first build needs a one-time download of about 360 MB of compiler tools. After that, a build takes about a minute.
+
+## Will it overwrite my saber? Can I undo it?
+
+An install replaces the firmware on the board. Before it does, Hiltwright reads the saber's whole firmware into a backup file. To undo an install, use **Put back** on the Backups tab. It writes the old firmware back exactly as it was.
+
+The presets and fonts on the SD card are not touched by an install or a put back. When you set presets with no saber plugged in, Hiltwright keeps a copy of the saber's own presets first, so they can be put back. See [Build and Install](build-and-install.html).
+
+## Does it send my data anywhere?
+
+The docs describe two things Hiltwright fetches from the internet. The first-run setup downloads the compiler tools and the ProffieOS source from GitHub and from the ProffieOS author's package index. The first install downloads a small bootloader driver from the ProffieOS author, and Windows asks you once to approve it.
+
+**Save diagnostics** writes a file on your computer and sends nothing. You attach it to a report yourself. Style code, fonts, hilt models and backups are never put in it, and your user name and computer name are replaced.
+
+## Does it work on Mac or Linux?
+
+Not in this beta. Hiltwright is Windows only for now. Mac and Linux support is planned for later.
+
+## Windows warns me about the installer. Is that normal?
+
+Yes. Beta 1 is not signed, so Windows shows warnings such as "Windows protected your PC". Choose **More info**, then **Run anyway**. If Smart App Control is **On**, Windows blocks the installer and the app with no way to allow just one app. It has to be off as long as you use the beta. See [Install](install.html) and [Troubleshooting](troubleshooting.html).
+
+## Where do sound fonts come from?
+
+You bring them. Fonts you buy or download go into the [Font library](font-library.html) as a `.zip` package or a folder. Six free ProffieOS fonts come with Hiltwright: TeensySF, SmthJedi, SmthGrey, SmthFuzz, RgueCmdr and TthCrstl. They can be copied to a card from Fonts & SD.
+
+Hiltwright cannot build a font from raw sounds in this beta.
+
+## Can I use Fett263 styles?
+
+Yes. On the [Styles](styles.html) page, press **Paste style code** and paste the whole block from the Fett263 style library, comments included. Say who made it. The credit stays with the style. Hiltwright never redistributes the library itself. You can also paste a style into the Full style editor to edit it.
+
+The preview may be only approximate for some parts of a pasted style. A note tells you which.
+
+## Can I build my own styles?
+
+Yes. The [Style editor](style-editor.html) has a Simple mode with plain blocks and a Full mode that shows every ProffieOS layer. A live blade shows each change. The [Demo room](demo-room.html) lets you swing the style with a sound font before you install anything.
+
+## Do I need a saber to start?
+
+No. **New saber** in the Armory sets one up ahead: wiring, presets and styles, ready to install. When you plug the real saber in, Hiltwright asks whether it is the one you planned. The tour in the app uses an example saber, so you can see every page.
+
+## What is not in this beta?
+
+Card formatting, code signing, macOS and Linux, and building fonts from sounds are not in this beta. A couple of features are switched off for now and are not covered in these pages. Known gaps are tracked in the project's later list on GitHub.
+
+## How do I report a problem or give feedback?
+
+Press **Save diagnostics** on the Diagnostics page, then open an issue at [github.com/safwyls/hiltwright/issues](https://github.com/safwyls/hiltwright/issues). Say what happened, which step you were on, and attach the file. Each report is answered: it is fixed, planned for a later release, or closed with a reason.

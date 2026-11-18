@@ -1,0 +1,40 @@
+---
+title: Walkthrough
+description: A guided walk through every page of Hiltwright, step by step, with the same words as the tour built into the app.
+nav: walkthrough
+scripts: assets/walkthrough.js
+---
+<section class="pagehead slim">
+  <div class="wrap">
+    <p class="eyebrow">Walkthrough</p>
+    <h1>Every page, in {{steps}} steps.</h1>
+    <p class="lede">This is the tour that is built into the app, on an example saber. Use the arrows, or pick a chapter. In the app, "Take the tour" runs the same steps on the real pages.</p>
+  </div>
+</section>
+
+<section class="wrap wt" id="wt" aria-label="Walkthrough">
+  <nav class="wt-chapters" aria-label="Chapters"></nav>
+  <div class="wt-main">
+    <figure class="frame wt-shot"><img width="1480" height="980" alt=""></figure>
+    <div class="wt-card" aria-live="polite">
+      <p class="wt-count mono"></p>
+      <h2 class="wt-title"></h2>
+      <div class="wt-text"></div>
+      <div class="wt-nav">
+        <button type="button" class="btn wt-prev">Back</button>
+        <button type="button" class="btn primary wt-next">Next</button>
+        <a class="wt-doc more" href="#"></a>
+      </div>
+      <div class="wt-bar" aria-hidden="true"><i></i></div>
+    </div>
+  </div>
+  <noscript><p>The walkthrough needs JavaScript. The same material is in the <a href="docs/index.html">docs</a>.</p></noscript>
+</section>
+<script type="application/json" id="tour-data">{{tour}}</script>
+
+<section class="band">
+  <div class="wrap narrow center">
+    <h2>Ready to try it on your own saber?</h2>
+    <div class="cta"><a class="btn primary" href="download.html">Get the beta</a><a class="btn" href="docs/quick-start.html">Read the quick start</a></div>
+  </div>
+</section>
