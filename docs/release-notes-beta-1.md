@@ -29,7 +29,7 @@ The six free ProffieOS fonts are included and can be copied to a card from Fonts
 
 ## Install
 
-The installer is unsigned, so Windows will warn you before it runs. The install guide covers each Windows barrier to unsigned software.
+The installer is unsigned, so Windows will warn you before it runs. If Smart App Control is on, Windows blocks it outright: check that first (install guide, section 3). The install guide covers each Windows barrier to unsigned software.
 
 Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.1/docs/install-guide.md
 

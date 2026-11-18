@@ -42,7 +42,7 @@ If there is no **Run anyway** button, read the next section.
 
 ## 3 Smart App Control
 
-Smart App Control is on some new Windows 11 PCs. It blocks unsigned apps. It gives no **Run anyway** choice. Microsoft says there is no way to allow one app.
+Check this before you download. Smart App Control is on some Windows 11 PCs. When it is **On**, it blocks the Hiltwright installer, because this beta is not signed. There is no **Run anyway** choice, and Microsoft says there is no way to allow one app.
 
 To check:
 
@@ -51,13 +51,18 @@ To check:
 3. Choose **Smart App Control settings**.
 4. It says **On**, **Evaluation** or **Off**.
 
-**On** blocks unsigned apps. **Evaluation** may turn itself off, or may switch to **On**. **Off** does nothing.
+- **Off:** nothing to do. Carry on.
+- **Evaluation:** it is only watching. It may switch itself to **On** or **Off** later.
+- **On:** the installer is blocked. Windows says: "We blocked … because we could not verify its publisher to confirm it was safe to run. This app has been blocked to help protect your device and data."
 
-On the developer's PC, with Smart App Control set to **On**, the downloaded installer ran and was not blocked. That is one PC, so yours may differ.
+If yours is **On**, you have two choices:
 
-If Smart App Control does block Hiltwright, do not turn it off just for this. Tell us what it said and at which step (section 7): the installer, the one-time setup download, or the first build.
+- Use another PC for this beta.
+- Turn Smart App Control off. This lowers the protection of your PC for every app, not only Hiltwright. On some versions of Windows it cannot be turned back on without resetting Windows, so read Microsoft's page first: https://support.microsoft.com/topic/what-is-smart-app-control-285ea03d-fa88-4d56-882e-6698afdb7003
 
-The one-time setup download and the first build have not been tried with Smart App Control on yet. They run a compiler and a flashing tool that Hiltwright downloads, so those are the steps to watch.
+A signed build, which Smart App Control accepts, is planned for the next beta.
+
+The one-time setup download and the first build have not been tried with Smart App Control on yet. They run a compiler and a flashing tool that Hiltwright downloads, so they may be blocked as well.
 
 ## 4 First run: the one-time setup download
 
