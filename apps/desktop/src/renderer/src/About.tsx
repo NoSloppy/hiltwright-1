@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import { LICENCE_NAME, STYLE_STATEMENT, sourceUrl } from '../../shared/about';
 import type { LegalTexts } from '../../shared/about';
+import { UpdatesPanel, type UpdatesView } from './Updates';
 
-export function About() {
+/** `updates`: the update state and its buttons; null during the tour, when nothing about updates shows. */
+export function About({ updates }: { updates: UpdatesView | null }) {
   const version = window.hiltwright?.appVersion ?? '?';
   const [legal, setLegal] = useState<LegalTexts | null>(null);
   const [failed, setFailed] = useState(false);
@@ -37,6 +39,7 @@ export function About() {
           <span className="dim">{STYLE_STATEMENT}</span>
         </div>
       </section>
+      {updates && <UpdatesPanel view={updates} />}
       {failed && <div className="note amber" role="alert"><Icon name="warn" /><span>The licence and notices could not be read from this install. They are in the Hiltwright source on GitHub.</span></div>}
       {show && legal && (
         <section className="panel" aria-label={show === 'licence' ? 'Licence text' : 'Third-party notices'} style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>

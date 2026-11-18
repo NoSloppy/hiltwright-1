@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@hiltwright/core": "*",
+    "electron-updater": "^6.8.11",
     "pixi.js": "^8.21.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -45,6 +46,14 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "safwyls",
+        "repo": "hiltwright",
+        "releaseType": "prerelease"
+      }
+    ],
     "files": [
       "out/**/*",
       "package.json"
@@ -76,6 +85,7 @@
     ],
     "win": {
       "icon": "build/icon.ico",
+      "verifyUpdateCodeSignature": false,
       "target": [
         {
           "target": "nsis",

@@ -14,6 +14,7 @@ import { Icon } from './Icon';
 import { SaveDiagnostics } from './SaveDiagnostics';
 import { readTransfer } from './transfer';
 import { toolchainBlockers } from '../../shared/toolchainChecks';
+import { duringWork } from './work';
 import { BOOTLOADER_WAIT_MS, STOPPED_HINT, applyStagedPresets, installSequence, restoreSequence, writeFromBootloader as writeFromBootloaderFlow, type InstallDeps, type InstallNote } from './installFlow';
 
 const api = () => window.hiltwright;
@@ -127,7 +128,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const [installStarted, setInstallStarted] = useState<number | null>(null);
   const install = async () => {
     setInstalling(true); setInstallError(null); setInstallStarted(Date.now());
-    try { setTool(await api().toolchain.install()); } catch (err) { setInstallError(String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')); } finally { setInstalling(false); }
+    try { setTool(await duringWork('setup', () => api().toolchain.install())); } catch (err) { setInstallError(String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')); } finally { setInstalling(false); }
   };
   // Locking a toolchain folder other Windows users can change (toolchain-integrity).
   const [repairing, setRepairing] = useState(false);
@@ -142,7 +143,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     setStep('building'); setElapsed(0); setNote(null); setResult(null); setBuiltModel(null); lastBuilds.delete(saber.id);
     const from = model;
     let r: BuildResult;
-    try { r = await api().build.run(saber.id, from, force); } catch (err) {
+    try { r = await duringWork('build', () => api().build.run(saber.id, from, force)); } catch (err) {
       // A build that stops unexpectedly (a file it cannot write, say) ends the step as failed, never left running.
       const reason = String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '');
       setStep('failed'); setNote({ tone: 'red', text: `Could not build: ${reason}` });
@@ -168,7 +169,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   /** From a board sitting in its bootloader with a usable driver: which board, check, backup, write, wait, reconnect, record. */
   const writeFromBootloader = useCallback(async () => {
     if (!result || !saber) return;
-    await writeFromBootloaderFlow(flowDeps(), { saber, model: builtModel, result, info, connected: false });
+    await duringWork('install', () => writeFromBootloaderFlow(flowDeps(), { saber, model: builtModel, result, info, connected: false }));
   }, [result, saber, builtModel, info, flowDeps]);
 
   /** The install sequence. The renderer does the reboot because it owns the serial port. */
@@ -177,7 +178,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     setWithBackup(true);
     setNote(null); setNotes([]); setElapsed(0);
     paused.current = { kind: 'install' };
-    await installSequence(flowDeps(), { saber, model: builtModel, result, info, connected: connectedNow });
+    await duringWork('install', () => installSequence(flowDeps(), { saber, model: builtModel, result, info, connected: connectedNow }));
   }, [result, saber, builtModel, info, flowDeps, connectedNow]);
 
   /** One click: main downloads, verifies and launches the official installer elevated, then the install resumes. */
@@ -185,7 +186,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const installDriver = async () => {
     setDriverBusy(true); setDriverCheck('Downloading the driver installer, then asking Windows for approval…');
     try {
-      const r = await api().flash.installDriver();
+      const r = await duringWork('driver', () => api().flash.installDriver());
       if (r.ok) { setDriverCheck(null); await resumeAfterDriver(); } else setDriverCheck(r.text);
     } catch (err) { setDriverCheck(String(err)); } finally { setDriverBusy(false); }
   };
@@ -213,19 +214,19 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
     setWithBackup(true);
     setRestoreArmed(null); setNote(null); setNotes([]); setElapsed(0);
     paused.current = { kind: 'restore', backup: b };
-    await restoreSequence(flowDeps(), saber, b, connectedNow);
+    await duringWork('restore', () => restoreSequence(flowDeps(), saber, b, connectedNow));
   }, [saber, flowDeps, connectedNow]);
   /** Put staged presets on a saber whose firmware already carries them, with no install (safe-staged-install D3). */
   const [stagedBusy, setStagedBusy] = useState(false);
   const useStaged = useCallback(async () => {
     if (!saber || !model) return;
     setStagedBusy(true); setNote(null); setNotes([]);
-    try { setNotes([await applyStagedPresets(flowDeps(), saber, model, saber.identity.usbSerial ?? null)]); } finally { setStagedBusy(false); }
+    try { setNotes([await duringWork('install', () => applyStagedPresets(flowDeps(), saber, model, saber.identity.usbSerial ?? null))]); } finally { setStagedBusy(false); }
   }, [saber, model, flowDeps]);
   /** After the driver step: carry on with what was paused, the board already in its bootloader. */
   const resumeAfterDriver = useCallback(async () => {
     const p = paused.current;
-    if (p?.kind === 'restore') { if (saber) await restoreSequence(flowDeps(), saber, p.backup, false); return; }
+    if (p?.kind === 'restore') { if (saber) await duringWork('restore', () => restoreSequence(flowDeps(), saber, p.backup, false)); return; }
     await writeFromBootloader();
   }, [saber, flowDeps, writeFromBootloader]);
   const checkDriver = useCallback(async () => {

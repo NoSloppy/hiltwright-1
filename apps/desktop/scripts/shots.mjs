@@ -51,6 +51,14 @@ const STATES = {
   'fonts-add': { page: 'fonts', js: run("click('[role=tab]', 'add a font'); await sleep(500);") },
   'fonts-tracks': { page: 'fonts', js: run("click('[role=tab]', 'tracks'); await sleep(500);") },
   'fonts-selected': { page: 'fonts', js: run("click('tbody tr:not(.grp)'); await sleep(400); click('[role=tab]', 'selected font'); await sleep(500);") },
+  // In-app updates, each state pretended by HILTWRIGHT_UPDATE_STATE (development only; nothing reaches GitHub).
+  // update-refused: the saber's card shared (the fake-shared aid), then Restart to update pressed.
+  'update-available': { page: 'about', env: { HILTWRIGHT_UPDATE_STATE: 'available' }, js: run('await sleep(600);') },
+  'update-downloading': { page: 'about', env: { HILTWRIGHT_UPDATE_STATE: 'downloading:42' }, js: run('await sleep(600);') },
+  'update-ready': { page: 'about', env: { HILTWRIGHT_UPDATE_STATE: 'ready' }, js: run('await sleep(600);') },
+  'update-refused': { page: 'about', env: { HILTWRIGHT_UPDATE_STATE: 'ready' }, js: run("window.hiltwrightGoto('fake-shared:about'); await sleep(900); click('.panel button', 'restart to update'); await sleep(900); console.log('[updates] shot check: ' + (document.querySelector('[role=alert]')?.textContent ?? 'no refusal shown'));") },
+  'update-failed': { page: 'about', env: { HILTWRIGHT_UPDATE_STATE: 'failed' }, js: run('await sleep(600);') },
+  'update-latest': { page: 'about', env: { HILTWRIGHT_UPDATE_STATE: 'latest' }, js: run('await sleep(600);') },
   'diag-reboot': { page: 'diag', js: run("const i = document.querySelector('input[placeholder=\"Type a command\"]'); i.focus(); typeInto(i, 'reboot'); await sleep(200); i.form.requestSubmit(); await sleep(600);") },
 };
 // The guided tour: its steps are counted from its words (src/renderer/src/tourSteps.ts: one `title:` per step; a test
@@ -160,12 +168,12 @@ const PICK_FIRST_ROW = "document.querySelector('tbody tr:not(.grp)')?.click()";
 const OPEN = { fonts: PICK_FIRST_ROW, library: PICK_FIRST_ROW };
 const viteBin = join(desktop, '../../node_modules/electron-vite/bin/electron-vite.js');
 
-function shoot({ name, page, js, file: fileName, shots }, { w, h }) {
+function shoot({ name, page, js, file: fileName, shots, env: extraEnv }, { w, h }) {
   const file = resolve(outDir, `${fileName ?? name}-${w}x${h}.png`);
   // The tour brings its own example saber, so its shots start from a plain page rather than the fixture's fake connection.
   const tour = name.startsWith('tour');
   return new Promise((done) => {
-    const shotEnv = { ...env, HILTWRIGHT_W: String(w), HILTWRIGHT_H: String(h), HILTWRIGHT_PAGE: tour ? page : `fake:${page}` };
+    const shotEnv = { ...env, ...extraEnv, HILTWRIGHT_W: String(w), HILTWRIGHT_H: String(h), HILTWRIGHT_PAGE: tour ? page : `fake:${page}` };
     if (shots) shotEnv.HILTWRIGHT_SHOTS = JSON.stringify(shots.map((s) => ({ file: resolve(outDir, `${s.name}-${w}x${h}.png`), js: s.js })));
     else shotEnv.HILTWRIGHT_SHOT = file;
     if (!shots && (js ?? OPEN[page])) shotEnv.HILTWRIGHT_SHOT_JS = js ?? OPEN[page];

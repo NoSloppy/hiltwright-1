@@ -33,6 +33,8 @@ import { tourGuarded, tourState } from './tourGuard';
 import { JsonStore, storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
 import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
+import { Updates, WorkCounter } from './updates';
+import { WORK_CHANNELS, type BusyFacts, type UpdateState, type WorkKind } from '../shared/updates';
 import type { FontLibraryStatus, JobEvent } from '../shared/api';
 import type { FirmwareManifest } from '@hiltwright/core';
 import type { SaberIdentity, SaberPatch } from '../shared/api';
@@ -66,10 +68,20 @@ function identity(v: unknown): SaberIdentity {
 }
 
 // Every handler goes through logged(): a request that fails is written to the run log before the page sees it. And
-// through tourGuarded(): while the guided tour runs, only requests that read are let through (tourGuard.ts).
+// through tourGuarded(): while the guided tour runs, only requests that read are let through (tourGuard.ts). A long job
+// (shared/updates.ts WORK_CHANNELS) is counted while it runs, so Restart to update can wait for it.
 type IpcHandler = Parameters<typeof ipcMain.handle>[1];
+const work = new WorkCounter();
 function handle(channel: string, fn: IpcHandler, quietDuringTour?: IpcHandler): void {
+  fn = work.wrap(WORK_CHANNELS[channel], fn);
   ipcMain.handle(channel, logged(channel, tourGuarded(channel, fn, quietDuringTour)));
+}
+
+/** The page's half of what is running, checked again here before a restart to update. */
+function busyFacts(v: unknown): BusyFacts {
+  const o = (v ?? {}) as { work?: unknown; cardShared?: unknown };
+  const kinds: WorkKind[] = ['build', 'install', 'restore', 'copy', 'share', 'setup', 'driver'];
+  return { work: Array.isArray(o.work) ? o.work.filter((k): k is WorkKind => kinds.includes(k as WorkKind)) : [], cardShared: o.cardShared === true };
 }
 
 export function registerIpc(): void {
@@ -519,4 +531,18 @@ export function registerIpc(): void {
     if (!insideFolder(userData, target)) throw new Error('Only app data paths can be opened');
     await shell.openPath(target);
   });
+
+  // In-app updates (updates.ts). Nothing is checked in a development run; HILTWRIGHT_UPDATE_STATE pretends a state
+  // there, for screenshots. During the tour a check is answered with the state as it is, and nothing else runs.
+  const sendUpdate = (s: UpdateState) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('updates:changed', s); };
+  const updates = new Updates({
+    packaged: app.isPackaged, version: app.getVersion(),
+    load: async () => (await import('electron-updater')).autoUpdater,
+    emit: sendUpdate, workInMain: () => work.now(), log: (l) => console.log(l), now: () => new Date(),
+    pretend: !app.isPackaged ? process.env.HILTWRIGHT_UPDATE_STATE : undefined,
+  });
+  handle('updates:state', () => updates.state());
+  handle('updates:check', (_e, asked: unknown) => updates.check(asked === true), () => updates.state());
+  handle('updates:download', () => updates.download());
+  handle('updates:install', (_e, facts: unknown) => updates.install(busyFacts(facts)));
 }

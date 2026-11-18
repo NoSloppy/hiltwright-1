@@ -22,6 +22,8 @@ import { StyleEditor } from './StyleEditor';
 import { FontLibrary } from './FontLibrary';
 import { Contributors } from './Contributors';
 import { About } from './About';
+import { UpdateChip, useUpdates } from './Updates';
+import { chipText } from '../../shared/updates';
 import { QUICK_COMMANDS, destructiveReason } from './consoleCommands';
 import { flowStatus, nextStep, useWorkspace, type Workspace } from './workspace';
 import type { SaberRecord } from '../../shared/api';
@@ -138,6 +140,8 @@ export function App() {
     if (take) startTour(0);
   };
   const realRef = useRef(real); realRef.current = real;
+  // In-app updates (Updates.tsx): hidden and still while the tour runs. A restart asks a page with unsaved work first.
+  const updates = useUpdates({ tourOn: !!tour, cardShared: board.card.shared, beforeRestart: (proceed) => { if (leaveGuard.current) leaveGuard.current(proceed); else proceed(); } });
   // A tour left on by a reload is over: main hears so as the page loads.
   useEffect(() => { void window.hiltwright.tour?.setActive(false).catch(() => undefined); }, []);
   useEffect(() => {
@@ -177,7 +181,7 @@ export function App() {
 
   return (
     <div className="app">
-      <aside className="side" aria-label="Primary">
+      <aside className={`side${!tour && chipText(updates.state) ? ' hasupd' : ''}`} aria-label="Primary">
         <div className="brand"><img src={logoIcon} alt="" width={28} height={28} /><img src={logoWordmark} alt="Hiltwright" className="wordmark" /></div>
         <nav className="nav" aria-label="Sections">
           {NAV.map((g) => (
@@ -195,7 +199,10 @@ export function App() {
         </nav>
         {ws.saber && <div className="col" style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', gap: 2 }}><span className="sec" style={{ padding: 0 }}>Working on</span><b className="ellip" style={{ fontWeight: 600, fontSize: 13 }}>{ws.saber.name}</b><span className="hint">{ws.live ? 'plugged in' : ws.saber.planned ? 'planned, not seen yet' : 'not plugged in'}</span></div>}
         <button type="button" className="tourbtn" data-tour="side-tour" disabled={!!tour} onClick={() => startTour(0)}><Icon name="info" /><span>Take the tour</span></button>
-        <div className="mono mute" style={{ padding: '14px 20px', borderTop: '1px solid var(--line)', fontSize: 11 }}>Hiltwright {window.hiltwright?.appVersion ?? '?'} beta</div>
+        <div className="col" style={{ padding: '14px 20px', borderTop: '1px solid var(--line)', gap: 8 }}>
+          <span className="mono mute" style={{ fontSize: 11 }}>Hiltwright {window.hiltwright?.appVersion ?? '?'} beta</span>
+          {!tour && <UpdateChip view={updates} onOpen={() => setPage('about')} />}
+        </div>
       </aside>
 
       <header className="top">
@@ -233,7 +240,7 @@ export function App() {
             : page === 'library' ? <FontLibrary board={board} onDemo={(folder) => { setDemoFont(folder); setPage('demo'); }} />
             : page === 'contributors' ? <Contributors onFonts={() => setPage('library')} onLooks={(name) => { setStyleCreator(name); setPage('looks'); }} onDemo={() => setPage('demo')} />
             : page === 'demo' ? <Suspense fallback={<span className="hint">Opening the demo room…</span>}><Demo initialLook={demoLook} initialFont={demoFont} board={board} /></Suspense>
-            : page === 'about' ? <About />
+            : page === 'about' ? <About updates={tour ? null : updates} />
             : <Diagnostics board={board} />}
         </ErrorBoundary>}
       </main>

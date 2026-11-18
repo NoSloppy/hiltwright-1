@@ -99,10 +99,24 @@ Unsigned files are sometimes flagged by mistake. If Defender or another antiviru
 
 1. Do not turn your antivirus off.
 2. Note the file name and the warning.
-3. Tell us (section 7).
+3. Tell us (section 8).
 4. You can submit the file to Microsoft at https://www.microsoft.com/wdsi/filesubmission. Say it is a false positive.
 
-## 7 Where to report a problem
+## 7 Newer betas
+
+0.2.0-beta.1 cannot update itself. Install the next beta by hand, once: download its installer from the releases page and run it, as in sections 1 and 2. It installs over this one. Your sabers, styles, fonts and backups are kept.
+
+From the next beta on, Hiltwright looks for newer versions itself:
+
+- A little after it starts, and every few hours while it is open, it asks GitHub for Hiltwright's list of releases. It sends nothing about your sabers or you; GitHub sees your internet address, as with any web page.
+- When a newer version is out, a small chip under the version in the sidebar says "Version ... is available". Nothing is downloaded yet.
+- On the **About** page, press **Download version ...**. You can keep working while it downloads.
+- Press **Restart to update**. Hiltwright closes, the installer runs, and Hiltwright opens again. Hiltwright will not restart while a build, a firmware install, a **Put back**, a copy to the card or card sharing is running; it says what to wait for.
+- To stop the checks, turn off **Check for updates when Hiltwright starts** on the About page. **Check now** still works.
+
+The browser warning and the **Unblock** step in section 2 are only for installers you download in a browser; an update Hiltwright downloads itself does not carry the mark. Smart App Control still has to stay off (section 3).
+
+## 8 Where to report a problem
 
 1. In Hiltwright, press **Save diagnostics**. It saves a file on your PC. It does not send anything.
 2. Open https://github.com/safwyls/hiltwright/issues

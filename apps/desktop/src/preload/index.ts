@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { HiltwrightApi, JobEvent } from '../shared/api';
+import type { UpdateState } from '../shared/updates';
 
 /** The package's version, set at build time (electron.vite.config.ts). */
 declare const __APP_VERSION__: string;
@@ -146,6 +147,17 @@ const api: HiltwrightApi = {
   },
   tour: {
     setActive: (on) => ipcRenderer.invoke('tour:set', on),
+  },
+  updates: {
+    state: () => ipcRenderer.invoke('updates:state'),
+    check: (asked) => ipcRenderer.invoke('updates:check', asked),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: (facts) => ipcRenderer.invoke('updates:install', facts),
+    onChange: (cb) => {
+      const listener = (_e: Electron.IpcRendererEvent, s: UpdateState) => cb(s);
+      ipcRenderer.on('updates:changed', listener);
+      return () => { ipcRenderer.removeListener('updates:changed', listener); };
+    },
   },
 };
 

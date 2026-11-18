@@ -1,0 +1,90 @@
+# Releasing a beta
+
+How to cut a Hiltwright beta from now on, and how an installed copy then finds it. Every release is a GitHub release on `safwyls/hiltwright`, marked as a pre-release, tagged `v<version>` (for example `v0.2.0-beta.2`).
+
+**0.2.0-beta.1 has no updater.** Testers on 0.2.0-beta.1 must install the next beta by hand once, as they did the first: download the installer from the release page and run it (it installs over 0.2.0-beta.1 and keeps their data). Every copy from that beta on finds later betas itself.
+
+## Steps
+
+1. **Bump the version** in all three package files and the lockfile, on a branch:
+
+   ```
+   npm version 0.2.0-beta.2 --workspaces --include-workspace-root --no-git-tag-version
+   ```
+
+   The app's version is `apps/desktop/package.json`'s. It must be valid semver with the pre-release part `beta.N` (`0.2.0-beta.2`, not `0.2.0b2`): the updater compares versions by semver, and the tag must be the version with a `v` in front.
+
+2. **Font packs.** The six `.hwpack` files in `apps/desktop/resources/packs/` are not in git. If they are not there, make them (see [font-packs.md](font-packs.md)):
+
+   ```
+   npm run fontpacks --workspace @hiltwright/desktop -- "<folder of the default SD card>"
+   ```
+
+3. **Check and build** at the repo root:
+
+   ```
+   npm ci
+   npm test
+   npm run typecheck
+   npm run dist
+   ```
+
+   `dist` never publishes anything (`--publish never`). It writes into `apps/desktop/release/`.
+
+4. **Make the GitHub release**, by hand, on https://github.com/safwyls/hiltwright/releases/new:
+
+   - Tag: `v0.2.0-beta.2`, on the commit the build was made from.
+   - Tick **Set as a pre-release**. Do not tick "Set as the latest release".
+   - Save it as a **draft** first, attach the files below, then publish. A draft is invisible to installed copies, so none of them sees the release before its files are there.
+
+5. **Attach exactly these three files** from `apps/desktop/release/`, with their names unchanged:
+
+   | File | What it is for |
+   |---|---|
+   | `Hiltwright-0.2.0-beta.2-setup.exe` | The installer, for testers who install by hand and for the updater, which downloads it. |
+   | `latest.yml` | What an installed copy reads: the version, the installer's file name, its size and SHA-512. Without it the release is not seen as an update. |
+   | `Hiltwright-0.2.0-beta.2-setup.exe.blockmap` | Lets the copy after this one download only the parts of its installer that changed. Optional, but attach it every time: the next update looks for this release's blockmap. |
+
+   A build writes only these and `builder-debug.yml` and the `win-unpacked` folder (checked with the 0.2.0-beta.1 version number on 2026-11-18). Do not attach the last two. There is no `beta.yml`: electron-builder writes only `latest.yml` for a GitHub build, whatever the version, and that is the file an installed beta falls back to.
+
+   `latest.yml` looks like this; its `url` must match the installer's name on the release exactly:
+
+   ```
+   version: 0.2.0-beta.2
+   files:
+     - url: Hiltwright-0.2.0-beta.2-setup.exe
+       sha512: ...
+       size: ...
+   path: Hiltwright-0.2.0-beta.2-setup.exe
+   sha512: ...
+   releaseDate: '...'
+   ```
+
+6. **Publish** the draft as a pre-release.
+
+7. **Check from an installed copy** of the previous beta: About, **Check now**. It should say "Version 0.2.0-beta.2 is available".
+
+## How an installed copy finds it
+
+The build writes the update source into the installed app (`resources/app-update.yml`: GitHub, owner `safwyls`, repo `hiltwright`), from the `publish` block in `apps/desktop/package.json`. In the app, electron-updater (main/updates.ts) then:
+
+1. Reads `https://github.com/safwyls/hiltwright/releases.atom`, GitHub's public feed of releases, pre-releases included, drafts not. It takes the newest entry whose tag is a valid version on the beta line or a full release (an `alpha` tag is skipped by a beta copy).
+2. Asks for `beta.yml` in that release, gets nothing (electron-builder writes only `latest.yml` for a GitHub build), and falls back to `latest.yml`.
+3. Offers the version in `latest.yml` if it is newer than its own by semver. Nothing is downloaded until the owner presses Download.
+4. On Download, fetches the installer named in `latest.yml` from the same release and checks its SHA-512. On Restart to update, runs it (not silently: the installer shows its progress window and opens Hiltwright again).
+
+So the repository must stay public, the tag must be `v<version>`, and the installer's name on the release must be exactly the one in `latest.yml`. GitHub's feed can lag a few minutes behind a new release.
+
+Checks happen in an installed copy only, a little after it starts and every four hours, unless the owner turns **Check for updates when Hiltwright starts** off on the About page. A check sends no saber or owner data; electron-updater's own per-install ID header is replaced by one value that every copy sends.
+
+## Signing
+
+The app is unsigned and stays unsigned. `win.verifyUpdateCodeSignature` is `false`, so `app-update.yml` carries no `publisherName` and the updater does not ask the downloaded installer for a signature. Smart App Control must be off on a tester's PC for the app to run at all. The browser warning and the **Unblock** step apply only to an installer downloaded in a browser: the updater's download is written by the app without the "downloaded from the internet" mark and started directly, so SmartScreen's "Windows protected your PC" prompt is not expected. That last point is from reading electron-updater's code, not from a test on a PC; check it with the first real update.
+
+## Testing an update locally
+
+Dev runs never check. To look at each state on screen, a development run takes `HILTWRIGHT_UPDATE_STATE=available | downloading:42 | ready | failed | latest | offline` (ignored by an installed copy). The shots script photographs them:
+
+```
+npm run shots --workspace @hiltwright/desktop -- <folder> update-available update-downloading update-ready update-refused update-failed update-latest
+```

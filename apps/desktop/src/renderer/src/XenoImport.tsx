@@ -7,6 +7,7 @@ import type { CardInfo, XenoFontInfo } from '../../shared/api';
 import { NO_XENO_FONTS } from '../../shared/importWords';
 import type { Board } from './board';
 import { Icon } from './Icon';
+import { duringWork } from './work';
 
 const api = () => window.hiltwright;
 const mb = (b: number) => `${(b / 1048576).toFixed(1)} MB`;
@@ -34,14 +35,14 @@ export function XenoImport({ card, board, onChanged }: { card: CardInfo | null; 
     setBusy(true); setNote(null);
     const results: Record<string, 'copied' | 'exists' | 'failed'> = { ...done };
     let copied = 0;
-    for (const f of source.fonts.filter((x) => chosen.has(x.path) && results[x.path] !== 'copied')) {
+    await duringWork('copy', async () => { for (const f of source.fonts.filter((x) => chosen.has(x.path) && results[x.path] !== 'copied')) {
       setProgress(`Converting ${f.name}…`);
       try { await api().importer.xenoFont(f.path, card.root, f.folder, false); results[f.path] = 'copied'; copied++; } catch (err) {
         results[f.path] = /already on the card/.test(String(err)) ? 'exists' : 'failed';
         console.log(`[import] ${f.name}: ${String(err)}`);
       }
       setDone({ ...results });
-    }
+    } });
     setProgress(null); setBusy(false);
     const skipped = Object.values(results).filter((r) => r === 'exists').length;
     const failed = Object.values(results).filter((r) => r === 'failed').length;

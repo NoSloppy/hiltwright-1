@@ -26,7 +26,9 @@ The presets and fonts on the SD card are not touched by an install or a put back
 
 ## Does it send my data anywhere?
 
-The docs describe two things Hiltwright fetches from the internet. The first-run setup downloads the compiler tools and the ProffieOS source from GitHub and from the ProffieOS author's package index. The first install downloads a small bootloader driver from the ProffieOS author, and Windows asks you once to approve it.
+Hiltwright reaches the internet for three things. The first-run setup downloads the compiler tools and the ProffieOS source from GitHub and from the ProffieOS author's package index. The first install downloads a small bootloader driver from the ProffieOS author, and Windows asks you once to approve it.
+
+And versions after 0.2.0-beta.1 look for a newer Hiltwright: a little after they start, and every few hours, they ask GitHub for Hiltwright's list of releases. The check sends nothing about your sabers or you; GitHub sees your internet address, as with any web page. A new version is downloaded only when you press **Download**, and installed only when you press **Restart to update**. Turn **Check for updates when Hiltwright starts** off on the [About page](diagnostics.html#about) to stop the checks; **Check now** still works.
 
 **Save diagnostics** writes a file on your computer and sends nothing. You attach it to a report yourself. Style code, fonts, hilt models and backups are never put in it, and your user name and computer name are replaced.
 

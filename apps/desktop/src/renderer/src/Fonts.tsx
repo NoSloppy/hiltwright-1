@@ -12,6 +12,7 @@ import { FEATURES } from './features';
 import { Icon } from './Icon';
 import { cardKind, chooseCard, rememberCardChoice, rememberedCardChoice } from './cardChoice';
 import { Select } from './Select';
+import { duringWork } from './work';
 import { DRIVE_WAIT_MS, giveCardBack, pickSaberDrive, plainDuration, shareCard, type Baseline, type GiveBackOutcome, type ShareDeps, type WaitProgress } from './cardShare';
 
 const api = () => window.hiltwright;
@@ -115,7 +116,8 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     else setUsbNote('The saber did not confirm it took its card back. Try again, or unplug it and plug it back in.');
   };
   // Share, or (with the saber already sharing) go straight to looking for its drive: the saber is asked first.
-  const mountUsb = async () => {
+  const mountUsb = () => duringWork('share', mountUsbNow);
+  const mountUsbNow = async () => {
     if (usb === 'asking' || usb === 'waiting') return;
     setUsb('asking'); setUsbNote(null); setWaitedOut(false); setWait(null);
     cancelRef.current = false;
@@ -140,7 +142,8 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   };
   // Cancel while waiting: the card is given back the same way as "Give the card back".
   const cancelShare = () => { cancelRef.current = true; scanGen.current++; setScanning(false); wakeRef.current?.(); };
-  const ejectUsb = async () => {
+  const ejectUsb = () => duringWork('share', ejectUsbNow);
+  const ejectUsbNow = async () => {
     setUsbNote(null);
     scanGen.current++; setScanning(false);
     // The drive comes first: Windows lets go of it, then the saber takes its card back (D4).
@@ -234,7 +237,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     setConfirmReplace(false);
     setBusy(true); setProgress(null);
     try {
-      const entry = await api().sd.copyFont(picked.path, card.root, replace);
+      const entry = await duringWork('copy', () => api().sd.copyFont(picked.path, card.root, replace));
       setMessage({ tone: 'green', text: `${entry.name} copied to the card (${entry.report.files} files).` });
       setPicked(null);
       await scan();
@@ -252,7 +255,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     setAskFs(null);
     setBusy(true); setMessage(null);
     const done: string[] = []; const failed: string[] = [];
-    try {
+    try { await duringWork('copy', async () => {
       for (const f of list) {
         const src = copyFrom(f); if (!src) continue;
         setCopyingNeeded(f);
@@ -261,7 +264,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
       }
       setMessage(failed.length ? { tone: done.length ? 'amber' : 'red', text: `${done.length ? `Copied ${done.join(', ')}. ` : ''}Not copied: ${failed.join('; ')}` } : { tone: 'green', text: `Copied ${done.join(', ')} to the card.` });
       await scan();
-    } finally { setCopyingNeeded(null); setBusy(false); setProgress(null); }
+    }); } finally { setCopyingNeeded(null); setBusy(false); setProgress(null); }
   };
 
   const issues = fonts.flatMap((f) => f.report.issues.map((i) => ({ font: f.name, ...i })));

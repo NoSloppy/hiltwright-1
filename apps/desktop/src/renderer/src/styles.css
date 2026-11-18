@@ -467,6 +467,10 @@ body.dragging-layer,body.dragging-layer *{cursor:grabbing!important;user-select:
 /* "Take the tour", at the foot of the sidebar. */
 .tourbtn{margin-top:auto;display:flex;align-items:center;gap:12px;height:40px;padding:0 22px;border-top:1px solid var(--line);color:var(--holo);font-weight:500;font-size:13.5px;letter-spacing:.02em;flex:none}
 .tourbtn svg{width:18px;height:18px;flex:none}
+/* In-app updates: the chip under the version in the sidebar footer (Updates.tsx). */
+/* A short window has no room below the nav for the chip: the nav rows close up while it shows. */
+@media (max-height:860px){.side.hasupd .nav a{height:29px}.side.hasupd .nav .sec{padding:7px 12px 3px}}
+.updchip{align-self:flex-start;max-width:100%;min-width:0;cursor:pointer;white-space:normal;height:auto;min-height:24px;padding:4px 10px;line-height:1.45;text-align:left;overflow-wrap:anywhere}.updchip .dot{flex:none}
 .tourbtn:hover:not(:disabled){color:#fff;background:rgba(255,255,255,.03)}
 .tourbtn:disabled{opacity:.45}
 /* A short window: the sidebar's rows close up so its foot, with "Take the tour", stays on screen. */

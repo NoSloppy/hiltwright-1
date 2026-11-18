@@ -17,6 +17,8 @@ export const TOUR_ALLOWED: ReadonlySet<string> = new Set([
   'toolchain:status', 'build:preview', 'flash:usb', 'flash:listBackups',
   'app:storeProblems', 'app:userDataPath', 'app:boardAccess', 'app:openHelp', 'app:openPath', 'app:legal', 'app:openSource',
   'tour:set',
+  // The update state only: what the page shows. A check during the tour is answered with it, and nothing is asked of GitHub.
+  'updates:state',
 ]);
 
 /** Requests that write, copy, build, flash or change a setting. Refused during the tour. Listed so tests can check every request is placed. */
@@ -36,6 +38,8 @@ export const TOUR_BLOCKED: ReadonlySet<string> = new Set([
   'build:run',
   'flash:waitForBootloader', 'flash:target', 'flash:leave', 'flash:backup', 'flash:write', 'flash:installDriver', 'flash:restore', 'flash:waitForRuntime',
   'support:save',
+  // In-app updates: a check (answered quietly with the state as it is), a download and a restart to update.
+  'updates:check', 'updates:download', 'updates:install',
 ]);
 
 /** Whether the tour is running, as the page last said. Main starts with it off; the page turns it off again when it loads. */

@@ -84,3 +84,14 @@ Open the file and read it before you attach it. To report a problem, go to [gith
 The **About** page, under Tools, shows the version you are running and the licence: GPL-3.0-or-later. It has **Show the licence** and **Show the third-party notices** buttons, and **Open the source**, which opens the source code of this exact build on GitHub. It also says that Hiltwright's own styles were composed from ProffieOS building blocks, taking ideas only from public style descriptions.
 
 ![The About page with the version, licence and source link](shots/clean-46.png)
+
+### Updates
+
+Versions after 0.2.0-beta.1 have an **Updates** panel on the About page. 0.2.0-beta.1 itself has none: install the next beta by hand once, over it.
+
+- **Check for updates when Hiltwright starts** is on unless you turn it off. Hiltwright then asks GitHub for its list of releases a little after it starts, and every few hours while it is open. The check sends nothing about your sabers or you; GitHub sees your internet address, as with any web page. A check that fails by itself says nothing, and being offline is not an error.
+- **Check now** checks at once, whether the setting is on or off, and says what it found: "You have the latest version", or "Could not check:" and why.
+- When a newer version is out, the panel says "Version ... is available", and a small chip under the version in the sidebar says so too. Nothing is downloaded until you press **Download version ...**. The panel shows how far the download has got.
+- **Restart to update** closes Hiltwright, runs the installer and opens Hiltwright again. Your sabers, styles and fonts are kept. It waits while a build, a firmware install, a **Put back**, a copy to the card or card sharing is running, and says what to wait for. Quitting Hiltwright never installs an update by itself.
+
+Nothing about updates shows or runs during the guided tour.

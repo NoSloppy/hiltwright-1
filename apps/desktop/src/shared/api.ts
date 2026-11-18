@@ -2,6 +2,7 @@
 // Only data crosses this boundary: no handles, no callbacks except the event subscriptions listed here.
 
 import type { HiltFit, SceneSettings } from './demoSettings';
+import type { BusyFacts, UpdateState } from './updates';
 import type { FirmwareManifest, FontReport, LookDef, PresetBank, PresetRecord, SaberConfigModel, VoicePackStatus } from '@hiltwright/core';
 
 /** A demo-room hilt the owner loaded, as the room lists it: everything but the model's bytes. */
@@ -425,5 +426,16 @@ export interface HiltwrightApi {
   tour: {
     /** The guided tour started or ended. While it runs, main refuses every request that would change anything. */
     setActive(on: boolean): Promise<boolean>;
+  };
+  /** In-app updates from GitHub's releases (main/updates.ts). Nothing is downloaded or installed without a press. */
+  updates: {
+    state(): Promise<UpdateState>;
+    /** Ask GitHub for a newer version. `asked`: the owner pressed Check now, so a failure is shown. */
+    check(asked: boolean): Promise<UpdateState>;
+    /** Download the newer version found. Progress arrives through onChange. */
+    download(): Promise<UpdateState>;
+    /** Close and run the downloaded installer. Refused, with what to wait for, while a job or card sharing is running. */
+    install(facts: BusyFacts): Promise<{ ok: boolean; text: string }>;
+    onChange(cb: (s: UpdateState) => void): () => void;
   };
 }
