@@ -1,7 +1,24 @@
 // The typed contract between renderer and main, exposed by the preload script as window.hiltwright.
 // Only data crosses this boundary: no handles, no callbacks except the event subscriptions listed here.
 
+import type { HiltFit, SceneSettings } from './demoSettings';
 import type { FirmwareManifest, FontReport, LookDef, PresetBank, PresetRecord, SaberConfigModel, VoicePackStatus } from '@hiltwright/core';
+
+/** A demo-room hilt the owner loaded, as the room lists it: everything but the model's bytes. */
+export interface HiltInfo { id: string; name: string; format: 'glb' | 'obj' | 'stl'; fit: HiltFit; creator?: string }
+/** A hilt's model and the files that came with it (an OBJ's .mtl and textures), by the names the model uses. */
+export interface HiltModelData { format: 'glb' | 'obj' | 'stl'; data: ArrayBuffer | Uint8Array; sideFiles: { name: string; data: ArrayBuffer | Uint8Array }[] }
+export interface HiltInput extends HiltModelData { name: string; fit?: unknown; creator?: string }
+/** 'new': add under its own name, or report the hilt that has it. 'keepBoth': add under the next free numbered name. `replace`: swap that hilt's model, keeping its name, fit and credit. */
+export type HiltAddMode = 'new' | 'keepBoth' | { replace: string };
+export type HiltAddResult = { added: HiltInfo } | { taken: { id: string; name: string } };
+/**
+ * What an earlier version kept in one page origin's own storage. `origin` is recorded once adopted, so it is never
+ * brought over twice. `chosen` is `pack:<packId>` or `name:<hilt name>`.
+ */
+export interface LegacyHilts { origin: string; hilts: (HiltInput & { packId?: string })[]; scene?: unknown; chosen?: string }
+/** Hilts added, pack fit adjustments added, and entries skipped because they were already here. */
+export interface HiltMergeResult { added: number; fits: number; skipped: number }
 
 /** What the app can learn about a board without touching its SD card. */
 export interface SaberIdentity {
@@ -34,9 +51,12 @@ export interface SaberRecord {
   firmware?: FirmwareManifest;
   /** Set up before the hilt was ever connected: wiring, presets and looks chosen ahead. Adopted by the real saber when it appears. */
   planned?: boolean;
+  /** What its bootloader showed at the last install or restore: the serial it had there, and its flash size and so its board. */
+  bootloader?: { serial: string | null; flashBytes: number; board: 'V2' | 'V3'; at: string };
 }
 
-export interface SaberPatch { model?: SaberConfigModel | null; firmware?: FirmwareManifest | null }
+/** A change to a remembered saber. `presets`: its presets as last read, kept up to date by live edits (preset-editor-fixes D5). */
+export interface SaberPatch { model?: SaberConfigModel | null; firmware?: FirmwareManifest | null; presets?: PresetRecord[] }
 
 export interface SnapshotMeta {
   file: string;
@@ -52,7 +72,19 @@ export interface CardInfo {
   totalBytes: number | null;
   proffie: boolean;
   hasPresetsIni: boolean;
+  /** The USB serial of the Proffieboard this drive belongs to, when a saber is sharing its own card. */
+  saberSerial: string | null;
+  /** The card's file system as Windows names it (FAT32, exFAT, NTFS...), or null when unknown. */
+  fileSystem: string | null;
+  /** Nothing on it but the system's own files. */
+  empty: boolean;
 }
+
+/**
+ * One look for drives (`sd.look`): the cards found, or that Windows did not answer the drive list in time or the
+ * query failed (`answered: false`), which is not "no card". `ms` is how long the look took.
+ */
+export type DriveLook = { answered: true; cards: CardInfo[]; ms: number } | { answered: false; detail: string; ms: number };
 
 export interface PackInfo {
   id: string; kind: 'hilt' | 'font'; name: string; creator: string; licence: string;
@@ -72,6 +104,24 @@ export interface FontEntry {
   name: string;
   path: string;
   report: FontReport;
+}
+
+export interface FontMeta { name: string; maker: string; notes: string; added: string; from?: string; /** A set the maker released together. */ bundle?: string }
+/** Someone credited for a font or a look, with their logo (a data URL) and link when the owner added them. */
+export interface ContributorInfo { name: string; logo: string | null; url: string | null }
+export interface FontSound { path: string; effect: string; kind: 'mono' | 'poly' | 'shared' | 'other'; seconds: number | null; size: number }
+export interface FontSupport { type: FontReport['type']; smoothSwing: boolean; effects: string[]; special: string[]; tracks: number }
+export interface LibraryFont { folder: string; meta: FontMeta; report: FontReport; support: FontSupport; bytes: number }
+export interface LibraryFontDetail extends LibraryFont { sounds: FontSound[]; tracks: FontSound[] }
+export interface ImportResult { added: string[]; skipped: { name: string; why: string }[] }
+export interface FontLibraryStatus {
+  root: string;
+  /** The library is in its default place, userData/fonts. */
+  isDefault: boolean;
+  /** The folder the owner chose is not there (its drive unplugged, say); nothing was created in its place. */
+  missing: boolean;
+  /** A folder chosen as the old "font bank", offered once for import. */
+  legacyBank: string | null;
 }
 
 export interface XenoFontInfo {
@@ -103,6 +153,10 @@ export interface ToolchainStatus {
   freeBytes: number | null;
   /** Windows: the folder is too deep for the compiler's 260-character path limit. */
   pathTooLong: boolean;
+  /** What is installed, read back: arduino-cli's version, the board support's version folders, the ProffieOS source. */
+  versions: { cli: string | null; core: string | null; proffieOS: string | null };
+  /** Windows: standard users other than the owner can change the folder. Null when it does not exist or is unknown. */
+  open: boolean | null;
 }
 
 export interface BuildResult {
@@ -121,6 +175,8 @@ export interface BuildResult {
   /** Which look went into which slot, for the saber record once installed. */
   manifest: Omit<FirmwareManifest, 'os' | 'at'> | null;
   os: string;
+  /** The board this firmware was built for; the install checks it against the bootloader's flash size. */
+  board: 'V2' | 'V3';
 }
 
 export interface UsbState {
@@ -128,14 +184,40 @@ export interface UsbState {
   bootloaderPresent: boolean;
   bootloaderDriver: string | null;
   bootloaderProblem: number | null;
+  /** Every board in its bootloader (serial null when the device gave none), and the serials of every running board. */
+  bootloaders: { serial: string | null; driver: string | null; problem: number | null }[];
+  runtimeSerials: string[];
+  /** Running boards that gave no USB serial. */
+  runtimeNoSerial: number;
 }
 
-export interface BackupInfo { file: string; at: string; label: string; bytes: number; /** Starts like real firmware; anything else is refused. */ valid: boolean }
+/** What one bootloader says about its board: the flash size, and the board type it means (null when unknown). */
+export interface FlashTarget { serial: string | null; flashBytes: number | null; board: 'V2' | 'V3' | null; found: boolean }
 
-export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string }
+export interface BackupInfo { file: string; at: string; label: string; bytes: number; /** Starts like real firmware; anything else is refused. */ valid: boolean; /** The config the saber reported when this was taken, if known. */ configName: string | null }
+
+/** `kind`: for a backup, what the read turned out to be; only 'firmware' is a backup (an erased read means a blank board). */
+/** `refused`: main would not write it (not this saber's last build, or unconfirmed wiring), so nothing was written. */
+export interface FlashStepResult { ok: boolean; ms: number; detail: string; file?: string; kind?: 'firmware' | 'erased' | 'unusable'; refused?: boolean }
 
 /** Progress lines from long-running main-process jobs. */
 export interface JobEvent { job: 'toolchain' | 'build' | 'flash'; line: string; at: number }
+
+/** What the page knows about the connection and the saber being worked on, for the diagnostics file. */
+export interface ConnectionSnapshot {
+  status: string;
+  error: string | null;
+  /** vid:pid of the open port. */
+  port: string | null;
+  board: {
+    version: string | null; config: string | null; prop: string | null; buttons: number | null;
+    battery: number | null; volume: number | null; presets: number; fonts: number; tracks: number; blades: number[];
+  } | null;
+  /** Times this connection's link stalled and the port was opened again (usb-power-connect D7). */
+  pauses: number;
+  /** The saber every page is about (the connected one, or the one chosen in the Armory). */
+  saberId: string | null;
+}
 
 export interface HiltwrightApi {
   appVersion: string;
@@ -143,7 +225,8 @@ export interface HiltwrightApi {
   library: {
     list(): Promise<SaberRecord[]>;
     /** Match an identity to a known saber, or create one. Returns the stored record. */
-    upsert(input: { identity: SaberIdentity; presets: PresetRecord[]; fonts: string[]; tracks: string[]; name?: string }): Promise<SaberRecord>;
+    /** Match or create. `expect` names the saber just installed and the config it now reports (matched without a serial). */
+    upsert(input: { identity: SaberIdentity; presets: PresetRecord[]; fonts: string[]; tracks: string[]; name?: string; expect?: { id: string; configName: string } | null }): Promise<SaberRecord>;
     rename(id: string, name: string): Promise<SaberRecord>;
     remove(id: string): Promise<void>;
     /** Store the build model and/or firmware manifest for a saber. `null` clears a field. */
@@ -152,6 +235,8 @@ export interface HiltwrightApi {
     plan(name: string, model: SaberConfigModel): Promise<SaberRecord>;
     /** The connected saber takes over a plan's model, and the plan is dropped. */
     adopt(plannedId: string, targetId: string): Promise<SaberRecord>;
+    /** Remember what this saber's bootloader showed at an install: its serial and flash size (256 KB or 512 KB only). */
+    noteBootloader(id: string, seen: { serial: string | null; flashBytes: number }): Promise<SaberRecord>;
   };
   /** Preset banks built without a saber, in userData/banks.json. */
   banks: {
@@ -163,7 +248,8 @@ export interface HiltwrightApi {
   looks: {
     list(): Promise<LookDef[]>;
     add(look: LookDef): Promise<LookDef[]>;
-    update(id: string, look: LookDef): Promise<LookDef[]>;
+    /** Store the new version, and give it to every saber whose plan holds a copy (how many is `sabersUpdated`). */
+    update(id: string, look: LookDef): Promise<{ looks: LookDef[]; sabersUpdated: number }>;
     remove(id: string): Promise<LookDef[]>;
   };
   snapshots: {
@@ -174,26 +260,93 @@ export interface HiltwrightApi {
   usb: {
     /** Serial numbers of Proffieboards currently attached, when the platform can tell us. */
     proffieSerials(): Promise<string[]>;
+    /** Let only the board with this USB serial be reached until it is read (null: every board). Returns how many of its serial interfaces were found. */
+    wantSerial(serial: string | null): Promise<number>;
   };
   sd: {
     /** Removable volumes, flagged when they look like a ProffieOS card. */
     locate(): Promise<CardInfo[]>;
+    /** The same look as `locate`, saying when Windows did not answer instead of returning an empty list. */
+    look(): Promise<DriveLook>;
     listFonts(root: string): Promise<FontEntry[]>;
     /** Flush and dismount the card's volume, as 'Safely remove' does. Before the saber takes its card back. */
     eject(root: string): Promise<{ ok: boolean; detail: string }>;
-    /** A font's playable sounds, from a known card or the font bank. Slow over the saber's USB link. */
+    /** Whether a folder of this name is on the card at `root`. */
+    hasFolder(root: string, name: string): Promise<boolean>;
+    /** A font's playable sounds, from a known card. Slow over the saber's USB link. */
     readFont(root: string, fontName: string): Promise<FontSounds>;
+    /** Progress of readFont and fontLibrary.readFont. */
     onReadFontProgress(cb: (p: { file: string; done: number; total: number }) => void): () => void;
-    /** The folder of fonts on this computer used when no card is about, or null. */
-    fontBank(): Promise<string | null>;
-    pickFontBank(): Promise<string | null>;
-    bankFonts(): Promise<FontEntry[]>;
     listTracks(root: string): Promise<{ name: string; size: number }[]>;
     /** The Fett263 voice pack in the card's common folder. */
     voicePack(root: string): Promise<VoicePackStatus>;
     /** Ask the user for a font folder on this computer and check it without copying. */
     pickFont(): Promise<FontEntry | null>;
     copyFont(src: string, root: string, replace: boolean): Promise<FontEntry>;
+    /** Files copied so far for a copy onto the card, from Fonts & SD or the font library (card-safety D5). */
+    onCopyProgress(cb: (p: { name: string; done: number; total: number }) => void): () => void;
+  };
+  /** Sound fonts the owner added to this computer, in a folder they can move (default userData/fonts). */
+  fontLibrary: {
+    status(): Promise<FontLibraryStatus>;
+    list(): Promise<LibraryFont[]>;
+    /** One font with every sound and track in it. */
+    detail(folder: string): Promise<LibraryFontDetail>;
+    setMeta(folder: string, patch: Partial<Pick<FontMeta, 'name' | 'maker' | 'notes' | 'bundle'>>): Promise<LibraryFont>;
+    /** Moves the font's folder to the recycle bin. */
+    remove(folder: string): Promise<void>;
+    /** The bytes of one sound or track (a path from detail()), to play. */
+    readSound(folder: string, path: string): Promise<ArrayBuffer>;
+    /** The playable sounds, for the demo room's font engine. Progress arrives through sd.onReadFontProgress. */
+    readFont(folder: string): Promise<FontSounds>;
+    copyToCard(folder: string, root: string, replace: boolean): Promise<FontEntry>;
+    /** Ask for .zip packages, or for folders, and copy the fonts found in them into the library. Null when cancelled. */
+    addZip(): Promise<ImportResult | null>;
+    addFolder(): Promise<ImportResult | null>;
+    importLegacy(): Promise<ImportResult | null>;
+    dismissLegacy(): Promise<FontLibraryStatus>;
+    /** Ask for a new location; offers to move the fonts there. */
+    chooseRoot(): Promise<FontLibraryStatus>;
+    resetRoot(): Promise<FontLibraryStatus>;
+    /** Open the library folder, or one font's folder, in the file manager. */
+    open(folder?: string): Promise<void>;
+    onProgress(cb: (line: string) => void): () => void;
+  };
+  /** Font makers and look authors, credited with a logo and a link. Shared by the font library and the looks. */
+  contributors: {
+    /** Everyone given a logo or a link. Names without either are only on the fonts and looks themselves. */
+    list(): Promise<ContributorInfo[]>;
+    /** Ask for an image and make it the person's logo. Null when cancelled. */
+    setLogo(name: string): Promise<ContributorInfo | null>;
+    clearLogo(name: string): Promise<void>;
+    /** An http(s) address, or '' to drop it. */
+    setUrl(name: string, url: string): Promise<void>;
+    /** Give `to` a copy of `from`'s logo and link (after an author rename). False when `from` has neither. */
+    copy(from: string, to: string): Promise<boolean>;
+    /** Open the person's saved link in the browser. */
+    open(name: string): Promise<void>;
+  };
+  /** The demo room's hilts, fit adjustments to pack hilts, and scene settings, kept in the app's data folder. */
+  hilts: {
+    list(): Promise<HiltInfo[]>;
+    model(id: string): Promise<HiltModelData>;
+    add(input: HiltInput, mode: HiltAddMode): Promise<HiltAddResult>;
+    setFit(id: string, fit: HiltFit): Promise<void>;
+    setCreator(id: string, creator: string): Promise<void>;
+    remove(id: string): Promise<void>;
+    packFits(): Promise<Record<string, HiltFit>>;
+    setPackFit(packId: string, fit: HiltFit): Promise<void>;
+    resetPackFit(packId: string): Promise<void>;
+    /** `adopted`: the page origins whose earlier storage has been brought over. */
+    room(): Promise<{ scene: SceneSettings | null; chosen: string | null; adopted: string[] }>;
+    /** `chosen`: a hilt id, `pack:<packId>`, or null for the built-in hilt. */
+    setRoom(patch: { scene?: SceneSettings; chosen?: string | null }): Promise<void>;
+    /** Bring over what an earlier version kept in page storage; never replaces anything. */
+    adopt(legacy: LegacyHilts): Promise<HiltMergeResult>;
+    /** Ask where to save, then write every hilt and pack fit to one zip. Null when cancelled. */
+    export(): Promise<{ file: string; hilts: number; packFits: number } | null>;
+    /** Ask for an export and add what is not already here. Null when cancelled. */
+    import(): Promise<HiltMergeResult | null>;
   };
   packs: {
     list(): Promise<PackInfo[]>;
@@ -201,6 +354,8 @@ export interface HiltwrightApi {
     dir(): Promise<string>;
     mesh(id: string): Promise<PackMesh>;
     font(id: string): Promise<FontSounds>;
+    /** Copy a font pack's folder to the card at `root`, all or nothing. Refused unless the pack allows copying to a card. */
+    copyFontToCard(packId: string, root: string, opts: { replace: boolean }): Promise<FontEntry>;
   };
   /** Bring fonts over from another board's SD card. The source is only read. */
   importer: {
@@ -211,8 +366,12 @@ export interface HiltwrightApi {
   };
   toolchain: {
     status(): Promise<ToolchainStatus>;
-    /** Download and install whatever is missing. Progress arrives through onJobEvent. */
+    /** Download and install whatever is missing. Progress arrives through onJobEvent. Joins a setup already running. */
     install(): Promise<ToolchainStatus>;
+    /** Stop the running setup. False when none is running. */
+    cancel(): Promise<boolean>;
+    /** Lock a toolchain folder other users can change (asks Windows for approval when needed). */
+    repair(): Promise<{ ok: boolean; text: string; status: ToolchainStatus }>;
   };
   build: {
     /** Generate config.h for the model and compile it. Progress arrives through onJobEvent. */
@@ -222,23 +381,44 @@ export interface HiltwrightApi {
   };
   flash: {
     usb(): Promise<UsbState>;
-    /** Wait up to timeoutMs for the bootloader to enumerate with a usable driver. */
-    waitForBootloader(timeoutMs: number): Promise<{ ok: boolean; text: string }>;
-    backup(saberId: string, label: string): Promise<FlashStepResult>;
-    write(dfuPath: string): Promise<FlashStepResult>;
+    /**
+     * Wait up to timeoutMs for a bootloader to enumerate with a usable driver. With `before` (the bootloader serials
+     * present before a reboot), only a new one counts. `serials` are the new bootloaders found.
+     */
+    waitForBootloader(timeoutMs: number, before?: (string | null)[]): Promise<{ ok: boolean; text: string; serials: (string | null)[] }>;
+    /** The flash size and board type of the bootloader with this serial (or the only one, for null). */
+    target(serial: string | null): Promise<FlashTarget>;
+    /** Send the board with this serial from its bootloader back to its firmware, writing nothing. */
+    leave(serial: string | null): Promise<FlashStepResult>;
+    /** `configName`: what the saber reported before its reboot, kept beside the backup so a restore can expect it back. `serial`: the board to read. */
+    backup(saberId: string, label: string, configName?: string | null, serial?: string | null): Promise<FlashStepResult>;
+    /** Write this saber's last build. Main refuses any other file, or wiring the owner has not confirmed (`refused`). */
+    write(saberId: string, dfuPath: string, serial?: string | null): Promise<FlashStepResult>;
     /** Windows: download the official bootloader driver installer, run it elevated, wait for WinUSB to bind. */
     installDriver(): Promise<{ ok: boolean; text: string }>;
     /** Flash backups taken before installs for this saber, newest first. */
     listBackups(saberId: string): Promise<BackupInfo[]>;
-    /** Write one of this saber's backups back. The board must be in bootloader mode. */
-    restore(saberId: string, file: string): Promise<FlashStepResult>;
-    /** Wait for the running firmware's serial device to be back. */
-    waitForRuntime(timeoutMs: number): Promise<boolean>;
+    /** Write one of this saber's backups back to the board with this serial. The board must be in bootloader mode. */
+    restore(saberId: string, file: string, serial?: string | null): Promise<FlashStepResult>;
+    /** Wait for the running firmware's serial device to be back; with a serial, that board's. */
+    waitForRuntime(timeoutMs: number, serial?: string | null): Promise<boolean>;
   };
   onJobEvent(cb: (e: JobEvent) => void): () => void;
+  support: {
+    /** Write a diagnostics file into <userData>/support, show it in its folder, and return its name. Nothing is sent. */
+    save(snapshot: ConnectionSnapshot): Promise<{ file: string }>;
+  };
   app: {
+    /** Stores that could not be read at start and were set aside: what the owner calls each, and the file it was kept as. */
+    storeProblems(): Promise<{ store: string; keptAs: string; startedFrom: 'backup' | 'readable records' | 'nothing'; place: 'data' | 'fonts' }[]>;
     userDataPath(): Promise<string>;
+    /** False when a development run was started with HILTWRIGHT_NO_BOARD: no board can be reached. */
+    boardAccess(): Promise<boolean>;
     openPath(path: string): Promise<void>;
+    /** The licence and third-party notices that ship with the app. A file that is missing is null. */
+    legal(): Promise<{ licence: string | null; notices: string | null }>;
+    /** Open the tagged source of this build on GitHub, in the system browser. Takes no address: main builds it from the app version. */
+    openSource(): Promise<void>;
     /** Open a known help page in the system browser. Only pod.hubbe.net and fredrik.hubbe.net are allowed. */
     openHelp(url: string): Promise<void>;
   };

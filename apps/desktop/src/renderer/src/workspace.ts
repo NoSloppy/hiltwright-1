@@ -5,10 +5,11 @@
 // reported, with staged presets kept until they are installed. Saving writes the model back to the saber's record.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { SaberConfigModel } from '@hiltwright/core';
+import { wiringConfirmed, type SaberConfigModel } from '@hiltwright/core';
 import type { SaberRecord } from '../../shared/api';
 import type { Board } from './board';
 import { draftModel, infoFromRecord } from './saberModel';
+import { setWorkingSaber } from './support';
 
 export interface Workspace {
   /** The saber every step is about, or null when none is remembered yet. */
@@ -32,6 +33,7 @@ export function useWorkspace(board: Board): Workspace {
   const saber = live ? board.saber : board.library.find((s) => s.id === chosenId) ?? board.library[0] ?? null;
   const info = useMemo(() => (live ? board.info : saber ? infoFromRecord(saber) : null), [live, board.info, saber]);
   const model = useMemo(() => (saber && info ? draftModel(info, saber) : null), [saber, info]);
+  useEffect(() => { setWorkingSaber(saber?.id ?? null); }, [saber?.id]);
   const saveModel = useCallback(async (next: SaberConfigModel) => { if (saber) await board.updateSaber({ model: next }, saber.id); }, [board, saber]);
   return { saber, info, live, model, choose: setChosenId, saveModel, plans: board.library.filter((s) => s.planned) };
 }
@@ -45,7 +47,7 @@ export function starterModel(saber: SaberRecord): SaberConfigModel {
 export type FlowStep = 'wiring' | 'presets' | 'fonts' | 'build';
 export function flowStatus(ws: Workspace): { step: FlowStep; label: string }[] {
   const m = ws.model; const s = ws.saber;
-  const wired = !!m?.wiringConfirmedAt || !!s?.firmware;
+  const wired = wiringConfirmed(m);
   const presets = m?.presets.length ?? 0;
   const installed = s?.firmware?.at ? new Date(s.firmware.at).toLocaleDateString() : null;
   return [
@@ -56,8 +58,8 @@ export function flowStatus(ws: Workspace): { step: FlowStep; label: string }[] {
   ];
 }
 export function nextStep(ws: Workspace): FlowStep {
-  const m = ws.model; const s = ws.saber;
-  if (!m || !(m.wiringConfirmedAt || s?.firmware)) return 'wiring';
+  const m = ws.model;
+  if (!m || !wiringConfirmed(m)) return 'wiring';
   if (!m.presets.length) return 'presets';
   return 'build';
 }

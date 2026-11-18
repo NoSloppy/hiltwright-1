@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIBRARY_LOOKS, LOOK_FX, STARTER_LOOKS, analyzeStyleCode, scanStyleArgs, colorWordToHex, formatStyleArgs, generateConfig, hexToColorWord, lookAtSlot, lookSlots, parseStyleArgs, validateModel, type LookDef, type SaberConfigModel } from '../src';
+import { LIBRARY_LOOKS, LOOK_FX, STARTER_LOOKS, analyzeStyleCode, creditOf, creditWords, pastedAuthor, withOrigin, lookFingerprint, scanStyleArgs, colorWordToHex, formatStyleArgs, generateConfig, hexToColorWord, lookAtSlot, lookSlots, parseStyleArgs, validateModel, type LookDef, type SaberConfigModel } from '../src';
 
 const FETT263 = `// Hiltwright test look (header laid out like a library block)
 // Copyright 2026 Hiltwright contributors
@@ -59,7 +59,7 @@ describe('style argument words', () => {
 describe('generateConfig with chosen looks', () => {
   const ember: LookDef = { ...analyzeStyleCode(FETT263), id: 'ember', name: 'Ember', source: 'pasted', by: 'Hiltwright', code: analyzeStyleCode(FETT263).expression, roles: ['main'], description: '' };
   const model: SaberConfigModel = {
-    name: 'hw_test', board: 'V2', buttons: 2, prop: 'fett263',
+    name: 'hw_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'fett263',
     blades: [
       { id: 'main', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } },
       { id: 'crystal', role: 'crystal', type: 'pixel', pixels: 1, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'blade2Pin', powerPins: ['bladePowerPin4'] } },
@@ -70,6 +70,21 @@ describe('generateConfig with chosen looks', () => {
     ],
     looks: [ember],
   };
+  // style-save-integrity ST2. The config hash below was produced by the code before fingerprints were added
+  // (2026-09-26): the fingerprint lives only in the manifest, and the config text is the same.
+  it('records a fingerprint per compiled look, and the config text is unchanged by it', () => {
+    const g = generateConfig(model);
+    expect(g.hash).toBe('589fe34025a7');
+    expect(g.text.length).toBe(3587);
+    for (const l of g.manifest.looks) {
+      const def = [...STARTER_LOOKS, ember].find((x) => x.id === l.id)!;
+      expect(l.hash).toBe(lookFingerprint(def));
+      expect(g.text).not.toContain(l.hash);
+    }
+    expect(lookFingerprint({ ...ember, name: 'Renamed', by: 'Someone' } as LookDef)).toBe(lookFingerprint(ember));
+    expect(lookFingerprint({ ...ember, code: `${ember.code} ` })).not.toBe(lookFingerprint(ember));
+    expect(lookFingerprint({ ...ember, define: 'using X = StylePtr<Red>;' })).not.toBe(lookFingerprint(ember));
+  });
   it('compiles the chosen look into its slot and keeps the library header once', () => {
     expect(validateModel(model)).toEqual([]);
     const g = generateConfig(model);
@@ -87,7 +102,7 @@ describe('generateConfig with chosen looks', () => {
     expect(lookAtSlot(full, 5, 1)).toBeNull();
   });
   it('flags unknown look ids', () => {
-    expect(validateModel({ ...model, presets: [{ font: 'A', track: '', name: 'x', looks: ['nope'] }] })[0]).toMatch(/unknown look "nope"/);
+    expect(validateModel({ ...model, presets: [{ font: 'A', track: '', name: 'x', looks: ['nope'] }] })[0]).toMatch(/unknown style "nope"/);
   });
   it('starters cover every role', () => {
     for (const role of ['main', 'side', 'crystal', 'accent', 'motor'] as const) expect(STARTER_LOOKS.some((l) => l.roles.includes(role))).toBe(true);
@@ -126,13 +141,13 @@ describe('the Hiltwright look library', () => {
 
   it('a build only carries the looks it uses, and the shared wrapper only when a blade look needs it', () => {
     const blade = { id: 'b1', role: 'main' as const, type: 'pixel' as const, pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own' as const, dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } };
-    const g = generateConfig({ name: 'lib', board: 'V2', buttons: 2, prop: 'sa22c', blades: [blade], presets: [{ font: 'A', track: '', name: 'One', looks: ['hw_fire'] }, { font: 'B', track: '', name: 'Two' }] });
+    const g = generateConfig({ name: 'lib', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'sa22c', blades: [blade], presets: [{ font: 'A', track: '', name: 'One', looks: ['hw_fire'] }, { font: 'B', track: '', name: 'Two' }] });
     expect(g.text).toContain('using HwFire = ');
     expect(g.text).toContain('using HwBlade = ');
     expect(g.text).toContain('template<class BASE> using HwFx');
     expect(g.text).not.toContain('using HwRainbow');
     expect(g.text).toContain('StylePtr<HwFire>()');
-    const accentOnly = generateConfig({ name: 'lib2', board: 'V2', buttons: 2, prop: 'sa22c', blades: [{ ...blade, role: 'main' }], presets: [{ font: 'A', track: '', name: 'One', looks: ['hw_spark'] }] });
+    const accentOnly = generateConfig({ name: 'lib2', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'sa22c', blades: [{ ...blade, role: 'main' }], presets: [{ font: 'A', track: '', name: 'One', looks: ['hw_spark'] }] });
     expect(accentOnly.text).not.toContain('HwFx');
   });
 
@@ -145,9 +160,9 @@ describe('the Hiltwright look library', () => {
 
 describe('special abilities and the prop', () => {
   const code = 'StylePtr<Layers<Blue, TransitionEffectL<TrDoEffectX<TrInstant,EFFECT_TRANSITION_SOUND,Int<0>>,EFFECT_USER1>, InOutTrL<TrWipe<300>,TrWipeIn<500>>>>()';
-  const cortosis: LookDef = { ...analyzeStyleCode(code), id: 'cortosis', name: 'Cortosis', source: 'pasted', by: 'Fett263', code, roles: ['main'], description: '' };
+  const cortosis: LookDef = { ...analyzeStyleCode(code), id: 'cortosis', name: 'Cortosis', source: 'pasted', by: 'Hiltwright', code, roles: ['main'], description: '' };
   const model = (prop: SaberConfigModel['prop']): SaberConfigModel => ({
-    name: 'hw_test', board: 'V2', buttons: 2, prop,
+    name: 'hw_test', board: 'V2', boardFrom: 'owner', buttons: 2, prop,
     blades: [{ id: 'main', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2'] } }],
     presets: [{ font: 'A', track: '', name: 'One', looks: ['cortosis'] }],
     looks: [cortosis],
@@ -168,5 +183,40 @@ describe('special abilities and the prop', () => {
     const g = generateConfig(model('sa22c'));
     expect(g.text).not.toMatch(/SPECIAL_ABILITIES/);
     expect(g.warnings.some((w) => /no gesture/.test(w))).toBe(true);
+  });
+});
+
+describe('who made a style', () => {
+  it('tells the owner, an unknown maker and a name apart (ST14)', () => {
+    expect(creditOf('you')).toEqual({ kind: 'own' });
+    expect(creditOf('')).toEqual({ kind: 'own' });
+    expect(creditOf('Unknown')).toEqual({ kind: 'unknown' });
+    expect(creditOf(' Fett263 ')).toEqual({ kind: 'named', name: 'Fett263' });
+    expect(creditWords({ by: 'unknown' })).toBe('Unknown author');
+    expect(creditWords({ by: 'you' })).toBe('Yours');
+    expect(creditWords({ by: 'Fett263', editedBy: 'you' })).toBe('Fett263, edited by you');
+  });
+
+  it('gives a paste no author until one is given or it is marked unknown (ST13)', () => {
+    expect(pastedAuthor('', false)).toBeNull();
+    expect(pastedAuthor('   ', false)).toBeNull();
+    expect(pastedAuthor('', true)).toBe('unknown');
+    expect(pastedAuthor('typed', true)).toBe('unknown');
+    expect(pastedAuthor(' Fett263 ', false)).toBe('Fett263');
+  });
+
+  it('keeps the original author and header on a style the owner edited (ST16)', () => {
+    const built: LookDef = { id: 'look_x', name: 'X', source: 'built', by: 'you', code: 'StylePtr<A>()', header: null, roles: ['main'], args: [], preview: '#ffffff', description: '' };
+    const kept = withOrigin(built, { by: 'Fett263', header: '// Copyright Fett263' });
+    expect(kept).toMatchObject({ by: 'Fett263', header: '// Copyright Fett263', editedBy: 'you' });
+    expect(withOrigin(built, { by: 'unknown', header: null }).editedBy).toBe('you');
+    // The owner's own style stays theirs, and an edit already recorded is kept.
+    expect(withOrigin(built, { by: 'you', header: null }).editedBy).toBeUndefined();
+    expect(withOrigin({ ...built, editedBy: 'you' }, { by: 'you', header: null }).editedBy).toBeUndefined();
+    expect(withOrigin(built, null)).toBe(built);
+  });
+
+  it('credits every built-in style to Hiltwright, as the About statement does (ST40)', () => {
+    expect(STARTER_LOOKS.every((l) => l.by === 'Hiltwright')).toBe(true);
   });
 });

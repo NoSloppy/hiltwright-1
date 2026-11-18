@@ -1,44 +1,49 @@
 // Main process. Owns the window and grants the renderer Web Serial access to the Proffieboard.
 // The renderer never touches Node: contextIsolation on, sandbox on, a tiny preload API.
 
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, dialog, session } from 'electron';
 import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
+import { release, version as osVersion } from 'node:os';
 import { registerIpc } from './ipc';
+import { scrubDevEnv } from './devEnv';
+import { activeWant, isProffie, serialAllowed } from './serialGate';
+import { lookUpWanted } from './usb';
+import { startLog } from './log';
 
-const PROFFIE_VID = 0x1209;
-const PROFFIE_PID = 0x6668;
+// A packaged build ignores every HILTWRIGHT_* development switch: they are removed before anything reads one.
+scrubDevEnv(process.env, app.isPackaged);
 
-/** Electron reports ids as decimal strings on select-serial-port ("4617") and as numbers to the device handler. */
-function idMatches(value: unknown, expected: number): boolean {
-  if (typeof value === 'number') return value === expected;
-  if (typeof value !== 'string' || !value) return false;
-  return parseInt(value, 10) === expected || parseInt(value, 16) === expected;
-}
+// Dev aid: HILTWRIGHT_USER_DATA=<folder> runs the app on a scratch data folder (sabers, styles, fonts, page storage),
+// so a test can never touch the owner's own.
+if (process.env.HILTWRIGHT_USER_DATA) app.setPath('userData', process.env.HILTWRIGHT_USER_DATA);
 
-function isProffie(vendorId: unknown, productId: unknown): boolean {
-  return idMatches(vendorId, PROFFIE_VID) && idMatches(productId, PROFFIE_PID);
-}
+// Every run writes a log in <userData>/logs (main's console, and the page's through console-message below).
+startLog(app.getPath('userData'));
+console.log(`[main] Hiltwright ${app.getVersion()} ${app.isPackaged ? 'packaged' : 'development'} build, Electron ${process.versions.electron}, ${osVersion()} ${release()}`);
+process.on('unhandledRejection', (reason) => console.error('[main] unhandled rejection', reason));
+
+// Dev aid: HILTWRIGHT_NO_BOARD=1 keeps this run away from every board: no serial device is granted or selected and
+// nothing connects on its own. For test runs that must never reach a real saber.
+const noBoard = !!process.env.HILTWRIGHT_NO_BOARD;
 
 function grantSerial(): void {
   const ses = session.defaultSession;
   // Pick the Proffieboard when the renderer calls navigator.serial.requestPort().
   ses.on('select-serial-port', (event, portList, _webContents, callback) => {
     event.preventDefault();
-    const proffie = portList.find((p) => isProffie(p.vendorId, p.productId));
+    const proffie = noBoard ? undefined : portList.find((p) => isProffie(p.vendorId, p.productId));
     console.log('[main] select-serial-port', portList.map((p) => `${p.portName ?? p.displayName ?? '?'} ${p.vendorId}:${p.productId}`).join(', '), '→', proffie?.portId ?? '(none)');
     callback(proffie?.portId ?? '');
   });
   // Let navigator.serial.getPorts() return the board without a prompt, so connecting needs no click.
   // With a handler installed, Electron consults it for getPorts() and again at open time, so it must recognise the
-  // board. On Windows a serial device arrives as { device_instance_id: "USB\\VID_1209&PID_6668&MI_00\\...", name },
-  // with no vendorId/productId fields; other platforms report ids. Accept either shape.
+  // board (serialAllowed accepts the shapes a device arrives in, and refuses everything in a no-board run).
   ses.setDevicePermissionHandler((details) => {
     if (details.deviceType !== 'serial') return false;
-    const d = details.device as { vendorId?: unknown; productId?: unknown; device_instance_id?: string };
-    const byId = isProffie(d.vendorId, d.productId);
-    const byInstance = /VID_1209&PID_6668/i.test(d.device_instance_id ?? '');
-    const ok = byId || byInstance;
+    const ok = serialAllowed(details.device, noBoard);
+    // A board held back while one saber is wanted: look its interfaces up, so the page's next try can reach it.
+    if (!ok && !noBoard && activeWant()) void lookUpWanted();
     console.log('[main] device permission', JSON.stringify(details.device), '→', ok);
     return ok;
   });
@@ -54,6 +59,8 @@ function createWindow(): void {
     minHeight: 700,
     backgroundColor: '#0a0e13',
     title: 'Hiltwright',
+    // The window and taskbar icon (the installed app also carries it in its .exe, from build/icon.ico).
+    icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,
     // The app's header row is the title bar: draggable, with the caption buttons overlaid in the header's colours.
     titleBarStyle: 'hidden',
@@ -69,16 +76,31 @@ function createWindow(): void {
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
+  // The Style editor holds the window open while it has unsaved work (a beforeunload that asks to stay). Ask the owner.
+  win.webContents.on('will-prevent-unload', (e) => {
+    const choice = dialog.showMessageBoxSync(win, {
+      type: 'warning', title: 'Unsaved style', buttons: ['Stay', 'Close without saving'], defaultId: 0, cancelId: 0, noLink: true,
+      message: 'Your style has changes that are not saved.',
+      detail: 'Stay to save them in the Style editor, or close and lose them.',
+    });
+    if (choice === 1) e.preventDefault(); // go ahead and close
+  });
   // Mirror renderer console output to the terminal so the walking skeleton can be checked headlessly.
+  // Electron 37 passes the level as a word on the event; older signatures passed a number (2 warning, 3 error) first.
   win.webContents.on('console-message', (event: unknown, ...rest: unknown[]) => {
     const details = (event as { message?: string; level?: string | number }) ?? {};
     const message = typeof rest[1] === 'string' ? rest[1] : details.message ?? String(rest[0] ?? '');
-    console.log('[renderer]', message);
+    const level = typeof rest[0] === 'number' ? rest[0] : details.level;
+    if (level === 'warning' || level === 2) console.warn('[renderer:warn]', message);
+    else if (level === 'error' || level === 3) console.error('[renderer:error]', message);
+    else console.log('[renderer]', message);
   });
+  win.webContents.on('render-process-gone', (_e, d) => console.error(`[main] the page's process ended: ${d.reason} (exit code ${d.exitCode})`));
   // Chromium requires a user gesture for navigator.serial.requestPort(). The renderer cannot fake one, but main can
   // run a script *as* a gesture, which is what makes "plug it in and it just connects" possible.
   win.webContents.on('did-finish-load', () => {
-    setTimeout(() => {
+    if (noBoard) console.log('[main] auto-connect skipped: HILTWRIGHT_NO_BOARD');
+    else setTimeout(() => {
       void win.webContents.executeJavaScript('window.hiltwrightAutoConnect ? window.hiltwrightAutoConnect() : "no hook"', true)
         .then((r) => console.log('[main] auto-connect', r))
         .catch((err) => console.log('[main] auto-connect failed', String(err)));
@@ -115,6 +137,8 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'));
 }
+
+app.on('child-process-gone', (_e, d) => console.error(`[main] a helper process ended: ${d.type} ${d.reason} (exit code ${d.exitCode})`));
 
 app.whenReady().then(() => {
   registerIpc();

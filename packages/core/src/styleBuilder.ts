@@ -6,7 +6,7 @@
 // and the simulator it runs as (built from the simulator's own primitives). Colours are standard edit-mode
 // arguments, so a built look's colours can be changed live on the saber like any library look.
 
-import { scanStyleArgs, type LookDef } from './looks';
+import { argInfo, scanStyleArgs, type LookDef } from './looks';
 import { prims, type ColorFn, type LayerFn, type Tr } from './sim';
 
 export type Knob = { key: string; label: string; kind: 'number'; min: number; max: number; step: number; unit?: string; hint?: string }
@@ -205,7 +205,7 @@ export const BLOCKS: Record<'base' | 'effect' | 'transition', BlockDef[]> = { ba
 export function newBlock(def: BlockDef): Block { return { kind: def.kind, params: { ...def.defaults } }; }
 
 /** A fresh style: a steady blue blade with the usual effects and a plain wipe. */
-export function defaultStyle(name = 'My look'): StyleDoc {
+export function defaultStyle(name = 'My style'): StyleDoc {
   const e = (k: string) => newBlock(EFFECTS.find((x) => x.kind === k)!);
   return { version: 1, name, base: newBlock(BASES[0]), effects: [e('blast'), e('clash'), e('lockup'), e('lightning'), e('drag'), e('stab')], ignition: newBlock(TRANSITIONS[0]), retraction: newBlock(TRANSITIONS[0]) };
 }
@@ -248,6 +248,49 @@ export function styleToLook(doc: StyleDoc, id: string): LookDef {
     args: scanned.args, defaults: scanned.defaults, preview: baseHex, ...(alt ? { preview2: alt } : {}),
     description: `Built in the style editor: ${summary}.`, define, usesFx: false, style: doc,
   };
+}
+
+/** One live setting on the saber that more than one colour in a built style reads. */
+export interface SharedSetting {
+  arg: number;
+  /** The setting as Presets names it ("2nd alt colour"). */
+  setting: string;
+  /** The blocks' colours that share it, in the editor's words ("Stardust", "Core pulse"; a second of the same effect is "Stardust (2nd)"). */
+  uses: string[];
+  /** The sentence for the owner. */
+  text: string;
+}
+
+/**
+ * Colours of a built style that read the same live setting on the saber (ST32): Stardust and Core pulse both use the
+ * 2nd alt colour, and two copies of one effect share its colour. The saber has one value for each, so changing it
+ * there changes every colour that reads it, while the preview here shows them separately.
+ */
+export function sharedSettings(doc: StyleDoc): SharedSetting[] {
+  const byArg = new Map<number, string[]>();
+  const copies = new Map<string, number>();
+  const visit = (b: Block, defs: BlockDef[], title?: string) => {
+    const def = find(defs, b.kind);
+    const n = (copies.get(`${title}${def.kind}`) ?? 0) + 1; copies.set(`${title}${def.kind}`, n);
+    for (const k of def.knobs) {
+      if (k.kind !== 'color') continue;
+      // An effect is named as in the editor ("Stardust", "Stardust (2nd)"); the blade and the transitions by their own card.
+      const name = title ? `${title}: ${k.label.toLowerCase()}` : n > 1 ? `${def.name} (${n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`})` : def.name;
+      byArg.set(k.arg, [...(byArg.get(k.arg) ?? []), name]);
+    }
+  };
+  visit(doc.base, BASES, 'Blade');
+  doc.effects.forEach((b) => visit(b, EFFECTS));
+  visit(doc.ignition, TRANSITIONS, 'Ignition');
+  visit(doc.retraction, TRANSITIONS, 'Retraction');
+  const out: SharedSetting[] = [];
+  for (const [arg, uses] of [...byArg].sort((a, b) => a[0] - b[0])) {
+    if (uses.length < 2) continue;
+    const setting = argInfo(arg).name;
+    const list = uses.length === 2 ? `${uses[0]} and ${uses[1]}` : `${uses.slice(0, -1).join(', ')} and ${uses[uses.length - 1]}`;
+    out.push({ arg, setting, uses, text: `${list} share one live setting on the saber (${setting}), so changing one there changes them all. The preview here shows them separately.` });
+  }
+  return out;
 }
 
 export function isStyleDoc(v: unknown): v is StyleDoc {

@@ -48,7 +48,7 @@ export const LIBRARY_LOOKS: readonly LibraryLook[] = [
   {
     id: 'hw_blade', name: 'Steady', roles: ['main', 'side'], alias: 'HwBlade', usesFx: true, preview: '#0000ff',
     define: `using HwBlade = HwFx<${BASE}>;`,
-    description: 'A clean, even blade. The cheapest look, and the one to pick when the font should do the talking.',
+    description: 'A clean, even blade. The cheapest style, and the one to pick when the font should do the talking.',
   },
   {
     id: 'hw_hum', name: 'Humming', roles: ['main', 'side'], alias: 'HwHum', usesFx: true, kb: 0.6, preview: '#0000ff', preview2: '#000080',
@@ -71,7 +71,7 @@ export const LIBRARY_LOOKS: readonly LibraryLook[] = [
     id: 'hw_fire', name: 'Fire', roles: ['main', 'side'], alias: 'HwFire', usesFx: true, kb: 1.1, preview: '#ff0000', preview2: '#ffff00',
     define: `using HwFire = HwFx<StyleFire<RgbArg<BASE_COLOR_ARG, Rgb<255,0,0>>, ${ALT(255, 255, 0)}, 0, 6,
   FireConfig<10,1000,2>, FireConfig<2,1000,5>, FireConfig<0,0,10>, FireConfig<0,0,10>>>;`,
-    description: 'Flames climbing the blade, from the base colour at the root to the second colour in the hottest licks. The heaviest look to run.',
+    description: 'Flames climbing the blade, from the base colour at the root to the second colour in the hottest licks. The heaviest style to run.',
   },
   {
     id: 'hw_stripes', name: 'Energy flow', roles: ['main', 'side'], alias: 'HwStripes', usesFx: true, kb: 1.1, preview: '#0000ff', preview2: '#00a0ff',
@@ -141,7 +141,7 @@ export const LIBRARY_LOOKS: readonly LibraryLook[] = [
     RgbArg<BASE_COLOR_ARG, Rgb<255,255,255>>, Mix<Int<9000>, Black, RgbArg<BASE_COLOR_ARG, Rgb<255,255,255>>>,
     RgbArg<BASE_COLOR_ARG, Rgb<255,255,255>>, Mix<Int<18000>, Black, RgbArg<BASE_COLOR_ARG, Rgb<255,255,255>>>>,
   RandomPerLEDFlickerL<AlphaL<Black, Int<9000>>>>>;`,
-    description: 'A pale blade shot through with fast, uneven shadows and a fine grain, for an ancient black-cored look.',
+    description: 'A pale blade shot through with fast, uneven shadows and a fine grain, for an ancient black-cored style.',
   },
   {
     id: 'hw_embers', name: 'Embers', roles: ['main', 'side'], alias: 'HwEmbers', usesFx: true, kb: 0.7, preview: '#ff1400', preview2: '#ff8c00',

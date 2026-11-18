@@ -2,11 +2,12 @@
 // Produces core ModelBlades directly, so what the owner confirms is exactly what generateConfig compiles.
 
 import { useState, type CSSProperties } from 'react';
-import { chainRanges, type BladeRole, type BladeVariant, type BoardModel, type ModelBlade } from '@hiltwright/core';
+import { chainRanges, type BladeVariant, type BoardModel, type ModelBlade } from '@hiltwright/core';
 import { Icon } from './Icon';
 import { BladeBar, Crystal, Hilt } from './Saber';
 
-import { KIND_LABEL, ROLES, ROLE_META, bladeSummary, dataPins, kindOf, newBlade, pinLabel, pinTable, powerOptions, powerPinsOf, withKind, type Kind } from './hardwareModel';
+import { KIND_LABEL, ROLES, ROLE_META, bladeSummary, dataPins, freeDataPins, kindOf, pinLabel, pinTable, powerOptions, powerPinsOf, withBladeCount, withKind, type Kind } from './hardwareModel';
+import { Select } from './Select';
 
 export interface SwapProps {
   variants: BladeVariant[];
@@ -23,23 +24,20 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
   const pins = pinTable(blades, board);
   const ranges = chainRanges(blades);
   const crystal = blades.find((b) => b.role === 'crystal');
+  // The power pins every other blade uses: a blade switched to a star LED takes free ones for its extra channels.
+  const othersPower = (id: string) => blades.filter((x) => x.id !== id).flatMap(powerPinsOf);
   const set = (id: string, patch: Partial<ModelBlade>) => onChange(blades.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   const setCount = (n: number) => {
-    if (n < 1 || n > 8 || locked) return;
-    if (n < blades.length) { onChange(blades.slice(0, n)); return; }
-    const next = [...blades];
-    while (next.length < n) {
-      const taken = { data: next.flatMap((b) => (b.wiring.kind === 'own' ? [b.wiring.dataPin] : [])), power: next.flatMap(powerPinsOf) };
-      const role: BladeRole = next.some((b) => b.role === 'main') ? (next.some((b) => b.role === 'crystal') ? 'accent' : 'crystal') : 'main';
-      next.push(newBlade(`b${next.length + 1}`, role, board, taken));
-    }
+    if (locked) return;
+    const next = withBladeCount(blades, n, board);
+    if (!next) return;
     onChange(next);
-    setOpen(next[next.length - 1].id);
+    if (next.length > blades.length) setOpen(next[next.length - 1].id);
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 280px', gap: 16 }}>
-      <div className="col" style={{ gap: 10 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 16 }}>
+      <div className="col" style={{ gap: 10, flex: '1 1 340px', minWidth: 0 }}>
         <div className="row" style={{ gap: 18 }}>
           <div className="row" style={{ gap: 0 }} role="group" aria-label="Number of blades">
             <button type="button" className="input" style={{ width: 38, justifyContent: 'center', padding: 0 }} aria-label="Fewer blades" disabled={locked || blades.length <= 1} onClick={() => setCount(blades.length - 1)}><Icon name="minus" /></button>
@@ -91,7 +89,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
                     <div className="col" style={{ gap: 6 }}>
                       <span className="label">Built from</span>
                       <div className="seg" role="radiogroup" aria-label="Type">
-                        {(['pixel', 'single', 'star'] as Kind[]).map((k) => <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'on' : ''} disabled={locked} onClick={() => set(b.id, withKind(b, k, board))}><Icon name={k === 'pixel' ? 'strip' : 'led'} />{KIND_LABEL[k]}</button>)}
+                        {(['pixel', 'single', 'star'] as Kind[]).map((k) => <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'on' : ''} disabled={locked} onClick={() => set(b.id, withKind(b, k, board, othersPower(b.id)))}><Icon name={k === 'pixel' ? 'strip' : 'led'} />{KIND_LABEL[k]}</button>)}
                       </div>
                     </div>
                   )}
@@ -100,14 +98,14 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
                 {kind === 'pixel' && (
                   <div className="grid3">
                     <label className="field"><span className="label">Pixels</span><span className="input"><input type="number" min={1} max={400} value={b.pixels} disabled={locked} aria-label="Pixel count" onChange={(e) => set(b.id, { pixels: Math.max(0, Math.round(Number(e.target.value) || 0)) })} /></span></label>
-                    <label className="field"><span className="label">Colour order</span><span className="input"><span className="ellip">{b.order || 'GRB'}</span><span className="caret"><Icon name="down" /></span><select value={b.order || 'GRB'} disabled={locked || w.kind === 'chain'} aria-label="Colour order" onChange={(e) => set(b.id, { order: e.target.value })}>{['GRB', 'RGB', 'GRBW', 'RGBW', 'BGR', 'BRG'].map((o) => <option key={o} value={o}>{o}</option>)}</select></span></label>
-                    <label className="field"><span className="label">Strips on this wire</span><span className="input sans"><span className="ellip">{b.parallel > 1 ? `${b.parallel} in parallel` : 'One strip'}</span><span className="caret"><Icon name="down" /></span><select value={String(b.parallel)} disabled={locked} aria-label="Strips wired in parallel on this data line" onChange={(e) => set(b.id, { parallel: Number(e.target.value) })}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n === 1 ? 'One strip' : `${n} in parallel`}</option>)}</select></span></label>
+                    <label className="field"><span className="label">Colour order</span><span className="input"><span className="ellip">{b.order || 'GRB'}</span><span className="caret"><Icon name="down" /></span><Select value={b.order || 'GRB'} disabled={locked || w.kind === 'chain'} aria-label="Colour order" onChange={(e) => set(b.id, { order: e.target.value })}>{['GRB', 'RGB', 'GRBW', 'RGBW', 'BGR', 'BRG'].map((o) => <option key={o} value={o}>{o}</option>)}</Select></span></label>
+                    <label className="field"><span className="label">Strips on this wire</span><span className="input sans"><span className="ellip">{b.parallel > 1 ? `${b.parallel} in parallel` : 'One strip'}</span><span className="caret"><Icon name="down" /></span><Select value={String(b.parallel)} disabled={locked} aria-label="Strips wired in parallel on this data line" onChange={(e) => set(b.id, { parallel: Number(e.target.value) })}>{[1, 2, 3].map((n) => <option key={n} value={n}>{n === 1 ? 'One strip' : `${n} in parallel`}</option>)}</Select></span></label>
                     {b.parallel > 1 && <span className="hint" style={{ gridColumn: '1 / -1' }}>Strips soldered to the same data wire show the same thing and cannot be controlled separately, so they count as one blade with one strip's pixel count.</span>}
                   </div>
                 )}
                 {kind === 'star' && <span className="hint">A tri-colour star LED on three power pins, red, green and blue in that order. The resistor values are the stock ProffieOS examples; ask the installer if the colours look wrong.</span>}
-                {kind === 'single' && <span className="hint">One LED on one power pin. Shown white in previews; its look decides the brightness.</span>}
-                {kind === 'motor' && <span className="hint">Runs from one power pin at full power while its look is on.</span>}
+                {kind === 'single' && <span className="hint">One LED on one power pin. Shown white in previews; its style decides the brightness.</span>}
+                {kind === 'motor' && <span className="hint">Runs from one power pin at full power while its style is on.</span>}
 
                 <div className="col" style={{ gap: 8 }}>
                   <span className="label">Wiring</span>
@@ -123,13 +121,13 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
                       </div>
                       {w.kind === 'own' && (
                         <div className="grid2">
-                          <label className="field"><span className="label">Data pin</span><span className="input"><span className="ellip">{w.dataPin}</span><span className="caret"><Icon name="down" /></span><select value={w.dataPin} disabled={locked} aria-label="Data pin" onChange={(e) => set(b.id, { wiring: { ...w, dataPin: e.target.value } })}>{dataPins(board).map((p) => <option key={p} value={p}>{p}{board === 'V3' && p >= 'blade5Pin' ? ' (Free)' : ''}</option>)}</select></span></label>
+                          <label className="field"><span className="label">Data pin</span><span className="input"><span className="ellip">{w.dataPin}</span><span className="caret"><Icon name="down" /></span><Select value={w.dataPin} disabled={locked} aria-label="Data pin" onChange={(e) => set(b.id, { wiring: { ...w, dataPin: e.target.value } })}>{dataPins(board).map((p) => <option key={p} value={p}>{p}{freeDataPins(board).includes(p) ? ' (Free)' : ''}</option>)}</Select></span></label>
                           <div className="field"><span className="label">Power pins</span><div className="row wrap" style={{ gap: 6, minHeight: 38 }}>{powerOptions(board).filter((o) => o.kind === 'fet').map((o) => { const on = w.powerPins.includes(o.pin); return <button key={o.pin} type="button" className={`chip ${on ? 'sel' : ''}`} aria-pressed={on} disabled={locked} onClick={() => { const next = on ? w.powerPins.filter((x) => x !== o.pin) : [...w.powerPins, o.pin].sort(); if (next.length) set(b.id, { wiring: { ...w, powerPins: next } }); }}>{o.label}</button>; })}</div></div>
                         </div>
                       )}
                       {w.kind === 'chain' && (
                         <div className="grid2">
-                          <label className="field"><span className="label">After</span><span className="input sans"><span className="ellip">Blade {blades.findIndex((x) => x.id === w.after) + 1}</span><span className="caret"><Icon name="down" /></span><select value={w.after} disabled={locked} aria-label="Continues after" onChange={(e) => set(b.id, { wiring: { ...w, after: e.target.value } })}>{parents.map((p) => <option key={p.id} value={p.id}>Blade {blades.indexOf(p) + 1} · {ROLE_META[p.role].label}</option>)}</select></span></label>
+                          <label className="field"><span className="label">After</span><span className="input sans"><span className="ellip">Blade {blades.findIndex((x) => x.id === w.after) + 1}</span><span className="caret"><Icon name="down" /></span><Select value={w.after} disabled={locked} aria-label="Continues after" onChange={(e) => set(b.id, { wiring: { ...w, after: e.target.value } })}>{parents.map((p) => <option key={p.id} value={p.id}>Blade {blades.indexOf(p) + 1} · {ROLE_META[p.role].label}</option>)}</Select></span></label>
                           <label className="row" style={{ gap: 10, alignSelf: 'end', height: 38, fontSize: 13, color: 'var(--dim)' }}><button type="button" className={`tog ${w.reverse ? 'on' : ''}`} role="switch" aria-checked={!!w.reverse} disabled={locked} onClick={() => set(b.id, { wiring: { ...w, reverse: !w.reverse } })}><i /></button>Runs the other way (reversed)</label>
                         </div>
                       )}
@@ -138,9 +136,9 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
                     <div className="grid3">
                       {(w as { pins: string[] }).pins.map((pin, k) => (
                         <label key={k} className="field"><span className="label">{kind === 'star' ? ['Red', 'Green', 'Blue'][k] : 'Power pin'}</span><span className="input sans"><span className="ellip">{pinLabel(board, pin)}</span><span className="caret"><Icon name="down" /></span>
-                          <select value={pin} disabled={locked} aria-label={kind === 'star' ? `${['Red', 'Green', 'Blue'][k]} power pin` : 'Power pin'} onChange={(e) => { const pinsNext = [...(w as { pins: string[] }).pins]; pinsNext[k] = e.target.value; set(b.id, { wiring: { kind: 'power', pins: pinsNext } }); }}>
+                          <Select value={pin} disabled={locked} aria-label={kind === 'star' ? `${['Red', 'Green', 'Blue'][k]} power pin` : 'Power pin'} onChange={(e) => { const pinsNext = [...(w as { pins: string[] }).pins]; pinsNext[k] = e.target.value; set(b.id, { wiring: { kind: 'power', pins: pinsNext } }); }}>
                             {powerOptions(board).filter((o) => o.kind === 'fet' || kind === 'single').map((o) => <option key={o.pin} value={o.pin}>{o.label}{o.kind === 'pwm' ? ' · PWM, small LED only' : ''}</option>)}
-                          </select></span></label>
+                          </Select></span></label>
                       ))}
                       <div className="field" style={{ gridColumn: kind === 'star' ? '1 / -1' : '2 / -1' }}><span className="label">Note</span><span className="hint" style={{ paddingTop: 6 }}>LED 1–6 switch battery power through a FET. Sharing one between blades is fine; the build adds the shared-power option.{board === 'V3' && kind === 'single' ? ' On a V3 a small indicator LED can use Free 1–3 as PWM instead and keep the FETs free.' : ''}</span></div>
                     </div>
@@ -191,7 +189,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
         })}
       </div>
 
-      <aside className="col sticky" style={{ gap: 12 }}>
+      <aside className="col sticky" style={{ gap: 12, flex: '0 0 280px', maxWidth: '100%' }}>
         <div style={{ border: '1px solid var(--line)', background: '#0b1016', padding: 12 }} className="col">
           <div className="row" style={{ gap: 0, padding: '4px 0 10px' }}><Hilt crystal={crystal ? '#ff3d3d' : null} /><BladeBar color="#3d7bff" /></div>
           <div className="list" style={{ border: '1px solid var(--line)' }}>

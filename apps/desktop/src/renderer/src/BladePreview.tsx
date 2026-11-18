@@ -3,7 +3,7 @@
 // and falls back to a flat bar in its main colour.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BladeSim, CLASH_G, canSimulateLook, type LockupType } from '@hiltwright/core';
+import { BladeSim, CLASH_G, canSimulateLook, type Cue, type LockupType } from '@hiltwright/core';
 import { addPreview, bladeRenderer } from './bladeRender';
 import { BladeBar, Hilt } from './Saber';
 import { MotionPad } from './MotionPad';
@@ -23,9 +23,13 @@ interface Props {
   /** 'compact' is one row of triggers with no swing slider or explanation, for use beside other controls. */
   controls?: boolean | 'compact';
   size?: 'sm' | 'md';
+  /** Show something off from outside: raise an effect, or hold a lockup for a moment. A new `n` is a new cue. */
+  cue?: (Cue & { n: number; at: number }) | null;
+  /** Bumped when the style behind `lookId` changes: the simulator is rebuilt, but the buttons, tilt and lockup stay as they are. */
+  version?: number;
 }
 
-export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 132, dot, hilt, controls, size = 'md' }: Props) {
+export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 132, dot, hilt, controls, size = 'md', cue, version = 0 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const simRef = useRef<BladeSim | null>(null);
@@ -41,12 +45,24 @@ export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 1
   const radius = dot ? (size === 'sm' ? 6 : 9) : size === 'sm' ? 4.5 : 7;
   const argKey = useMemo(() => (args ? [...args].map(([k, v]) => `${k}=${v}`).join(' ') : ''), [args]);
 
+  // What the buttons and sliders are set to, so a simulator rebuilt for an edited style picks up where the last one was.
+  const state = useRef({ on, lockup, swing, tilt, twist, args });
+  state.current = { on, lockup, swing, tilt, twist, args };
+  const lastLook = useRef(lookId);
   useEffect(() => {
     if (!ok || !lookId) { simRef.current = null; return; }
     const sim = new BladeSim(lookId, n, 1 + Math.floor(Math.random() * 1e6));
-    sim.setOn(true);
+    if (lastLook.current !== lookId) {
+      // Another look altogether: start from a lit, still blade.
+      lastLook.current = lookId;
+      sim.setOn(true);
+      setOn(true); setLockup(null); setSwing(0); setTilt(0); setTwist(0);
+    } else {
+      const s = state.current;
+      sim.setArgs(new Map(s.args ?? []));
+      sim.setOn(s.on); sim.setLockup(s.lockup, 0.55); sim.setSwing(s.swing); sim.setAngle(s.tilt); sim.setTwist(s.twist);
+    }
     simRef.current = sim;
-    setOn(true); setLockup(null); setSwing(0); setTilt(0); setTwist(0);
     const el = canvas.current; const box = wrap.current;
     const ctx = el?.getContext('2d') ?? null;
     if (!el || !box || !ctx) return;
@@ -68,7 +84,7 @@ export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 1
       },
     });
     return () => { remove(); ro.disconnect(); };
-  }, [ok, lookId, n, height, radius, dot]);
+  }, [ok, lookId, n, height, radius, dot, version]);
 
   useEffect(() => { simRef.current?.setArgs(new Map(args ?? [])); }, [argKey, lookId, ok]); // eslint-disable-line react-hooks/exhaustive-deps
   const onRef = useRef(on); onRef.current = on;
@@ -78,18 +94,50 @@ export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 1
   useEffect(() => { simRef.current?.setAngle(tilt); }, [tilt]);
   useEffect(() => { simRef.current?.setTwist(twist); }, [twist]);
 
+  // A cue from the editor: raise an effect, hold a lockup, or pose the saber while a Where control is dragged. The
+  // simulator is rebuilt as the style changes but the preview's state is kept, so a held lockup and the pose carry on.
+  const HOLD_MS = 1500;
+  const seenCue = useRef(cue?.n ?? 0);
+  const release = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFire = useRef(0);
+  // The lockup the owner turned on with the buttons: a held cue borrows the blade for a moment, then gives this back.
+  const ownLockup = useRef<LockupType | null>(null);
+  useEffect(() => {
+    const sim = simRef.current;
+    if (!cue || !sim || cue.n === seenCue.current) return;
+    seenCue.current = cue.n;
+    if (!sim.isOn) setOn(true);
+    if (cue.pose?.tilt != null) setTilt(Math.max(-90, Math.min(90, Math.round(cue.pose.tilt))));
+    if (cue.pose?.swing != null) setSwing(Math.max(0, Math.min(600, Math.round(cue.pose.swing))));
+    if (cue.pose?.twist != null) setTwist(Math.max(-180, Math.min(180, Math.round(cue.pose.twist))));
+    if (cue.lockup) {
+      if (release.current) clearTimeout(release.current);
+      setLockup(cue.lockup);
+      release.current = setTimeout(() => { release.current = null; setLockup(ownLockup.current); }, HOLD_MS); // long enough to see it come in, hold and go out
+      return;
+    }
+    // A momentary effect held on: set it off again now and then, so it keeps landing where the pose puts it.
+    const now = performance.now();
+    if (cue.hold && now - lastFire.current < 450) return;
+    lastFire.current = now;
+    if (cue.effect === 'EFFECT_CLASH' || cue.effect === 'EFFECT_BLAST' || cue.effect === 'EFFECT_STAB') {
+      sim.trigger(cue.effect === 'EFFECT_CLASH' ? 'clash' : cue.effect === 'EFFECT_BLAST' ? 'blast' : 'stab', 0.35 + Math.random() * 0.4, CLASH_G.soft);
+    } else if (cue.effect) sim.raise(cue.effect);
+  }, [cue?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (release.current) clearTimeout(release.current); }, []);
+
   if (!ok) {
     return (
       <div className="col" style={{ gap: 6 }}>
         <div className="row" style={{ gap: 0, height, paddingRight: 28 }}>{hilt && <Hilt />}<BladeBar color={fallbackColor} thin={size === 'sm'} /></div>
-        {controls && <span className="hint">{broken ? 'The live preview needs WebGL, which is not available here. This bar only shows the main colour.' : 'No live preview for this look: only Hiltwright’s own looks can be simulated. This bar only shows its main colour.'}</span>}
+        {controls && <span className="hint">{broken ? 'The live preview needs WebGL, which is not available here. This bar only shows the main colour.' : 'No live preview for this style: only Hiltwright’s own styles can be simulated. This bar only shows its main colour.'}</span>}
       </div>
     );
   }
 
   const hit = (type: 'clash' | 'blast' | 'stab', pos = 0.35 + Math.random() * 0.4, hard = false) => { if (on) simRef.current?.trigger(type, pos, hard ? CLASH_G.hard : Math.min(CLASH_G.hard, CLASH_G.soft + (swing / 600) * (CLASH_G.hard - CLASH_G.soft))); };
   const hold = (t: LockupType, label: string) => (
-    <button type="button" className={`chip ${lockup === t ? 'sel' : ''}`} aria-pressed={lockup === t} disabled={!on} onClick={() => setLockup(lockup === t ? null : t)}>{label}</button>
+    <button type="button" className={`chip ${lockup === t ? 'sel' : ''}`} aria-pressed={lockup === t} disabled={!on} onClick={() => { const next = lockup === t ? null : t; ownLockup.current = next; if (release.current) { clearTimeout(release.current); release.current = null; } setLockup(next); }}>{label}</button>
   );
 
   return (
@@ -103,7 +151,7 @@ export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 1
       </div>
       {controls === 'compact' && (
         <div className="row wrap" style={{ gap: 6 }}>
-          <button type="button" className="chip" onClick={() => { setOn(!on); setLockup(null); }}>{on ? 'Retract' : 'Ignite'}</button>
+          <button type="button" className="chip" onClick={() => { setOn(!on); ownLockup.current = null; setLockup(null); }}>{on ? 'Retract' : 'Ignite'}</button>
           <button type="button" className="chip" disabled={!on} onClick={() => hit('clash')}>Clash</button>
           <button type="button" className="chip" disabled={!on} onClick={() => hit('blast')}>Blast</button>
           {!dot && hold('normal', 'Lockup')}
@@ -113,7 +161,7 @@ export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 1
       {controls === true && (
         <div className="col" style={{ gap: 8 }}>
           <div className="row wrap" style={{ gap: 6 }}>
-            <button type="button" className="btn sm" onClick={() => { setOn(!on); setLockup(null); }}><span className="b"><span className="i">{on ? 'Retract' : 'Ignite'}</span></span></button>
+            <button type="button" className="btn sm" onClick={() => { setOn(!on); ownLockup.current = null; setLockup(null); }}><span className="b"><span className="i">{on ? 'Retract' : 'Ignite'}</span></span></button>
             <button type="button" className="chip" disabled={!on} onClick={() => hit('clash')}>Clash</button>
             <button type="button" className="chip" disabled={!on} onClick={() => hit('blast')}>Blast</button>
             {!dot && <button type="button" className="chip" disabled={!on} onClick={() => hit('stab')}>Stab</button>}

@@ -70,6 +70,12 @@ export function classifySound(fileName: string): { effect: string; kind: 'mono' 
   return { effect: base.replace(/\d+$/, ''), kind: 'other', index: null };
 }
 
+/** How many bytes from the start of a wav are enough to find its format (the fmt chunk, past any extra header chunks). */
+export const WAV_HEADER_BYTES = 512;
+
+/** The sounds that make a folder a font, in words for messages. */
+export const CORE_SOUNDS_TEXT = 'hum, font, out (ignition), poweron or in (retraction)';
+
 export interface FontFile {
   name: string;
   size: number;
@@ -130,4 +136,97 @@ export function checkFont(files: FontFile[]): FontReport {
   if (hum === 0) issues.push({ kind: 'missing-hum', text: 'No hum sound found. Every font needs at least hum.wav or hum01.wav.', files: [] });
   const type: FontReport['type'] = mono && poly ? 'mixed' : poly ? 'polyphonic' : mono ? 'monophonic' : 'unknown';
   return { files: files.length, bytes: files.reduce((a, f) => a + f.size, 0), type, effects, issues };
+}
+
+/** Names ProffieOS has that EFFECT_NAMES does not, gathered under one label each. */
+const EXTRA: [RegExp, string][] = [
+  [/^(swingl|swingh|lswing|hswing)$/, 'smoothswing'],
+  [/^(lb|bgnlb|endlb)$/, 'lightning block'],
+  [/^(bgndrag|enddrag)$/, 'drag'],
+  [/^(bgnmelt|endmelt)$/, 'melt'],
+  [/^(tr|trloop|tron|troff)$/, 'blade transitions'],
+  [/^(quote|quotes)$/, 'quotes'],
+  [/^(ccbegin|ccend|ccchange|color|colour)$/, 'colour change'],
+  [/^(blast)$/, 'blaster'],
+  [/^(fastout|fastin)$/, 'fast ignition'],
+  [/^(bgnauto|endauto|auto)$/, 'blaster auto'],
+  [/^(lowbatt)$/, 'low battery'],
+  [/^(battery|vmbegin|vmend|volup|voldown|volmin|volmax|mnum|mselect|mclick|mstart|mend|menu)$/, 'menu voice'],
+];
+
+/** The label for a `.wav` ProffieOS has no name for (readme.wav, notes.wav): shown, but never an effect. */
+export const OTHER_FILES = 'other files';
+
+/**
+ * The name ProffieOS would treat a file as. Inside an effect's folder any numbering goes (`clsh/001.wav`,
+ * `clsh/clsh1.wav`, `tr/001/000.wav`), and the file belongs to that folder's effect; it is renamed to the flat
+ * form (`clsh01.wav`) so the checker sees the same thing the saber does.
+ */
+function soundName(rel: string): { checker: string; base: string } {
+  const parts = rel.split('/');
+  const file = parts[parts.length - 1];
+  const stem = file.toLowerCase().replace(/\.wav$/, '');
+  if (parts.length > 1) {
+    const folder = parts[0].toLowerCase();
+    const m = /^([a-z_]*?)(\d*)$/.exec(stem);
+    if (m && (m[1] === '' || m[1] === folder)) return { checker: `${folder}${m[2] ? m[2].padStart(2, '0') : ''}.wav`, base: folder };
+  }
+  return { checker: file, base: stem.replace(/\d+$/, '') };
+}
+
+/** What a file at this path within a font plays for. `checker` is the flat name the checks see. */
+export function classifyFontFile(rel: string): { effect: string; kind: 'mono' | 'poly' | 'shared' | 'other'; checker: string } {
+  const { checker, base } = soundName(rel);
+  const c = classifySound(checker);
+  if (c.kind !== 'other') return { effect: c.effect, kind: c.kind, checker };
+  for (const [re, label] of EXTRA) if (re.test(base)) return { effect: label, kind: 'other', checker };
+  return { effect: OTHER_FILES, kind: 'other', checker };
+}
+
+/** Whether a path within a font is a track (inside a `tracks` folder): tracks are not sounds of the font. */
+export const isTrackPath = (rel: string): boolean => rel.split('/').slice(0, -1).some((p) => /^tracks?$/i.test(p));
+
+/** One `.wav` of a font as the main process found it: its path within the font (forward slashes), size, first bytes. */
+export interface FontListingEntry {
+  path: string;
+  size: number;
+  /** The first WAV_HEADER_BYTES of the file; null when it could not be read. */
+  header: Uint8Array | null;
+}
+
+export interface FontSoundFact {
+  path: string;
+  effect: string;
+  kind: 'mono' | 'poly' | 'shared' | 'other';
+  seconds: number | null;
+  size: number;
+}
+
+export interface FontCheck {
+  report: FontReport;
+  sounds: FontSoundFact[];
+  tracks: FontSoundFact[];
+  /** Every wav's size, tracks included. */
+  bytes: number;
+}
+
+/**
+ * The one font checker, for the library and the card alike: a pure function over a listing of the font's wavs.
+ * Tracks are left out of the sound checks; per-sound folders and flat files get the same verdict.
+ */
+export function checkFontListing(entries: FontListingEntry[]): FontCheck {
+  const sounds: FontSoundFact[] = [];
+  const tracks: FontSoundFact[] = [];
+  const checked: FontFile[] = [];
+  let bytes = 0;
+  const sorted = [...entries].sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
+  for (const e of sorted) {
+    const wav = e.header ? parseWavHeader(e.header) : null;
+    bytes += e.size;
+    if (isTrackPath(e.path)) { tracks.push({ path: e.path, effect: 'track', kind: 'other', seconds: wav?.seconds ?? null, size: e.size }); continue; }
+    const c = classifyFontFile(e.path);
+    sounds.push({ path: e.path, effect: c.effect, kind: c.kind, seconds: wav?.seconds ?? null, size: e.size });
+    checked.push({ name: c.checker, size: e.size, wav });
+  }
+  return { report: checkFont(checked), sounds, tracks, bytes };
 }

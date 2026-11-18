@@ -3,6 +3,8 @@
 import { readFile, readdir, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app } from 'electron';
+import { copyPackFontToCard } from './packCopy';
+import type { CopyOptions, FontEntry } from './sd';
 import { decodeMesh, readItem, readManifest, type PackManifest, type PackedMesh } from './hwpack';
 
 export interface PackInfo extends Omit<PackManifest, 'items'> { file: string; sounds: number }
@@ -10,7 +12,9 @@ export interface PackInfo extends Omit<PackManifest, 'items'> { file: string; so
 function packDirs(): string[] {
   const dirs = [join(app.getPath('userData'), 'packs')];
   // Shipped with the app (resources/packs in a build), or the repo's packs folder in development.
-  dirs.push(app.isPackaged ? join(process.resourcesPath, 'packs') : join(app.getAppPath(), '..', '..', 'packs'));
+  // The free ProffieOS fonts ship in resources/packs (apps/desktop/resources/packs in development, made by npm run fontpacks).
+  if (app.isPackaged) dirs.push(join(process.resourcesPath, 'packs'));
+  else dirs.push(join(app.getAppPath(), 'resources', 'packs'), join(app.getAppPath(), '..', '..', 'packs'));
   // Packs that are part of the app itself: the built-in hilt.
   dirs.push(app.isPackaged ? join(process.resourcesPath, 'builtin') : join(app.getAppPath(), 'resources', 'builtin'));
   if (process.env.HILTWRIGHT_PACKS) dirs.push(process.env.HILTWRIGHT_PACKS);
@@ -75,4 +79,10 @@ export async function packFont(id: string): Promise<{ name: string; files: Recor
     bytes += b.length;
   }
   return { name: manifest.name, files, ini: manifest.ini ?? {}, smoothsw: manifest.smoothsw ?? {}, bytes, skipped: 0 };
+}
+
+/** Copy a font pack's folder to a card, all or nothing. Refused unless the pack's creator allowed copying. */
+export async function copyFontToCard(id: string, root: string, options: CopyOptions = {}): Promise<FontEntry> {
+  const { file, manifest, itemsStart } = await find(id);
+  return copyPackFontToCard(file, manifest, itemsStart, root, options);
 }

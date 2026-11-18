@@ -1,9 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { HiltwrightApi, JobEvent } from '../shared/api';
 
+/** The package's version, set at build time (electron.vite.config.ts). */
+declare const __APP_VERSION__: string;
+
 // Thin, typed bridge. Each method maps to one ipcMain.handle in src/main/ipc.ts.
 const api: HiltwrightApi = {
-  appVersion: '0.1.0',
+  appVersion: __APP_VERSION__,
   platform: process.platform,
   library: {
     list: () => ipcRenderer.invoke('library:list'),
@@ -13,6 +16,7 @@ const api: HiltwrightApi = {
     update: (id, patch) => ipcRenderer.invoke('library:update', id, patch),
     plan: (name, model) => ipcRenderer.invoke('library:plan', name, model),
     adopt: (plannedId, targetId) => ipcRenderer.invoke('library:adopt', plannedId, targetId),
+    noteBootloader: (id, seen) => ipcRenderer.invoke('library:noteBootloader', id, seen),
   },
   banks: {
     list: () => ipcRenderer.invoke('banks:list'),
@@ -32,26 +36,70 @@ const api: HiltwrightApi = {
   },
   usb: {
     proffieSerials: () => ipcRenderer.invoke('usb:proffieSerials'),
+    wantSerial: (serial) => ipcRenderer.invoke('usb:wantSerial', serial),
   },
   sd: {
     locate: () => ipcRenderer.invoke('sd:locate'),
+    look: () => ipcRenderer.invoke('sd:locate', { detailed: true }),
     listFonts: (root) => ipcRenderer.invoke('sd:listFonts', root),
     eject: (root) => ipcRenderer.invoke('sd:eject', root),
+    hasFolder: (root, name) => ipcRenderer.invoke('sd:hasFolder', root, name),
     readFont: (root, fontName) => ipcRenderer.invoke('sd:readFont', root, fontName),
     onReadFontProgress: (cb) => { const h = (_e: unknown, p: { file: string; done: number; total: number }) => cb(p); ipcRenderer.on('sd:readFont:progress', h); return () => ipcRenderer.off('sd:readFont:progress', h); },
-    fontBank: () => ipcRenderer.invoke('sd:fontBank'),
-    pickFontBank: () => ipcRenderer.invoke('sd:pickFontBank'),
-    bankFonts: () => ipcRenderer.invoke('sd:bankFonts'),
     listTracks: (root) => ipcRenderer.invoke('sd:listTracks', root),
     voicePack: (root) => ipcRenderer.invoke('sd:voicePack', root),
     pickFont: () => ipcRenderer.invoke('sd:pickFont'),
     copyFont: (src, root, replace) => ipcRenderer.invoke('sd:copyFont', src, root, replace),
+    onCopyProgress: (cb) => { const h = (_e: unknown, p: { name: string; done: number; total: number }) => cb(p); ipcRenderer.on('sd:copy:progress', h); return () => ipcRenderer.off('sd:copy:progress', h); },
+  },
+  fontLibrary: {
+    status: () => ipcRenderer.invoke('fontlib:status'),
+    list: () => ipcRenderer.invoke('fontlib:list'),
+    detail: (folder) => ipcRenderer.invoke('fontlib:detail', folder),
+    setMeta: (folder, patch) => ipcRenderer.invoke('fontlib:setMeta', folder, patch),
+    remove: (folder) => ipcRenderer.invoke('fontlib:remove', folder),
+    readSound: (folder, path) => ipcRenderer.invoke('fontlib:readSound', folder, path),
+    readFont: (folder) => ipcRenderer.invoke('fontlib:readFont', folder),
+    copyToCard: (folder, root, replace) => ipcRenderer.invoke('fontlib:copyToCard', folder, root, replace),
+    addZip: () => ipcRenderer.invoke('fontlib:addZip'),
+    addFolder: () => ipcRenderer.invoke('fontlib:addFolder'),
+    importLegacy: () => ipcRenderer.invoke('fontlib:importLegacy'),
+    dismissLegacy: () => ipcRenderer.invoke('fontlib:dismissLegacy'),
+    chooseRoot: () => ipcRenderer.invoke('fontlib:chooseRoot'),
+    resetRoot: () => ipcRenderer.invoke('fontlib:resetRoot'),
+    open: (folder) => ipcRenderer.invoke('fontlib:open', folder ?? null),
+    onProgress: (cb) => { const h = (_e: unknown, line: string) => cb(line); ipcRenderer.on('fontlib:progress', h); return () => ipcRenderer.off('fontlib:progress', h); },
+  },
+  contributors: {
+    list: () => ipcRenderer.invoke('contributors:list'),
+    setLogo: (name) => ipcRenderer.invoke('contributors:setLogo', name),
+    clearLogo: (name) => ipcRenderer.invoke('contributors:clearLogo', name),
+    setUrl: (name, url) => ipcRenderer.invoke('contributors:setUrl', name, url),
+    copy: (from, to) => ipcRenderer.invoke('contributors:copy', from, to),
+    open: (name) => ipcRenderer.invoke('contributors:open', name),
+  },
+  hilts: {
+    list: () => ipcRenderer.invoke('hilts:list'),
+    model: (id) => ipcRenderer.invoke('hilts:model', id),
+    add: (input, mode) => ipcRenderer.invoke('hilts:add', input, mode),
+    setFit: (id, fit) => ipcRenderer.invoke('hilts:setFit', id, fit),
+    setCreator: (id, creator) => ipcRenderer.invoke('hilts:setCreator', id, creator),
+    remove: (id) => ipcRenderer.invoke('hilts:remove', id),
+    packFits: () => ipcRenderer.invoke('hilts:packFits'),
+    setPackFit: (packId, fit) => ipcRenderer.invoke('hilts:setPackFit', packId, fit),
+    resetPackFit: (packId) => ipcRenderer.invoke('hilts:resetPackFit', packId),
+    room: () => ipcRenderer.invoke('hilts:room'),
+    setRoom: (patch) => ipcRenderer.invoke('hilts:setRoom', patch),
+    adopt: (legacy) => ipcRenderer.invoke('hilts:adopt', legacy),
+    export: () => ipcRenderer.invoke('hilts:export'),
+    import: () => ipcRenderer.invoke('hilts:import'),
   },
   packs: {
     list: () => ipcRenderer.invoke('packs:list'),
     dir: () => ipcRenderer.invoke('packs:dir'),
     mesh: (id) => ipcRenderer.invoke('packs:mesh', id),
     font: (id) => ipcRenderer.invoke('packs:font', id),
+    copyFontToCard: (id, root, opts) => ipcRenderer.invoke('packs:copyFontToCard', id, root, opts),
   },
   importer: {
     pickXeno: () => ipcRenderer.invoke('import:pickXeno'),
@@ -60,6 +108,8 @@ const api: HiltwrightApi = {
   toolchain: {
     status: () => ipcRenderer.invoke('toolchain:status'),
     install: () => ipcRenderer.invoke('toolchain:install'),
+    cancel: () => ipcRenderer.invoke('toolchain:cancel'),
+    repair: () => ipcRenderer.invoke('toolchain:repair'),
   },
   build: {
     run: (saberId, model, force) => ipcRenderer.invoke('build:run', saberId, model, force),
@@ -67,23 +117,32 @@ const api: HiltwrightApi = {
   },
   flash: {
     usb: () => ipcRenderer.invoke('flash:usb'),
-    waitForBootloader: (timeoutMs) => ipcRenderer.invoke('flash:waitForBootloader', timeoutMs),
-    backup: (saberId, label) => ipcRenderer.invoke('flash:backup', saberId, label),
-    write: (dfuPath) => ipcRenderer.invoke('flash:write', dfuPath),
+    waitForBootloader: (timeoutMs, before) => ipcRenderer.invoke('flash:waitForBootloader', timeoutMs, before ?? null),
+    target: (serial) => ipcRenderer.invoke('flash:target', serial),
+    leave: (serial) => ipcRenderer.invoke('flash:leave', serial),
+    backup: (saberId, label, configName, serial) => ipcRenderer.invoke('flash:backup', saberId, label, configName ?? null, serial ?? null),
+    write: (saberId, dfuPath, serial) => ipcRenderer.invoke('flash:write', saberId, dfuPath, serial ?? null),
     installDriver: () => ipcRenderer.invoke('flash:installDriver'),
     listBackups: (saberId) => ipcRenderer.invoke('flash:listBackups', saberId),
-    restore: (saberId, file) => ipcRenderer.invoke('flash:restore', saberId, file),
-    waitForRuntime: (timeoutMs) => ipcRenderer.invoke('flash:waitForRuntime', timeoutMs),
+    restore: (saberId, file, serial) => ipcRenderer.invoke('flash:restore', saberId, file, serial ?? null),
+    waitForRuntime: (timeoutMs, serial) => ipcRenderer.invoke('flash:waitForRuntime', timeoutMs, serial ?? null),
   },
   onJobEvent: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, ev: JobEvent) => cb(ev);
     ipcRenderer.on('job:event', listener);
     return () => { ipcRenderer.removeListener('job:event', listener); };
   },
+  support: {
+    save: (snapshot) => ipcRenderer.invoke('support:save', snapshot),
+  },
   app: {
+    storeProblems: () => ipcRenderer.invoke('app:storeProblems'),
     userDataPath: () => ipcRenderer.invoke('app:userDataPath'),
+    boardAccess: () => ipcRenderer.invoke('app:boardAccess'),
     openHelp: (url) => ipcRenderer.invoke('app:openHelp', url),
     openPath: (path) => ipcRenderer.invoke('app:openPath', path),
+    legal: () => ipcRenderer.invoke('app:legal'),
+    openSource: () => ipcRenderer.invoke('app:openSource'),
   },
 };
 

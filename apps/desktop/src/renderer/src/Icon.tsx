@@ -28,6 +28,7 @@ const P: Record<string, string> = {
   sd: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 3v4M12 3v4M15 3v4"/>',
   lock: '<rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 018 0v4"/>',
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
+  redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/>',
   spin: '<path d="M12 3a9 9 0 019 9" stroke-width="2.4"/><circle cx="12" cy="12" r="9" opacity=".25"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   blade: '<path d="M10 22v-7h4v7z"/><path d="M12 15V2"/><path d="M9 18h6"/>',
@@ -38,6 +39,12 @@ const P: Record<string, string> = {
   strip: '<rect x="3" y="9" width="18" height="6"/><path d="M7 9v6M11 9v6M15 9v6"/>',
   link: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
   unlink: '<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/><path d="M4 4l16 16"/>',
+  people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 13.6a5 5 0 015.5 5"/>',
+  eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>',
+  eyeOff: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><path d="M4 4l16 16"/>',
+  code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>',
+  tree: '<path d="M5 4v16M5 8h7M5 16h7"/><rect x="12" y="5" width="7" height="6"/><rect x="12" y="13" width="7" height="6"/>',
+  power: '<path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1011.4 0"/>',
   grip: '',
 };
 
@@ -57,13 +64,5 @@ export function Icon({ name, size, className, style }: { name: string; size?: nu
       className={className} style={size ? { width: size, height: size, ...style } : style}
       dangerouslySetInnerHTML={{ __html: P[name] ?? '' }}
     />
-  );
-}
-
-export function Mark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" aria-hidden="true">
-      <path d="M10 22v-9h4v9z" /><path d="M12 13V2" stroke="#5fd3ff" strokeWidth={2.2} /><path d="M9 16h6" />
-    </svg>
   );
 }

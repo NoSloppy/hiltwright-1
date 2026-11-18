@@ -3,24 +3,33 @@
 // the Workshop, off to the side, and picked from the Presets step.
 
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { registerLookSim, type LookDef } from '@hiltwright/core';
+import { registerLookSim, wiringConfirmed, type LookDef } from '@hiltwright/core';
 import { useBoard } from './board';
-import { Icon, Mark } from './Icon';
+import { Icon } from './Icon';
+import logoIcon from './assets/hiltwright-icon.svg';
+import logoWordmark from './assets/hiltwright-wordmark.svg';
 import { Presets } from './Presets';
 import { Fonts } from './Fonts';
 import { Build } from './Build';
 import { Looks } from './Looks';
 import { Wiring } from './Wiring';
 import { ErrorBoundary } from './ErrorBoundary';
+import { SaveDiagnostics } from './SaveDiagnostics';
 import { SaberControls } from './Controls';
 import { guessBlades, infoFromRecord, queuedLookIds } from './saberModel';
 import { usePendingLookColours } from './pendingColours';
 import { StyleEditor } from './StyleEditor';
+import { FontLibrary } from './FontLibrary';
+import { Contributors } from './Contributors';
+import { About } from './About';
+import { QUICK_COMMANDS, destructiveReason } from './consoleCommands';
 import { flowStatus, nextStep, useWorkspace, type Workspace } from './workspace';
+import type { SaberRecord } from '../../shared/api';
+import { batteryLabel, noBattery } from './battery';
 // three.js is only needed in the demo room, so it loads when that page is first opened.
 const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
 
-type Page = 'armory' | 'wiring' | 'presets' | 'fonts' | 'build' | 'looks' | 'editor' | 'demo' | 'diag';
+type Page = 'armory' | 'wiring' | 'presets' | 'fonts' | 'build' | 'looks' | 'editor' | 'library' | 'contributors' | 'demo' | 'diag' | 'about';
 const NAV: { section: string; pages: { id: Page; title: string; icon: Parameters<typeof Icon>[0]['name']; step?: number }[] }[] = [
   { section: 'Saber', pages: [
     { id: 'armory', title: 'Armory', icon: 'armory' },
@@ -30,37 +39,58 @@ const NAV: { section: string; pages: { id: Page; title: string; icon: Parameters
     { id: 'build', title: 'Build & Install', icon: 'build', step: 4 },
   ] },
   { section: 'Workshop', pages: [
-    { id: 'looks', title: 'Looks', icon: 'looks' },
+    { id: 'looks', title: 'Styles', icon: 'looks' },
     { id: 'editor', title: 'Style editor', icon: 'gear' },
+    { id: 'library', title: 'Font library', icon: 'fonts' },
+    { id: 'contributors', title: 'Contributors', icon: 'people' },
     { id: 'demo', title: 'Demo room', icon: 'play' },
   ] },
-  { section: 'Tools', pages: [{ id: 'diag', title: 'Diagnostics', icon: 'diag' }] },
+  { section: 'Tools', pages: [{ id: 'diag', title: 'Diagnostics', icon: 'diag' }, { id: 'about', title: 'About', icon: 'info' }] },
 ];
 const PAGES = NAV.flatMap((g) => g.pages);
-const TITLE: Record<Page, string> = { armory: 'Armory', wiring: 'Wiring', presets: 'Presets', fonts: 'Fonts & SD', build: 'Build & Install', looks: 'Looks', editor: 'Style editor', demo: 'Demo room', diag: 'Diagnostics' };
+const TITLE: Record<Page, string> = { armory: 'Armory', wiring: 'Wiring', presets: 'Presets', fonts: 'Fonts & SD', build: 'Build & Install', looks: 'Styles', editor: 'Style editor', library: 'Font library', contributors: 'Contributors', demo: 'Demo room', diag: 'Diagnostics', about: 'About' };
 
 export function App() {
   const real = useBoard();
   usePendingLookColours(real);
   // Dev aid: hiltwrightGoto('fake:presets') shows the connected pages from the remembered saber, with no board, for
-  // layout screenshots. Nothing is sent anywhere; never available in a packaged app.
-  const [fake, setFake] = useState(false);
+  // layout screenshots; 'fake-shared:presets' does the same with its card shared (card-safety 3.4). Nothing is sent
+  // anywhere; never available in a packaged app.
+  const [fake, setFake] = useState<false | 'plain' | 'shared'>(false);
   const lib0 = real.library[0];
-  const board: typeof real = fake && import.meta.env.DEV && lib0 ? { ...real, status: 'connected', portName: 'FAKE', saber: lib0, info: { ...infoFromRecord(lib0), currentPreset: 0, battery: 3.91, volume: 1800 } } : real;
+  const board: typeof real = fake && import.meta.env.DEV && lib0 ? { ...real, status: 'connected', portName: 'FAKE', saber: lib0, info: { ...infoFromRecord(lib0), currentPreset: 0, battery: 3.91, volume: 1800 }, card: { shared: fake === 'shared', root: fake === 'shared' ? 'H:\\' : null } } : real;
   const ws = useWorkspace(board);
-  const [page, setPage] = useState<Page>('armory');
+  const [page, setPageNow] = useState<Page>('armory');
+  // A page with unsaved work (the Style editor) can hold navigation: it gets a proceed callback, and calls it once the
+  // owner has saved or chosen to leave. Every page change goes through here.
+  const leaveGuard = useRef<((proceed: () => void) => void) | null>(null);
+  const pageRef = useRef(page); pageRef.current = page;
+  const setPage = (p: Page, then?: () => void) => {
+    const move = () => { then?.(); setPageNow(p); };
+    if (p !== pageRef.current && leaveGuard.current) leaveGuard.current(move); else move();
+  };
+  const setPageRef = useRef(setPage); setPageRef.current = setPage;
   const [demoLook, setDemoLook] = useState<string | null>(null);
+  const [demoFont, setDemoFont] = useState<string | null>(null);
+  // The Styles page opened from the Contributors page shows that person's styles.
+  const [styleCreator, setStyleCreator] = useState<string | null>(null);
   const [editingLook, setEditingLook] = useState<LookDef | null>(null);
+  // Bumped each time Styles opens the editor on a style (or a new one); saving never remounts the editor.
+  const [editorOpen, setEditorOpen] = useState(0);
   // Saved looks get a simulator at startup (built ones from their layers, pasted ones from their code), so they preview like library looks.
   useEffect(() => { void window.hiltwright.looks.list().then((ls) => { for (const l of ls) registerLookSim(l); }); }, []);
   const { status, info } = board;
   const connected = status === 'connected';
   const configName = info?.version?.config?.replace(/^config\//, '').replace(/\.h$/, '') ?? null;
   // Dev aid: lets main switch pages for screenshots.
-  useEffect(() => { (window as unknown as { hiltwrightGoto?: (p: string) => void }).hiltwrightGoto = (p) => { setFake(p.startsWith('fake:')); setPage(p.replace('fake:', '') as Page); }; }, []);
+  useEffect(() => { if (!import.meta.env.DEV) return; (window as unknown as { hiltwrightGoto?: (p: string) => void }).hiltwrightGoto = (p) => { setFake(p.startsWith('fake-shared:') ? 'shared' : p.startsWith('fake:') ? 'plain' : false); setPage(p.replace(/^fake(-shared)?:/, '') as Page); }; }, []);
+  // Dev aid: hiltwrightFault() makes the current page throw while rendering, to check the fault screen and its log line.
+  // The fault belongs to the page it was raised on, so moving to another page shows that page normally.
+  const [faultPage, setFaultPage] = useState<Page | null>(null);
+  useEffect(() => { if (!import.meta.env.DEV) return; (window as unknown as { hiltwrightFault?: () => void }).hiltwrightFault = () => setFaultPage(pageRef.current); }, []);
   // Ctrl+1..9 switch pages, in the order shown.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (!e.ctrlKey || e.altKey || e.shiftKey) return; const p = PAGES[Number(e.key) - 1]; if (p) { e.preventDefault(); setPage(p.id); } };
+    const onKey = (e: KeyboardEvent) => { if (!e.ctrlKey || e.altKey || e.shiftKey) return; const p = PAGES[Number(e.key) - 1]; if (p) { e.preventDefault(); setPageRef.current(p.id); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -70,23 +100,23 @@ export function App() {
   return (
     <div className="app">
       <aside className="side" aria-label="Primary">
-        <div className="brand"><Mark /><span>HILTWRIGHT</span></div>
+        <div className="brand"><img src={logoIcon} alt="" width={28} height={28} /><img src={logoWordmark} alt="Hiltwright" className="wordmark" /></div>
         <nav className="nav" aria-label="Sections">
           {NAV.map((g) => (
             <div key={g.section} className="col" style={{ gap: 2 }}>
               <span className="sec">{g.section}</span>
               {g.pages.map((p) => (
-                <a key={p.id} href="#" className={page === p.id ? 'on' : ''} aria-current={page === p.id ? 'page' : undefined} title={`Ctrl+${PAGES.indexOf(p) + 1}`} onClick={(e) => { e.preventDefault(); setPage(p.id); }}>
+                <a key={p.id} href="#" className={page === p.id ? 'on' : ''} aria-current={page === p.id ? 'page' : undefined} title={`Ctrl+${PAGES.indexOf(p) + 1}`} onClick={(e) => { e.preventDefault(); setPage(p.id, () => setStyleCreator(null)); }}>
                   {p.step ? <span className="stepn">{p.step}</span> : <Icon name={p.icon} />}<span>{p.title}</span>
                   {p.id === 'presets' && ws.live && !ws.model?.presetsFrom && <span className="tier">live</span>}
-                  {p.id === 'build' && (queued > 0 ? <span className="badge" title="Looks waiting for a build">{queued} queued</span> : null)}
+                  {p.id === 'build' && (queued > 0 ? <span className="badge" title="Styles waiting for a build">{queued} queued</span> : null)}
                 </a>
               ))}
             </div>
           ))}
         </nav>
         {ws.saber && <div className="col" style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', gap: 2 }}><span className="sec" style={{ padding: 0 }}>Working on</span><b className="ellip" style={{ fontWeight: 600, fontSize: 13 }}>{ws.saber.name}</b><span className="hint">{ws.live ? 'plugged in' : ws.saber.planned ? 'planned, not seen yet' : 'not plugged in'}</span></div>}
-        <div className="mono mute" style={{ marginTop: 'auto', padding: '14px 20px', borderTop: '1px solid var(--line)', fontSize: 11 }}>Hiltwright {window.hiltwright?.appVersion ?? '?'} alpha</div>
+        <div className="mono mute" style={{ marginTop: 'auto', padding: '14px 20px', borderTop: '1px solid var(--line)', fontSize: 11 }}>Hiltwright {window.hiltwright?.appVersion ?? '?'} beta</div>
       </aside>
 
       <header className="top">
@@ -99,7 +129,7 @@ export function App() {
         </div>
         <div className="row" style={{ gap: 12 }}>
           <StatusChip status={status} port={board.portName} />
-          <span className="chip"><Icon name="battery" />{info?.battery != null ? `${info.battery.toFixed(2)} V` : '—'}</span>
+          <span className="chip" title={noBattery(info?.battery ?? null) ? 'The battery reads under 2 V: none is connected, and the saber runs on USB power.' : undefined}><Icon name="battery" />{batteryLabel(info?.battery ?? null)}</span>
           {connected
             ? <button type="button" className="btn sm" onClick={() => void board.disconnect()}><span className="b"><span className="i">Disconnect</span></span></button>
             : <button type="button" className="btn sm pri" onClick={() => void board.connect(true)} disabled={status === 'connecting' || status === 'reading'}><span className="b"><span className="i"><Icon name="usb" />Connect</span></span></button>}
@@ -108,14 +138,20 @@ export function App() {
 
       <main className="main">
         <ErrorBoundary key={page} what={`the ${TITLE[page]} page`}>
+          {faultPage === page && <FaultForDev />}
           {page === 'armory' ? <Armory board={board} ws={ws} go={go} />
             : page === 'wiring' ? <Wiring ws={ws} board={board} go={go} />
             : page === 'presets' ? <Presets ws={ws} board={board} go={go} />
-            : page === 'fonts' ? <Fonts board={board} />
+            : page === 'fonts' ? <Fonts board={board} ws={ws} go={go} />
             : page === 'build' ? <Build ws={ws} board={board} go={go} />
-            : page === 'looks' ? <Looks ws={ws} board={board} onPresets={() => setPage('presets')} onBuild={() => setPage('build')} onDemo={(id) => { setDemoLook(id); setPage('demo'); }} onEdit={(l) => { setEditingLook(l); setPage('editor'); }} onNew={() => { setEditingLook(null); setPage('editor'); }} />
-            : page === 'editor' ? <StyleEditor key={editingLook?.id ?? 'new'} editing={editingLook} onSaved={() => undefined} onDemo={(id) => { setDemoLook(id); setPage('demo'); }} />
-            : page === 'demo' ? <Suspense fallback={<span className="hint">Opening the demo room…</span>}><Demo initialLook={demoLook} board={board} /></Suspense>
+            : page === 'looks' ? <Looks ws={ws} board={board} initialCreator={styleCreator} onPresets={() => setPage('presets')} onBuild={() => setPage('build')} onDemo={(id) => { setDemoLook(id); setPage('demo'); }} onEdit={(l) => { setEditingLook(l); setEditorOpen((n) => n + 1); setPage('editor'); }} onNew={() => { setEditingLook(null); setEditorOpen((n) => n + 1); setPage('editor'); }} />
+            : page === 'editor' ? <EditorLoader key={editorOpen} lookId={editingLook?.id ?? null}>{(fresh) => (
+                <StyleEditor key={fresh?.id ?? 'new'} editing={fresh} onSaved={(look) => { setEditingLook(look); void board.refreshLibrary(); }} onDemo={(id) => setPage('demo', () => setDemoLook(id))} onLeaveGuard={(g) => { leaveGuard.current = g; }} />
+              )}</EditorLoader>
+            : page === 'library' ? <FontLibrary board={board} onDemo={(folder) => { setDemoFont(folder); setPage('demo'); }} />
+            : page === 'contributors' ? <Contributors onFonts={() => setPage('library')} onLooks={(name) => { setStyleCreator(name); setPage('looks'); }} onDemo={() => setPage('demo')} />
+            : page === 'demo' ? <Suspense fallback={<span className="hint">Opening the demo room…</span>}><Demo initialLook={demoLook} initialFont={demoFont} board={board} /></Suspense>
+            : page === 'about' ? <About />
             : <Diagnostics board={board} />}
         </ErrorBoundary>
       </main>
@@ -141,12 +177,23 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
   const [draft, setDraft] = useState('');
   const [planning, setPlanning] = useState(false);
   const [planName, setPlanName] = useState('');
+  // A plan made while a saber is plugged in: the plugged-in saber stays the working one, and this says so.
+  const [plannedAside, setPlannedAside] = useState<string | null>(null);
   const plan = async () => {
     const name = planName.trim() || `Saber ${board.library.length + 1}`;
     const rec = await board.planSaber(name, { name: `hiltwright_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'saber'}`, board: 'V2', buttons: 2, prop: 'fett263', blades: guessBlades([132]), presets: [], looks: [], generator: `hiltwright ${window.hiltwright.appVersion}` });
     setPlanning(false); setPlanName('');
+    if (ws.live) { setPlannedAside(rec.name); return; }
     ws.choose(rec.id); go('wiring');
   };
+  // Stores that could not be read at start were kept aside (jsonStore.ts); say so until dismissed.
+  const [problems, setProblems] = useState<Awaited<ReturnType<typeof window.hiltwright.app.storeProblems>>>([]);
+  useEffect(() => { void window.hiltwright.app.storeProblems().then(setProblems, () => setProblems([])); }, []);
+  const openFolder = async (place: 'data' | 'fonts') => {
+    try { if (place === 'fonts') await window.hiltwright.fontLibrary.open(); else await window.hiltwright.app.openPath(await window.hiltwright.app.userDataPath()); } catch { /* nothing to open */ }
+  };
+  // Adoption asks first: which plan the owner said this saber is.
+  const [adopting, setAdopting] = useState<SaberRecord | null>(null);
   const steps = flowStatus(ws);
   const next = nextStep(ws);
   const stepPage: Record<string, Page> = { wiring: 'wiring', presets: 'presets', fonts: 'fonts', build: 'build' };
@@ -158,6 +205,12 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
   return (
     <div className="work" style={{ gridTemplateColumns: 'minmax(0,1fr) 420px' }}>
       <div className="col" style={{ gap: 16, minHeight: 0 }}>
+        {problems.map((p) => (
+          <div key={p.keptAs} className="note amber" role="alert"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+            <span>Your {p.store} could not be read. It was kept as <b className="mono">{p.keptAs}</b> in {p.place === 'fonts' ? 'the font library folder' : "Hiltwright's data folder"}, and Hiltwright started {p.startedFrom === 'backup' ? 'from its backup copy' : p.startedFrom === 'readable records' ? 'with the entries it could read' : 'with an empty one'}.</span>
+            <span className="row" style={{ gap: 8 }}><button type="button" className="btn sm" onClick={() => void openFolder(p.place)}><span className="b"><span className="i">Open folder</span></span></button><button type="button" className="btn sm ghost" onClick={() => setProblems((ps) => ps.filter((x) => x !== p))}><span className="b"><span className="i">Dismiss</span></span></button></span>
+          </span></div>
+        ))}
         <section className="panel" aria-label="Connection">
           <div className="row" style={{ padding: '16px 18px', gap: 18 }}>
             <span style={{ color: ws.live ? 'var(--holo)' : 'var(--mute)', display: 'flex', width: 28, height: 28 }}><Icon name="usb" /></span>
@@ -168,9 +221,20 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
             {!ws.live && (status === 'no-port' || status === 'error' || status === 'idle') && <button type="button" className="btn pri" onClick={() => void board.connect(true)}><span className="b"><span className="i"><Icon name="usb" />Connect</span></span></button>}
             {ws.live && <button type="button" className="btn sm ghost" onClick={() => void board.identify()}><span className="b"><span className="i"><Icon name="undo" />Read again</span></span></button>}
           </div>
+          {ws.live && board.info && noBattery(board.info.battery) && <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="battery" /><span>No battery detected: {cur?.name ?? 'this saber'} is running on USB power alone. It may pause for a moment when it plays sound or reads its card. If it does, Hiltwright reconnects to it on its own.</span></div>}
           {ws.live && board.info && board.info.rejected.length > 0 && <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="warn" /><span>This firmware does not know {board.info.rejected.join(', ')}. Hiltwright adapts to what the board supports.</span></div>}
-          {adoptable && (
-            <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="info" /><span>Is this a saber you set up ahead? {plans.map((p) => <button key={p.id} type="button" className="holo" style={{ marginRight: 10 }} onClick={() => void board.adoptPlan(p.id)}>It is "{p.name}"</button>)}Its wiring, presets and looks move onto this saber, ready to install.</span></div>
+          {adoptable && !adopting && (
+            <div className="note amber" style={{ margin: '0 18px 16px' }}><Icon name="info" /><span>Is this a saber you set up ahead? {plans.map((p) => <button key={p.id} type="button" className="holo" style={{ marginRight: 10 }} onClick={() => setAdopting(p)}>It is "{p.name}"</button>)}Its wiring, presets and styles move onto this saber, ready to install.</span></div>
+          )}
+          {adoptable && adopting && cur && (
+            <div className="note amber" role="alertdialog" aria-label="Adopt a planned saber" style={{ margin: '0 18px 16px' }}><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+              <span>Adopting "{adopting.name}" moves its wiring, prop, presets and styles onto {cur.name}. The next install replaces the styles compiled into {cur.name}'s current firmware, and the presets on its card will then be the plan's.</span>
+              {cur.model && <span>{cur.name} already has wiring and presets set up in Hiltwright. They will be replaced by the plan's.</span>}
+              <span className="row" style={{ gap: 8 }}>
+                <button type="button" className="btn sm pri" onClick={() => { const id = adopting.id; setAdopting(null); void board.adoptPlan(id); }}><span className="b"><span className="i">Adopt</span></span></button>
+                <button type="button" className="btn sm ghost" onClick={() => setAdopting(null)}><span className="b"><span className="i">Not now</span></span></button>
+              </span>
+            </span></div>
           )}
         </section>
 
@@ -178,8 +242,14 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
           <div className="ph"><h2>Your sabers</h2>
             {planning
               ? <form className="row" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); void plan(); }}><span className="input sans" style={{ height: 30, width: 200 }}><input type="text" value={planName} autoFocus placeholder="Name the saber" aria-label="Name for the new saber" onChange={(e) => setPlanName(e.target.value)} /></span><button type="submit" className="btn sm pri"><span className="b"><span className="i">Start</span></span></button><button type="button" className="chip" onClick={() => setPlanning(false)}><Icon name="x" /></button></form>
-              : <button type="button" className="btn sm pri" title="Set a saber up before it is plugged in: wiring, presets and looks, ready to install when it arrives" onClick={() => setPlanning(true)}><span className="b"><span className="i"><Icon name="plus" />New saber</span></span></button>}
+              : <button type="button" className="btn sm pri" title="Set a saber up before it is plugged in: wiring, presets and styles, ready to install when it arrives" onClick={() => setPlanning(true)}><span className="b"><span className="i"><Icon name="plus" />New saber</span></span></button>}
           </div>
+          {plannedAside && cur && (
+            <div className="note" role="status" style={{ margin: '12px 18px 0' }}><Icon name="info" /><span className="col" style={{ gap: 8 }}>
+              <span>{plannedAside} is set up. {cur.name} is plugged in, so it stays the saber you are working on. Unplug it to work on {plannedAside}.</span>
+              <span><button type="button" className="btn sm ghost" onClick={() => setPlannedAside(null)}><span className="b"><span className="i">OK</span></span></button></span>
+            </span></div>
+          )}
           <div className="list" style={{ overflow: 'auto' }}>
             {board.library.length === 0 && <div className="li hint" style={{ minHeight: 44 }}>No sabers yet. Plug one in and it is remembered, or start a new one to set up ahead.</div>}
             {board.library.map((s) => {
@@ -216,7 +286,7 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
           <>
             <div className="row between" style={{ minHeight: 24 }}><b style={{ fontWeight: 600 }} className="ellip">{cur.name}</b><span className="hint">{ws.live ? 'plugged in' : cur.planned ? 'set up ahead' : 'unplugged'}</span></div>
             {steps.map((st, i) => {
-              const done = (st.step === 'wiring' && (!!ws.model?.wiringConfirmedAt || !!cur.firmware)) || (st.step === 'presets' && !!ws.model?.presets.length) || (st.step === 'build' && !!cur.firmware && !queuedLookIds(ws.model ?? undefined, cur.firmware).length && !ws.model?.presetsFrom);
+              const done = (st.step === 'wiring' && wiringConfirmed(ws.model)) || (st.step === 'presets' && !!ws.model?.presets.length) || (st.step === 'build' && !!cur.firmware && !queuedLookIds(ws.model ?? undefined, cur.firmware).length && !ws.model?.presetsFrom);
               const now = st.step === next;
               return (
                 <button key={st.step} type="button" className={`stepc ${done ? 'done' : now ? 'now' : ''}`} style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go(stepPage[st.step])}>
@@ -225,7 +295,7 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
               );
             })}
             <button type="button" className="btn pri full" onClick={() => go(stepPage[next])}><span className="b"><span className="i"><Icon name="chev" />Continue with {stepTitle[next]}</span></span></button>
-            <span className="hint">Looks are chosen on the Presets step; make and try new ones in the Workshop.</span>
+            <span className="hint">Styles are chosen on the Presets step; make and try new ones in the Workshop.</span>
           </>
         )}
       </aside>
@@ -233,11 +303,34 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
   );
 }
 
+/**
+ * The style editor always opens the stored, current version of a style: fetched each time the page is entered, from
+ * Styles or from the sidebar, never a copy held since Styles last opened it. A style removed meanwhile opens a new one.
+ */
+function EditorLoader({ lookId, children }: { lookId: string | null; children: (look: LookDef | null) => React.ReactNode }) {
+  const [state, setState] = useState<{ look: LookDef | null; gone: boolean } | null>(lookId ? null : { look: null, gone: false });
+  useEffect(() => {
+    if (!lookId) return;
+    let live = true;
+    void window.hiltwright.looks.list().then((all) => { const look = all.find((l) => l.id === lookId) ?? null; if (live) setState({ look, gone: !look }); }, () => { if (live) setState({ look: null, gone: true }); });
+    return () => { live = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!state) return <div className="pb hint">Loading the style…</div>;
+  return <>{state.gone && <div className="note amber" style={{ margin: '0 0 12px' }}><Icon name="warn" /><span>That style is no longer in your Styles, so the editor starts a new one.</span></div>}{children(state.look)}</>;
+}
+
+function FaultForDev(): never {
+  throw new Error('A fault forced by hiltwrightFault() (development only)');
+}
+
 function Diagnostics({ board }: { board: ReturnType<typeof useBoard> }) {
   const [cmd, setCmd] = useState('');
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [board.lines]);
-  const quick = ['version', 'battery', 'get_volume', 'get_preset', 'show_current_preset', 'list_fonts', 'list_tracks', 'id', 'scanid'];
+  const quick = QUICK_COMMANDS;
+  // A typed command that restarts the board or changes files waits here until the owner says to send it.
+  const [held, setHeld] = useState<{ command: string; reason: string } | null>(null);
+  const run = (command: string) => { void board.send(command, { idleMs: 700 }); setCmd(''); setHeld(null); };
   const connected = board.status === 'connected';
   return (
     <>
@@ -245,13 +338,23 @@ function Diagnostics({ board }: { board: ReturnType<typeof useBoard> }) {
       <SaberControls board={board} />
       <section className="panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <div className="ph"><h2>Console</h2><div className="row wrap" style={{ gap: 6 }}>{quick.map((q) => <button key={q} type="button" className="chip" disabled={!connected} onClick={() => void board.send(q, q === 'show_current_preset' ? { until: board.isPresetBlockEnd } : { idleMs: 700 })}>{q}</button>)}</div></div>
+        <div className="row" style={{ padding: '8px 12px', borderBottom: '1px solid var(--line)' }}><SaveDiagnostics small /></div>
         <div className="console grow" style={{ border: 0, minHeight: 0 }}>
           {board.lines.length === 0 && <span className="mute">Connect a saber, then type a command. Events the board prints on its own show in amber.</span>}
           {board.lines.map((l, i) => <div key={i} className={l.kind}>{l.text}</div>)}
           <div ref={end} />
         </div>
-        <form className="row" style={{ padding: 12, borderTop: '1px solid var(--line)', gap: 8 }} onSubmit={(e) => { e.preventDefault(); if (cmd.trim()) { void board.send(cmd.trim(), { idleMs: 700 }); setCmd(''); } }}>
-          <span className="input grow"><input type="text" value={cmd} onChange={(e) => setCmd(e.target.value)} aria-label="Serial command" placeholder="Type a command" disabled={!connected} /></span>
+        {held && (
+          <div className="note amber" role="alertdialog" aria-label="Confirm the command" style={{ margin: '0 12px 12px' }}><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+            <span>{held.reason} Send <b className="mono">{held.command}</b> anyway?</span>
+            <span className="row" style={{ gap: 8 }}>
+              <button type="button" className="btn sm pri" onClick={() => run(held.command)}><span className="b"><span className="i">Send it</span></span></button>
+              <button type="button" className="btn sm ghost" onClick={() => setHeld(null)}><span className="b"><span className="i">Do not send</span></span></button>
+            </span>
+          </span></div>
+        )}
+        <form className="row" style={{ padding: 12, borderTop: '1px solid var(--line)', gap: 8 }} onSubmit={(e) => { e.preventDefault(); const c = cmd.trim(); if (!c) return; const reason = destructiveReason(c); if (reason) setHeld({ command: c, reason }); else run(c); }}>
+          <span className="input grow"><input type="text" value={cmd} onChange={(e) => { setCmd(e.target.value); setHeld(null); }} aria-label="Serial command" placeholder="Type a command" disabled={!connected} /></span>
           <button type="submit" className="btn sm pri" disabled={!connected}><span className="b"><span className="i">Send</span></span></button>
         </form>
       </section>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BladeSim, PROPS, registerStyleSim, unregisterStyleSim } from '../src/sim';
-import { CATALOGUE, cloneNode, defaultFor, evaluateStyle, kindOf, newNode, paramFor, parseStyle, printStyle } from '../src/styleTree';
+import { APPROXIMATE_WORDS, CATALOGUE, cloneNode, defaultFor, evaluateStyle, kindOf, newNode, paramFor, parseStyle, printStyle } from '../src/styleTree';
 
 const USER_EXAMPLE = `Layers<Red, ResponsiveLockupL<White,TrInstant,TrFade<100>,Int<26000>>, ResponsiveLightningBlockL<White>, ResponsiveMeltL<Mix<TwistAngle<>,Red,Yellow>>, ResponsiveDragL<White>, ResponsiveClashL<White,TrInstant,TrFade<200>,Int<26000>>, ResponsiveBlastL<White>, ResponsiveBlastWaveL<White>, ResponsiveBlastFadeL<White>, ResponsiveStabL<White>, InOutTrL<TrWipe<300>,TrWipeIn<500>>>`;
 
@@ -256,5 +256,51 @@ describe('the prop around the style', () => {
         expect(sim.isOn, key).toBe(!expectOff);
       }
     } finally { unregisterStyleSim('ctl'); }
+  });
+});
+
+// preview-honesty ST19 and ST21: what the evaluator cannot follow paints nothing and is named; what it shows only
+// roughly is named as approximate.
+describe('an honest preview', () => {
+  const litFrame = (text: string) => {
+    const { make, report } = evaluateStyle(parseStyle(text));
+    registerStyleSim('h', make);
+    try { const sim = new BladeSim('h', 20); sim.setOn(true); let f = sim.frame(0); for (let t = 0; t <= 1000; t += 50) f = sim.frame(t); return { f: [...f], report }; } finally { unregisterStyleSim('h'); }
+  };
+
+  it('ST19 an unmodelled layer paints nothing, and is named', () => {
+    // Before ST19 this layer painted its first colour (White) over the whole blade.
+    const { f, report } = litFrame('Layers<Blue, NoSuchLayerL<White, Int<5>>, InOutTrL<TrInstant, TrInstant>>');
+    expect(report.unsupported).toEqual(['NoSuchLayerL']);
+    for (let i = 0; i < 20; i++) expect(f.slice(i * 3, i * 3 + 3)).toEqual([0, 0, 1]);
+  });
+
+  it('ST19 an unmodelled base paints nothing rather than its first colour', () => {
+    const { f, report } = litFrame('Layers<NoSuchColor<Red>, InOutTrL<TrInstant, TrInstant>>');
+    expect(report.unsupported).toEqual(['NoSuchColor']);
+    expect(f.every((v) => v === 0)).toBe(true);
+  });
+
+  it('ST21 a style using a simplification is marked approximate, and says which', () => {
+    const approx = (text: string) => evaluateStyle(parseStyle(text)).report.approximate;
+    expect(approx('Layers<RotateColorsX<Variation, Red>, InOutTrL<TrInstant, TrInstant>>')).toEqual(['Variation']);
+    expect(approx('Layers<Mix<AltF, Red, Blue>, InOutTrL<TrInstant, TrInstant>>')).toEqual(['AltF']);
+    expect(approx('Layers<Red, SyncAltToVarianceL, InOutTrL<TrInstant, TrInstant>>')).toEqual(['SyncAltToVariance']);
+    expect(approx('Layers<ColorChange<TrFade<300>, Red, Blue>, InOutTrL<TrInstant, TrInstant>>')).toEqual(['ColorChange']);
+    expect(approx('Layers<HardStripes<3000, -1000, Red, Blue>, InOutTrL<TrInstant, TrInstant>>')).toEqual(['HardStripes']);
+    expect(approx('Layers<StyleFire<Red, Yellow, 300>, InOutTrL<TrInstant, TrInstant>>')).toEqual(['FireDelay']);
+    expect(approx('Layers<StyleFire<Red, Yellow, 0>, InOutTrL<TrInstant, TrInstant>>')).toEqual([]);
+    expect(approx('Layers<Red, InOutTrL<TrWipeX<BendTimePowInvX<Int<300>, Int<20000>>>, TrInstant>>')).toEqual(['TimeBend']);
+    // The sound-length stand-in: only where a time of 0 hands over to the sound.
+    expect(approx('Layers<Red, InOutTrL<TrWipeX<IgnitionTime<300>>, TrWipeInX<RetractionTime<500>>>>')).toEqual([]);
+    expect(approx('Layers<Red, InOutTrL<TrWipeX<IgnitionTime<300>>, TrWipeInX<RetractionTime<>>>>')).toEqual(['WavLen']);
+    let deep = 'Red'; for (let i = 0; i < 210; i++) deep = `Layers<${deep}>`;
+    expect(approx(deep)).toEqual(['Deep']);
+    // A fully modelled style is neither.
+    expect(evaluateStyle(parseStyle('Layers<Red, ResponsiveClashL<White>, ResponsiveBlastL<White>, InOutTrL<TrWipe<300>, TrWipeIn<500>>>')).report).toEqual({ unsupported: [], approximate: [] });
+  });
+
+  it('ST21 every approximate entry has plain words', () => {
+    for (const k of ['Variation', 'AltF', 'SyncAltToVariance', 'ColorChange', 'TimeBend', 'HardStripes', 'FireDelay', 'Deep', 'WavLen', 'SoundLevel', 'ClashImpactF']) expect(APPROXIMATE_WORDS[k], k).toBeTruthy();
   });
 });

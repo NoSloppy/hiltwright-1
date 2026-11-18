@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { bladeTables, generateConfig, getDefine, hasDefine, parseConfig, presetArrays, readGeneratedHeader, rowToBlades, validateModel, type SaberConfigModel } from '../src';
+import { BOARD_NOT_CHOSEN, bladeTables, boardHint, commentSafe, generateConfig, getDefine, hasDefine, parseConfig, presetArrays, readGeneratedHeader, rowToBlades, validateModel, withWiringConfirmation, type LookDef, type ModelBlade, type SaberConfigModel } from '../src';
 
 const hote2: SaberConfigModel = {
-  name: 'hiltwright_hote2', board: 'V2', buttons: 2, prop: 'fett263',
+  name: 'hiltwright_hote2', board: 'V2', boardFrom: 'owner', buttons: 2, prop: 'fett263',
   blades: [
     { id: 'main', role: 'main', type: 'pixel', pixels: 140, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } },
     { id: 'crystal', role: 'crystal', type: 'pixel', pixels: 2, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'blade2Pin', powerPins: ['bladePowerPin4'] } },
@@ -45,6 +45,14 @@ describe('generateConfig', () => {
     expect(generateConfig(hote2).text).toBe(generateConfig(hote2).text);
   });
 
+  it('records the board and blades it was built for, and the wiring confirmation never reaches the firmware', () => {
+    const plain = generateConfig(hote2);
+    expect(plain.manifest.wiring).toEqual({ board: 'V2', blades: hote2.blades });
+    const confirmed = generateConfig(withWiringConfirmation(hote2, true, '2026-09-24T10:00:00.000Z'));
+    expect(confirmed.text).toBe(plain.text);
+    expect(confirmed.hash).toBe(plain.hash);
+  });
+
   it('chained blades become SubBlade rows and a motor gets the motor look', () => {
     const m: SaberConfigModel = {
       ...hote2, prop: 'default', buttons: 1,
@@ -66,15 +74,15 @@ describe('generateConfig', () => {
   it('validates the model before generating', () => {
     expect(validateModel(hote2)).toEqual([]);
     expect(validateModel({ ...hote2, name: 'bad name' })).toContain('Config name must be letters, digits and underscores.');
-    expect(validateModel({ ...hote2, blades: [{ ...hote2.blades[0], wiring: { kind: 'own', dataPin: 'bladePin', powerPins: [] } }] })).toEqual(['main: a pixel strip needs at least one power pin.']);
-    expect(validateModel({ ...hote2, blades: [hote2.blades[0], { ...hote2.blades[1], wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin4'] } }] })[0]).toMatch(/bladePin is used by 2/);
+    expect(validateModel({ ...hote2, blades: [{ ...hote2.blades[0], wiring: { kind: 'own', dataPin: 'bladePin', powerPins: [] } }] })).toEqual(['Blade 1 needs at least one power pin.']);
+    expect(validateModel({ ...hote2, blades: [hote2.blades[0], { ...hote2.blades[1], wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin4'] } }] })[0]).toMatch(/bladePin has 2 separate strips on it/);
   });
 });
 
 describe('generateConfig with every blade kind', () => {
   it('emits a chained sub-blade, a single LED, a star LED and a motor, and parses back', () => {
     const m: SaberConfigModel = {
-      name: 'hw_kinds', board: 'V3', buttons: 2, prop: 'sa22c',
+      name: 'hw_kinds', board: 'V3', boardFrom: 'owner', buttons: 2, prop: 'sa22c',
       blades: [
         { id: 'b1', role: 'main', type: 'pixel', pixels: 132, order: 'GRB', extra: [], leds: [], parallel: 1, wiring: { kind: 'own', dataPin: 'bladePin', powerPins: ['bladePowerPin2', 'bladePowerPin3'] } },
         { id: 'b2', role: 'crystal', type: 'pixel', pixels: 4, order: '', extra: [], leds: [], parallel: 1, wiring: { kind: 'chain', after: 'b1', reverse: true } },
@@ -137,5 +145,99 @@ describe('Blade ID variants', () => {
   it('refuses blades whose readings are too close to tell apart', () => {
     const m: SaberConfigModel = { ...base, bladeId: { variants: [{ id: 'a', name: 'A', pixels: 140, ohms: 10000 }, { id: 'b', name: 'B', pixels: 96, ohms: 10800 }] } };
     expect(validateModel(m)[0]).toMatch(/too close together/);
+  });
+});
+
+// Baseline audit (baseline-firmware config-generation 3.3).
+describe('config-generation audit', () => {
+  it('3.3 a V3 saber: the config includes the Proffieboard V3 board file and not the V2 one', () => {
+    const { text } = generateConfig({ ...hote2, board: 'V3' });
+    expect(text).toContain('#include "proffieboard_v3_config.h"');
+    expect(text).not.toContain('proffieboard_v2_config.h');
+  });
+});
+
+// build-correctness FW15 and FW14: names never break the config, and each preset slot's lines are known.
+describe('names in the config', () => {
+  const nasty: LookDef = {
+    id: 'lk_nasty', name: 'Fire */ Blade', source: 'pasted', by: 'Kyber\\', header: '// Copyright 2026 someone',
+    code: 'StylePtr<Red>()', roles: ['main'], args: [], preview: '#ff0000', description: '',
+  };
+  const model: SaberConfigModel = {
+    ...hote2, prop: 'sa22c', looks: [nasty],
+    presets: hote2.presets.map((p, i) => (i === 1 ? { ...p, looks: ['lk_nasty', null, null] } : p)),
+    bladeId: { variants: [{ id: 'v1', name: 'Two\nlines\\', pixels: 140, ohms: 900 }, { id: 'v2', name: 'Plain', pixels: 96, ohms: 22000 }] },
+  };
+
+  it('FW15 a style named like code, an author ending in a backslash and a two-line blade name leave the config intact', () => {
+    expect(commentSafe('Fire */ Blade', 'block')).toBe('Fire * / Blade');
+    expect(commentSafe('Kyber\\', 'line')).toBe('Kyber');
+    expect(commentSafe('Two\nlines\\', 'line')).toBe('Two lines');
+    const { text } = generateConfig(model);
+    // Every comment the generator opens ends where it meant to: no stray end inside a name.
+    expect(text).toContain('/* Fire * / Blade */ StylePtr<Red>()');
+    expect(text).toContain('// Look "Fire */ Blade" (Kyber):');
+    for (const l of text.split('\n')) if (l.includes('//')) expect(l.endsWith('\\')).toBe(false);
+    const doc = parseConfig(text);
+    expect(presetArrays(doc)[0].presets.map((p) => p.name)).toEqual(model.presets.map((p) => p.name));
+    expect(readGeneratedHeader(text)?.looks).toContain('lk_nasty');
+  });
+
+  it("FW14 slotLines point at each preset slot's style code", () => {
+    const g = generateConfig(model);
+    const lines = g.text.split('\n');
+    expect(g.slotLines).toHaveLength(model.presets.length * model.blades.length);
+    const slot = g.slotLines.find((s) => s.preset === 1 && s.blade === 0)!;
+    expect(slot).toMatchObject({ lookId: 'lk_nasty', lookName: 'Fire */ Blade' });
+    expect(lines[slot.line - 1]).toContain('StylePtr<Red>()');
+    for (const s of g.slotLines) {
+      const code = lines.slice(s.line - 1, s.endLine).join('\n');
+      expect(code.trim().endsWith(',')).toBe(true);
+    }
+    // The line before a preset's first slot is its `{ font, track,` line.
+    const first = g.slotLines.find((s) => s.preset === 0 && s.blade === 0)!;
+    expect(lines[first.line - 2]).toContain('{ "Mara Jade Skywalker;common",');
+  });
+});
+
+// wiring-validation FW27: each preset slot's style against its blade.
+describe('styles against their blades', () => {
+  const motor: ModelBlade = { id: 'motor', role: 'motor', type: 'simple', pixels: 1, order: '', extra: [], parallel: 1, leds: ['CreeXPE2WhiteTemplate<550>', 'NoLED', 'NoLED', 'NoLED'], wiring: { kind: 'power', pins: ['bladePowerPin1'] } };
+  it('fills an unchosen slot with the role default and says so, grouped per blade', () => {
+    const { warnings } = generateConfig(hote2);
+    expect(warnings).toContain('3 presets (Mara Jade Skywalker, Valkyrie, Battery Level), main blade (blade 1): no style chosen, using "Steady".');
+    expect(warnings).toContain('3 presets (Mara Jade Skywalker, Valkyrie, Battery Level), crystal (blade 2): no style chosen, using "Follow the blade".');
+  });
+  it('refuses a blade style on a motor, naming the preset', () => {
+    const m: SaberConfigModel = { ...hote2, blades: [...hote2.blades, motor], presets: hote2.presets.map((p, i) => (i === 0 ? { ...p, looks: ['hw_blade', null, null, 'hw_fire'] } : p)) };
+    expect(validateModel(m)).toEqual(['Preset Mara Jade Skywalker: the motor needs a motor style, not "Fire".']);
+    const ok: SaberConfigModel = { ...m, presets: m.presets.map((p, i) => (i === 0 ? { ...p, looks: ['hw_blade', null, null, 'hw_motor'] } : p)) };
+    expect(validateModel(ok)).toEqual([]);
+  });
+  it('builds a main-blade style on a crystal, with a warning', () => {
+    const m: SaberConfigModel = { ...hote2, presets: hote2.presets.map((p, i) => (i === 1 ? { ...p, looks: ['hw_blade', 'hw_fire', null] } : p)) };
+    expect(validateModel(m)).toEqual([]);
+    expect(generateConfig(m).warnings).toContain('Preset Valkyrie, crystal: "Fire" is not made for this blade.');
+  });
+});
+
+// install-target-safety design D2: the board is known, or chosen by the owner, never assumed.
+describe('the board is known before building', () => {
+  it('a model whose board nobody has chosen is refused, in the Wiring page words', () => {
+    const { boardFrom: _unset, ...unchosen } = hote2;
+    expect(validateModel(unchosen)).toContain('Choose the board (Proffieboard V2 or V3) on the Wiring page.');
+    expect(validateModel(unchosen)).toContain(BOARD_NOT_CHOSEN);
+    for (const from of ['bootloader', 'firmware', 'owner'] as const) expect(validateModel({ ...hote2, boardFrom: from })).not.toContain(BOARD_NOT_CHOSEN);
+  });
+
+  it('a config name can suggest a board, but only when it names exactly one', () => {
+    expect(boardHint('config/proffieboard_v3_config.h')).toBe('V3');
+    expect(boardHint('config/my_v2_saber.h')).toBe('V2');
+    expect(boardHint('config/V3-hilt.h')).toBe('V3');
+    expect(boardHint('config/hiltwright_hote2.h')).toBeNull();
+    expect(boardHint('config/default_proffieboard_config.h')).toBeNull();
+    expect(boardHint('config/saber_v31.h')).toBeNull();
+    expect(boardHint('config/v2_to_v3.h')).toBeNull();
+    expect(boardHint(null)).toBeNull();
   });
 });

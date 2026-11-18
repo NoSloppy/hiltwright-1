@@ -21,6 +21,8 @@ const EFFECTS: { cmd: string; label: string; needsOn?: boolean }[] = [
 
 export function SaberControls({ board, bare }: { board: Board; bare?: boolean }) {
   const connected = board.status === 'connected';
+  // The saber saves its settings, and plays its effects, from its card: none of it while the card is shared (card-safety D2).
+  const shared = connected && board.card.shared;
   const [values, setValues] = useState<Record<string, number | null>>({});
   const [pending, setPending] = useState<Record<string, number>>({});
   const [on, setOn] = useState<boolean | null>(null);
@@ -70,7 +72,7 @@ export function SaberControls({ board, bare }: { board: Board; bare?: boolean })
   const effects = connected && (
     <div className="col" style={{ gap: 6 }}>
       {!bare && <span className="label">Try an effect</span>}
-      <div className="row wrap" style={{ gap: 6 }}>{EFFECTS.map((e) => <button key={e.cmd} type="button" className="btn sm" disabled={!!e.needsOn && on === false} onClick={() => void effect(e.cmd)}><span className="b"><span className="i">{e.label}</span></span></button>)}</div>
+      <div className="row wrap" style={{ gap: 6 }}>{EFFECTS.map((e) => <button key={e.cmd} type="button" className="btn sm" disabled={shared || (!!e.needsOn && on === false)} onClick={() => void effect(e.cmd)}><span className="b"><span className="i">{e.label}</span></span></button>)}</div>
       <span className="hint">The same triggers the buttons and motion sensors send. Keep the blade clear of anything breakable before igniting.</span>
     </div>
   );
@@ -79,7 +81,7 @@ export function SaberControls({ board, bare }: { board: Board; bare?: boolean })
     return (
       <label key={s.key} className="col" style={{ gap: 4 }}>
         <span className="row between"><span className="label">{s.label}</span><span className="mono small">{s.show(v)}{s.unit}{pending[s.key] != null ? ' …' : ''}</span></span>
-        <input type="range" min={s.min} max={s.max} step={s.step} value={v} aria-label={s.label} onChange={(e) => change(s, Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--holo)' }} />
+        <input type="range" min={s.min} max={s.max} step={s.step} value={v} aria-label={s.label} disabled={shared} onChange={(e) => change(s, Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--holo)' }} />
         {!bare && <span className="hint">{s.hint}</span>}
       </label>
     );
@@ -88,6 +90,7 @@ export function SaberControls({ board, bare }: { board: Board; bare?: boolean })
     <div className="pb col scroll" style={{ gap: 14 }}>
       {bare && state}
       {!connected && <span className="hint">Connect a saber to change its settings.</span>}
+      {shared && <div className="note amber"><Icon name="warn" /><span>{board.saber?.name ?? 'The saber'}'s card is shared with this computer. Give it back on Fonts & SD first. The saber keeps these settings, and plays its effects, from the card.</span></div>}
       {bare && effects}
       {connected && known.length === 0 && <span className="hint">This firmware does not answer the settings commands. Hiltwright firmware does.</span>}
       {sliders}

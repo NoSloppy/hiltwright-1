@@ -1,45 +1,36 @@
-// Preset banks, shared across sabers: one JSON file in userData, written atomically like the library.
+// Preset banks (the owner's saved preset sets), shared across sabers: one JSON file in userData, kept by the safe store
+// (jsonStore.ts) like the saber library.
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { isBank, type PresetBank } from '@hiltwright/core';
+import { JsonStore } from './jsonStore';
 
 interface BanksFile { version: 1; banks: PresetBank[] }
 
+/** The sets that have the expected shape, and how many did not. Null when the file is not a sets file. */
+export function cleanBanks(raw: unknown): { value: BanksFile; dropped: number } | null {
+  const f = raw as Partial<BanksFile> | null;
+  if (!f || typeof f !== 'object' || !Array.isArray(f.banks)) return null;
+  const banks = f.banks.filter(isBank);
+  return { value: { version: 1, banks }, dropped: f.banks.length - banks.length };
+}
+
 export class BanksStore {
-  private cache: BanksFile | null = null;
-  constructor(private file: string) {}
-  private async load(): Promise<BanksFile> {
-    if (this.cache) return this.cache;
-    try {
-      const parsed = JSON.parse(await readFile(this.file, 'utf8')) as BanksFile;
-      this.cache = { version: 1, banks: Array.isArray(parsed.banks) ? parsed.banks.filter(isBank) : [] };
-    } catch {
-      this.cache = { version: 1, banks: [] };
-    }
-    return this.cache;
+  private store: JsonStore<BanksFile>;
+  constructor(file: string) {
+    this.store = new JsonStore(file, { name: 'preset sets', place: 'data', empty: () => ({ version: 1, banks: [] }), clean: cleanBanks });
   }
-  private async persist(): Promise<void> {
-    const data = this.cache ?? { version: 1, banks: [] };
-    await mkdir(dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, this.file);
-  }
-  async list(): Promise<PresetBank[]> { return [...(await this.load()).banks]; }
+  async list(): Promise<PresetBank[]> { return [...(await this.store.read()).banks]; }
   /** Add or replace by id, keeping the list's order for a replacement. */
-  async save(bank: PresetBank): Promise<PresetBank[]> {
-    const f = await this.load();
-    const i = f.banks.findIndex((b) => b.id === bank.id);
-    if (i >= 0) f.banks[i] = bank; else f.banks.push(bank);
-    await this.persist();
-    return [...f.banks];
+  save(bank: PresetBank): Promise<PresetBank[]> {
+    return this.store.update((f) => {
+      const i = f.banks.findIndex((b) => b.id === bank.id);
+      if (i >= 0) f.banks[i] = bank; else f.banks.push(bank);
+      return [...f.banks];
+    });
   }
-  async remove(id: string): Promise<PresetBank[]> {
-    const f = await this.load();
-    f.banks = f.banks.filter((b) => b.id !== id);
-    await this.persist();
-    return [...f.banks];
+  remove(id: string): Promise<PresetBank[]> {
+    return this.store.update((f) => { f.banks = f.banks.filter((b) => b.id !== id); return [...f.banks]; });
   }
 }
 

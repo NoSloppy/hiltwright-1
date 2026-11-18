@@ -2,8 +2,36 @@
 // is what survives a reflash, so main asks the OS. Windows only for now (PnP instance id of the composite parent).
 
 import { execFile } from 'node:child_process';
+import { activeWant, setWantedInterfaces } from './serialGate';
 
 const PARENT_RE = /USB\\VID_1209&PID_6668\\([^\\\s"]+)/gi;
+
+/** The Proffieboard serial interfaces whose parent device carries this USB serial, from PnP `InstanceId`/parent pairs. */
+export function interfacesOf(list: { id: string; parent: string | null }[], serial: string): string[] {
+  const parent = `USB\\VID_1209&PID_6668\\${serial}`.toUpperCase();
+  return list.filter((d) => /&MI_00\\/i.test(d.id) && (d.parent ?? '').toUpperCase() === parent).map((d) => d.id);
+}
+
+/** Every Proffieboard serial interface present, with its parent device. Windows only; [] elsewhere or on failure. */
+export async function proffieInterfaces(): Promise<{ id: string; parent: string | null }[]> {
+  if (process.platform !== 'win32') return [];
+  const script = `Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '^USB\\\\VID_1209&PID_6668&MI_' } | ForEach-Object { [pscustomobject]@{ id = $_.InstanceId; parent = (Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName 'DEVPKEY_Device_Parent' -ErrorAction SilentlyContinue).Data } } | ConvertTo-Json`;
+  const out = await new Promise<string>((resolve) => {
+    execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 10000, windowsHide: true }, (err, stdout) => resolve(err ? '' : stdout));
+  });
+  try { const parsed = JSON.parse(out || '[]'); return (Array.isArray(parsed) ? parsed : [parsed]).map((d: { id?: unknown; parent?: unknown }) => ({ id: String(d.id ?? ''), parent: typeof d.parent === 'string' ? d.parent : null })); } catch { return []; }
+}
+
+/** Look up which interfaces belong to the wanted board. At most one lookup at a time; a new request waits for it. */
+let looking: Promise<void> | null = null;
+export function lookUpWanted(): Promise<void> {
+  const w = activeWant();
+  if (!w) return Promise.resolve();
+  looking ??= (async () => {
+    try { setWantedInterfaces(w.serial, interfacesOf(await proffieInterfaces(), w.serial)); } finally { looking = null; }
+  })();
+  return looking;
+}
 
 export async function proffieSerials(): Promise<string[]> {
   if (process.platform !== 'win32') return [];

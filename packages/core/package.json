@@ -1,6 +1,7 @@
 {
   "name": "@hiltwright/core",
-  "version": "0.1.0",
+  "version": "0.2.0-beta.1",
+  "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",
   "description": "Pure TypeScript domain logic for Hiltwright: config.h codec, blade model, presets.ini, board protocol. No Node, Electron or DOM imports.",

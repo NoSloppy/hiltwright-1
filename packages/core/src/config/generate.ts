@@ -7,6 +7,7 @@ import { emitBladeExpr, emitPresetArray } from './emit';
 import { bladesToExprs, sharedPowerPins, stripLength } from './blades';
 import { quote } from './cpp';
 import { STARTER_LOOKS, starterLookFor, type FirmwareManifest, type LookDef } from '../looks';
+import { wiringProblems } from './pinRules';
 import { LIBRARY_LOOKS, LOOK_FX } from '../lookLibrary';
 
 export type Prop = 'fett263' | 'sa22c' | 'bc' | 'default';
@@ -30,6 +31,11 @@ export interface SaberConfigModel {
   /** Config file stem, e.g. `hiltwright_hote2`. Letters, digits and underscores. */
   name: string;
   board: BoardModel;
+  /**
+   * How the board is known: from the saber's bootloader (its flash size), from the firmware Hiltwright installed on it,
+   * or chosen by the owner. Absent: nobody knows yet, `board` only keeps the pin lists showing, and nothing is built.
+   */
+  boardFrom?: 'bootloader' | 'firmware' | 'owner';
   buttons: 1 | 2 | 3;
   prop: Prop;
   blades: ModelBlade[];
@@ -45,7 +51,12 @@ export interface SaberConfigModel {
   presets: { font: string; track: string; name: string; looks?: (string | null)[]; lookArgs?: (string | null)[] }[];
   /** Set when the presets came from a bank rather than the saber: the draft keeps them, and the install replaces the saber's own. */
   presetsFrom?: { bank?: string; name: string; at: string };
-  /** When the owner confirmed the wiring against the installer's notes; the build waits for it once per wiring change. */
+  /**
+   * The owner's "I checked the wiring": when, and for which board and blade layout (a fingerprint). It counts only
+   * while the layout still matches; see `wiringConfirmed` in ./wiring.
+   */
+  wiringConfirmation?: { at: string; layout: string };
+  /** @deprecated Timestamp-only confirmation from before 2026-09-24. It never said what it confirmed and no longer counts. */
   wiringConfirmedAt?: string;
   /** Looks beyond the starters that presets may reference (pasted library styles). */
   looks?: LookDef[];
@@ -80,6 +91,55 @@ export function lookForSlot(m: SaberConfigModel, pi: number, bi: number): LookDe
   return chosen ?? starterLookFor(m.blades[bi]?.role ?? 'main');
 }
 
+/**
+ * What a look compiles to, as a short hash: its code and its alias define. Kept per look in the firmware record, so a
+ * look edited since the install shows as needing a build. Names, authors and previews do not change it.
+ */
+export function lookFingerprint(look: Pick<LookDef, 'code' | 'define'>): string {
+  return contentHash(`${look.code}\n${look.define ?? ''}`);
+}
+
+/**
+ * A name made safe for a comment in the config (build-correctness FW15): no line break, no trailing backslash (which
+ * would carry a line comment onto the next line), and in a block comment no `*` + `/` that would end it early.
+ */
+export function commentSafe(s: string, kind: 'line' | 'block'): string {
+  let out = s.replace(/[\r\n]+/g, ' ').replace(/\\+\s*$/, '');
+  if (kind === 'block') out = out.replace(/\*\//g, '* /');
+  return out;
+}
+
+const ROLE_WORD: Record<BladeRole, string> = { main: 'main blade', crystal: 'crystal', accent: 'accent', side: 'side blade', motor: 'motor' };
+
+/**
+ * Each preset slot's style against its blade (wiring-validation FW27). A motor only takes a motor style: anything else
+ * is an error. Any other mismatch, and a slot with no style chosen (filled with the role's default), is a warning.
+ * Unchosen slots are grouped per blade, since presets read from a saber often choose nothing for the crystal or accent.
+ */
+export function slotChecks(m: SaberConfigModel): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const looks = modelLooks(m);
+  const presetName = (pi: number) => (m.presets[pi]?.name ?? `${pi + 1}`).replace(/[\r\n]+/g, ' ');
+  m.blades.forEach((b, bi) => {
+    const unchosen: number[] = [];
+    m.presets.forEach((p, pi) => {
+      const id = p.looks?.[bi];
+      if (!id) { unchosen.push(pi); return; }
+      const look = looks.find((l) => l.id === id);
+      if (!look || look.roles.includes(b.role)) return;
+      if (b.role === 'motor') errors.push(`Preset ${presetName(pi)}: the motor needs a motor style, not "${look.name}".`);
+      else warnings.push(`Preset ${presetName(pi)}, ${ROLE_WORD[b.role]}: "${look.name}" is not made for this blade.`);
+    });
+    if (unchosen.length) {
+      const names = unchosen.slice(0, 4).map(presetName).join(', ') + (unchosen.length > 4 ? ` and ${unchosen.length - 4} more` : '');
+      const which = unchosen.length === 1 ? `Preset ${names}` : `${unchosen.length} presets (${names})`;
+      warnings.push(`${which}, ${ROLE_WORD[b.role]} (blade ${bi + 1}): no style chosen, using "${starterLookFor(b.role).name}".`);
+    }
+  });
+  return { errors, warnings };
+}
+
 /** Small stable hash for identity headers. Not cryptographic. */
 export function contentHash(text: string): string {
   let h1 = 0x811c9dc5;
@@ -92,28 +152,33 @@ export function contentHash(text: string): string {
   return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).slice(0, 12);
 }
 
+/** Said when nobody has told Hiltwright which board a saber has (the running firmware never says). */
+export const BOARD_NOT_CHOSEN = 'Choose the board (Proffieboard V2 or V3) on the Wiring page.';
+
+/**
+ * The board a config file name mentions (`proffieboard_v3_config.h`, `my_v2_saber.h`), as a suggestion only: a name is
+ * whatever the installer called the file. Null when it names neither, or both.
+ */
+export function boardHint(configName: string | null | undefined): BoardModel | null {
+  const found = new Set([...(configName ?? '').matchAll(/(?:^|[^a-z0-9])v([23])(?![0-9])/gi)].map((m) => `V${m[1]}` as BoardModel));
+  return found.size === 1 ? [...found][0] : null;
+}
+
 export function validateModel(m: SaberConfigModel): string[] {
   const errors: string[] = [];
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(m.name)) errors.push('Config name must be letters, digits and underscores.');
+  if (!m.boardFrom) errors.push(BOARD_NOT_CHOSEN);
   if (!m.blades.length) errors.push('At least one blade is needed.');
-  if (!m.blades.some((b) => b.role === 'main')) errors.push('One blade must be the main blade.');
   if (!m.presets.length) errors.push('At least one preset is needed.');
-  const dataPins = new Map<string, number>();
-  for (const b of m.blades) {
-    if (b.type === 'pixel' && b.wiring.kind === 'own') {
-      dataPins.set(b.wiring.dataPin, (dataPins.get(b.wiring.dataPin) ?? 0) + 1);
-      if (!b.wiring.powerPins.length) errors.push(`${b.id}: a pixel strip needs at least one power pin.`);
-    }
-    if (b.type === 'pixel' && b.pixels < 1) errors.push(`${b.id}: pixel count must be at least 1.`);
-    if (b.wiring.kind === 'power' && !b.wiring.pins.length) errors.push(`${b.id}: needs a power pin.`);
-  }
-  for (const [pin, n] of dataPins) if (n > 1) errors.push(`${pin} is used by ${n} separate strips. Chain them or use different data pins.`);
+  // The same wiring rules, and words, as the Wiring page (pinRules.ts).
+  for (const p of wiringProblems(m.blades, m.board)) errors.push(p.message);
   const known = new Set(modelLooks(m).map((l) => l.id));
-  m.presets.forEach((p, pi) => (p.looks ?? []).forEach((id, bi) => { if (id && !known.has(id)) errors.push(`Preset ${pi + 1}, blade ${bi + 1}: unknown look "${id}".`); }));
+  m.presets.forEach((p, pi) => (p.looks ?? []).forEach((id, bi) => { if (id && !known.has(id)) errors.push(`Preset ${pi + 1}, blade ${bi + 1}: unknown style "${id}".`); }));
   for (const l of m.looks ?? []) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(l.id)) errors.push(`Look id "${l.id}" must be letters, digits and underscores.`);
-    if (!l.code.trim()) errors.push(`Look "${l.name}" has no style code.`);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(l.id)) errors.push(`Style id "${l.id}" must be letters, digits and underscores.`);
+    if (!l.code.trim()) errors.push(`Style "${l.name}" has no style code.`);
   }
+  errors.push(...slotChecks(m).errors);
   const variants = m.bladeId?.variants ?? [];
   if (variants.length) {
     const main = m.blades.find((b) => b.role === 'main');
@@ -142,7 +207,9 @@ export function bladeRowsFor(m: SaberConfigModel): { id: string; name: string; b
   }));
 }
 
-export interface GeneratedConfig { text: string; hash: string; sharedPower: string[]; warnings: string[]; manifest: Omit<FirmwareManifest, 'os' | 'at'> }
+/** The config lines (1-based, inclusive) holding one preset slot's style, and which look it is. */
+export interface SlotLines { line: number; endLine: number; preset: number; blade: number; lookId: string; lookName: string }
+export interface GeneratedConfig { text: string; hash: string; sharedPower: string[]; warnings: string[]; manifest: Omit<FirmwareManifest, 'os' | 'at'>; slotLines: SlotLines[] }
 
 export function generateConfig(m: SaberConfigModel): GeneratedConfig {
   const warnings: string[] = [];
@@ -180,25 +247,27 @@ export function generateConfig(m: SaberConfigModel): GeneratedConfig {
   const slotLooks = m.presets.map((_p, pi) => m.blades.map((_b, bi) => lookForSlot(m, pi, bi)));
   const presets = m.presets.map((p, pi): PresetSource => ({
     font: p.font, track: p.track, name: p.name,
-    styles: slotLooks[pi].map((l) => ({ kind: 'raw', code: l.source === 'starter' ? l.code : `/* ${l.name} */ ${l.code}` })),
+    styles: slotLooks[pi].map((l) => ({ kind: 'raw', code: l.source === 'starter' ? l.code : `/* ${commentSafe(l.name, 'block')} */ ${l.code}` })),
   }));
   const usedLooks = modelLooks(m).filter((l) => slotLooks.some((row) => row.some((x) => x.id === l.id)));
-  const pastedHeaders = usedLooks.filter((l) => l.source !== 'starter' && l.header).map((l) => `// Look "${l.name}" (${l.by}):\n${l.header}`);
+  const pastedHeaders = usedLooks.filter((l) => l.source !== 'starter' && l.header).map((l) => `// Look "${commentSafe(l.name, 'line')}" (${commentSafe(l.by, 'line')}):\n${l.header}`);
   // Special abilities (EFFECT_USER1..4) are gestures the prop raises: Fett263 needs a define for them, sa22c has none.
   const abilityLooks = usedLooks.filter((l) => /EFFECT_USER[1-8]\b/.test(`${l.define ?? ''} ${l.code}`));
   if (abilityLooks.length) {
     const names = abilityLooks.map((l) => `"${l.name}"`).join(', ');
     if (m.prop === 'fett263') { defines.push('FETT263_SPECIAL_ABILITIES'); warnings.push(`${names} use${abilityLooks.length > 1 ? '' : 's'} special abilities: FETT263_SPECIAL_ABILITIES added, so hold Power and turn the hilt to use them.`); }
-    else if (m.prop !== 'bc') warnings.push(`${names} use${abilityLooks.length > 1 ? '' : 's'} special abilities, which the ${m.prop} prop has no gesture for; that part of the look will not trigger on this saber.`);
+    else if (m.prop !== 'bc') warnings.push(`${names} use${abilityLooks.length > 1 ? '' : 's'} special abilities, which the ${m.prop} prop has no gesture for; that part of the style will not trigger on this saber.`);
   }
   const manifest: GeneratedConfig['manifest'] = {
     hash: '',
     bladeId: swapping,
-    looks: usedLooks.map((l) => ({ id: l.id, name: l.name, args: l.args, ...(l.defaults ? { defaults: l.defaults } : {}) })),
+    looks: usedLooks.map((l) => ({ id: l.id, name: l.name, args: l.args, ...(l.defaults ? { defaults: l.defaults } : {}), hash: lookFingerprint(l) })),
     presets: slotLooks.map((row, pi) => ({ name: m.presets[pi].name, looks: row.map((l) => l.id) })),
+    wiring: { board: m.board, blades: m.blades },
   };
 
-  const rowText = rows.map((r) => `  { ${r.id}, ${bladesToExprs(r.blades).map(emitBladeExpr).join(',\n    ')},\n    CONFIGARRAY(presets) },${swapping ? ` // ${r.name.replace(/[\r\n]+/g, ' ')}` : ''}`);
+  const presetText = emitPresetArray({ name: 'presets', presets }).trimEnd();
+  const rowText = rows.map((r) => `  { ${r.id}, ${bladesToExprs(r.blades).map(emitBladeExpr).join(',\n    ')},\n    CONFIGARRAY(presets) },${swapping ? ` // ${commentSafe(r.name, 'line')}` : ''}`);
   const summary = {
     generator: m.generator ?? 'hiltwright',
     name: m.name, board: m.board, buttons: m.buttons, prop: m.prop,
@@ -225,7 +294,7 @@ export function generateConfig(m: SaberConfigModel): GeneratedConfig {
     '#endif',
     '',
     '#ifdef CONFIG_PRESETS',
-    emitPresetArray({ name: 'presets', presets }).trimEnd(),
+    presetText,
     '',
     'BladeConfig blades[] = {',
     ...rowText,
@@ -243,13 +312,30 @@ export function generateConfig(m: SaberConfigModel): GeneratedConfig {
   const header = [
     '/*',
     ` * ${m.name}.h · generated by Hiltwright. Do not edit by hand; edit the saber in Hiltwright and rebuild.`,
-    ` * hiltwright: ${JSON.stringify({ ...summary, hash })}`,
+    // JSON does not escape '/': a comment end inside a value is written with an escaped slash, which JSON reads the same.
+    ` * hiltwright: ${JSON.stringify({ ...summary, hash }).replace(/\*\//g, '*\\/')}`,
     ' */',
     '',
   ].join('\n');
   if (shared.length) warnings.push(`Power ${shared.length > 1 ? 'pins' : 'pin'} ${shared.join(', ')} shared between blades: SHARED_POWER_PINS added.`);
+  warnings.push(...slotChecks(m).warnings);
   manifest.hash = hash;
-  return { text: header + body, hash, sharedPower: shared, warnings, manifest };
+  // Which config lines hold which preset slot's style, so a compiler error can name the preset, blade and style.
+  // Counted from the emitted text: the array opens on one line, then each preset is `{ font, track,`, one entry per
+  // style (as many lines as its code), and the name.
+  const slotLines: SlotLines[] = [];
+  let line = (header.match(/\n/g) ?? []).length + (body.slice(0, body.indexOf(presetText)).match(/\n/g) ?? []).length + 2;
+  presets.forEach((p, pi) => {
+    line++; // `  { font, track,`
+    p.styles.forEach((st, bi) => {
+      const n = (st.kind === 'raw' ? st.code : '').split('\n').length;
+      const look = slotLooks[pi][bi];
+      slotLines.push({ line, endLine: line + n - 1, preset: pi, blade: bi, lookId: look.id, lookName: look.name });
+      line += n;
+    });
+    line++; // the name
+  });
+  return { text: header + body, hash, sharedPower: shared, warnings, manifest, slotLines };
 }
 
 /** Recover the summary a generated config carries in its header. */

@@ -30,7 +30,11 @@ type Ctx = {
 };
 export type EffectType = 'clash' | 'blast' | 'stab';
 /** An effect on the bus: the short names for the three the library looks answer to, ProffieOS's EFFECT_ names for the rest. */
-export interface SimEffect { type: string; at: number; pos: number; wavnum: number; seq: number; strength: number }
+export interface SimEffect {
+  type: string; at: number; pos: number; wavnum: number; seq: number; strength: number;
+  /** Seconds of the sound the font played for it, as SaberBase::sound_length carries it to WavLen<>. Unknown without a font. */
+  soundLength?: number;
+}
 /**
  * What a prop file does with the effects a style can raise. The style's own layers see every effect on the bus
  * regardless; this is about the saber around them: whether FAST_OFF/ON actually power the blade, whether the prop
@@ -649,7 +653,7 @@ export class BladeSim {
 
   constructor(readonly lookId: string, readonly numLeds: number, seed = 1) {
     const make = SIM_LOOKS[lookId] ?? CUSTOM_SIMS.get(lookId);
-    if (!make) throw new Error(`No simulator for look ${lookId}`);
+    if (!make) throw new Error(`No simulator for style ${lookId}`);
     this.style = make();
     this.rand = mulberry32(seed);
     this.ctx = { now: 0, n: numLeds, rnd: (n) => (n > 0 ? Math.floor(this.rand() * n) : 0), on: false, args: new Map(), effects: [], doEffect: (type, pos, wavnum) => this.doEffect(type, pos, wavnum), powered: false, lockup: null, lockupPos: -1, swing: 0, sound: 0, battery: 26000, angle: 16384, twist: 0 };
@@ -658,7 +662,8 @@ export class BladeSim {
 
   get isOn(): boolean { return this.ctx.on; }
   setArgs(args: Map<number, string>): void { this.ctx.args = args; }
-  setOn(on: boolean): void { if (this.ctx.on === on) return; this.ctx.on = on; this.push(on ? 'EFFECT_IGNITION' : 'EFFECT_RETRACTION', 0, -1); }
+  /** `soundSeconds`: the length of the ignition or retraction sound, when a font is playing, for WavLen<>. */
+  setOn(on: boolean, soundSeconds?: number): void { if (this.ctx.on === on) return; this.ctx.on = on; this.push(on ? 'EFFECT_IGNITION' : 'EFFECT_RETRACTION', 0, -1, 0, soundSeconds); }
   /** Something the prop or the style raised; the demo room plays its sound. */
   onEffect: ((e: SimEffect) => void) | null = null;
   /** The strength in g of the last clash, as ClashImpactF reads it. */
@@ -666,9 +671,9 @@ export class BladeSim {
   /** The prop around the blade: decides whether a style can power the saber. Fett263 unless told otherwise. */
   prop: PropBehaviour = PROPS.fett263;
   private seq = 0;
-  private push(type: string, pos: number, wavnum: number, strength = 0): void {
+  private push(type: string, pos: number, wavnum: number, strength = 0, soundLength?: number): void {
     const c = this.ctx;
-    const e: SimEffect = { type, at: c.now, pos: clamp(pos, 0, 1), wavnum, seq: ++this.seq, strength };
+    const e: SimEffect = { type, at: c.now, pos: clamp(pos, 0, 1), wavnum, seq: ++this.seq, strength, ...(soundLength != null ? { soundLength } : {}) };
     c.effects.push(e);
     this.onEffect?.(e);
   }
@@ -676,12 +681,12 @@ export class BladeSim {
    * Raise an effect the way SaberBase::DoEffect does, with the prop's response to the ones styles use to steer it:
    * FAST_OFF and OFF turn the blade off, FAST_ON and ON turn it on. Everything else is just put on the bus.
    */
-  doEffect(type: string, pos = 0.5, wavnum = -1): void {
+  doEffect(type: string, pos = 0.5, wavnum = -1, soundSeconds?: number): void {
     const c = this.ctx;
     if (type === 'EFFECT_FAST_OFF' || type === 'EFFECT_OFF') { this.push(type, pos, wavnum); if (c.on && this.prop.stylesCanPower) this.setOn(false); return; }
     if (type === 'EFFECT_FAST_ON' || type === 'EFFECT_ON') { this.push(type, pos, wavnum); if (!c.on && this.prop.stylesCanPower) this.setOn(true); return; }
     if (type === 'EFFECT_CLASH' || type === 'EFFECT_BLAST' || type === 'EFFECT_STAB') { this.trigger(type.slice(7).toLowerCase() as EffectType, pos); return; }
-    this.push(type, pos, wavnum);
+    this.push(type, pos, wavnum, 0, soundSeconds);
   }
   /** Swing speed in degrees per second (a hard swing is 400 to 600). */
   setSwing(degPerSec: number): void { this.ctx.swing = Math.max(0, degPerSec); }

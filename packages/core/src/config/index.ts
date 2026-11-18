@@ -4,4 +4,6 @@ export { emitConfig, emitBladeExpr, emitPresetArray, emitBladeTable, emitStyleRe
 export { rowToBlades, rowToConfiguration, configurationToRow, bladesToExprs, chainRanges, stripLength, sharedPowerPins } from './blades';
 export { mask, splitArgs, splitTopLevel, parseString, quote } from './cpp';
 export { bladeRowsFor, BLADE_ID_MIN_SEPARATION, type BladeVariant } from './generate';
-export { generateConfig, validateModel, readGeneratedHeader, contentHash, modelLooks, lookForSlot, STARTER_STYLES, type GeneratedConfig, type SaberConfigModel, type ModelBlade, type Prop, type BoardModel, type BladeRole } from './generate';
+export { wiringFingerprint, wiringConfirmed, withWiringConfirmation } from './wiring';
+export { BOARD_PINS, bladeKind, wiringProblems, type BladeKind, type PowerOption, type WiringProblem } from './pinRules';
+export { generateConfig, validateModel, boardHint, BOARD_NOT_CHOSEN, slotChecks, commentSafe, type SlotLines, readGeneratedHeader, contentHash, lookFingerprint, modelLooks, lookForSlot, STARTER_STYLES, type GeneratedConfig, type SaberConfigModel, type ModelBlade, type Prop, type BoardModel, type BladeRole } from './generate';

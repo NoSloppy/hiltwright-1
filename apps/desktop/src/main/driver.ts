@@ -21,9 +21,31 @@ async function sha256(file: string): Promise<string> {
   return createHash('sha256').update(await readFile(file)).digest('hex');
 }
 
+/** Start the installer with administrator rights (the Windows approval prompt) and wait for it to close. */
+function launchElevated(exe: string): Promise<{ ok: boolean; err: string }> {
+  return new Promise((resolve) => {
+    const ps = `try { Start-Process -FilePath '${exe.replace(/'/g, "''")}' -Verb RunAs -Wait -ErrorAction Stop; exit 0 } catch { Write-Output $_.Exception.Message; exit 1 }`;
+    execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 10 * 60 * 1000, windowsHide: true }, (err, stdout) => resolve({ ok: !err, err: String(stdout || err || '').trim() }));
+  });
+}
+
+/** The system calls the driver install makes, so a test can stand in for them. The default is the real thing. */
+export interface DriverSys {
+  platform: NodeJS.Platform;
+  usbState: typeof usbState;
+  download: typeof download;
+  launchElevated: typeof launchElevated;
+  waitFor: typeof waitFor;
+  /** The file the installer must be: the published size and pinned SHA-256 unless a test says otherwise. */
+  expected?: { bytes: number; sha256: string | null };
+}
+const realDriverSys: DriverSys = { platform: process.platform, usbState, download, launchElevated, waitFor };
+
 /** Download (if needed), verify, run elevated, then wait for WinUSB to bind to the bootloader. */
-export async function installBootloaderDriver(dir: string, onLine: Progress): Promise<DriverResult> {
-  if (process.platform !== 'win32') return { ok: true, text: 'No driver is needed on this system.' };
+export async function installBootloaderDriver(dir: string, onLine: Progress, sys: DriverSys = realDriverSys): Promise<DriverResult> {
+  const { usbState, download, launchElevated, waitFor } = sys;
+  const want = sys.expected ?? { bytes: DRIVER_BYTES, sha256: DRIVER_SHA256 };
+  if (sys.platform !== 'win32') return { ok: true, text: 'No driver is needed on this system.' };
   const before = await usbState();
   if (!before.bootloaderPresent) return { ok: false, text: 'The board is not in bootloader mode. Hold BOOT, tap RESET, release BOOT, then try again.' };
   if (/winusb/i.test(before.bootloaderDriver ?? '')) return { ok: true, text: 'The driver is already installed.' };
@@ -31,7 +53,7 @@ export async function installBootloaderDriver(dir: string, onLine: Progress): Pr
   await mkdir(dir, { recursive: true });
   const exe = join(dir, 'proffie-dfu-setup.exe');
   let have = false;
-  try { have = (await stat(exe)).size === DRIVER_BYTES; } catch { /* not downloaded yet */ }
+  try { have = (await stat(exe)).size === want.bytes; } catch { /* not downloaded yet */ }
   if (!have) {
     await rm(exe, { force: true });
     await download(DRIVER_URL, exe, onLine);
@@ -40,16 +62,13 @@ export async function installBootloaderDriver(dir: string, onLine: Progress): Pr
   const size = (await stat(exe)).size;
   const hash = await sha256(exe);
   onLine(`installer ${size} bytes, sha256 ${hash}`);
-  if (size !== DRIVER_BYTES || (DRIVER_SHA256 && hash !== DRIVER_SHA256)) {
+  if (size !== want.bytes || (want.sha256 && hash !== want.sha256)) {
     await rm(exe, { force: true });
     return { ok: false, text: 'The downloaded driver installer is not the file Hiltwright expects, so it was not run. Use the setup page instead.' };
   }
 
   onLine('asking Windows for administrator approval');
-  const launched = await new Promise<{ ok: boolean; err: string }>((resolve) => {
-    const ps = `try { Start-Process -FilePath '${exe.replace(/'/g, "''")}' -Verb RunAs -Wait -ErrorAction Stop; exit 0 } catch { Write-Output $_.Exception.Message; exit 1 }`;
-    execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 10 * 60 * 1000, windowsHide: true }, (err, stdout) => resolve({ ok: !err, err: String(stdout || err || '').trim() }));
-  });
+  const launched = await launchElevated(exe);
   if (!launched.ok) {
     const declined = /cancel/i.test(launched.err);
     return { ok: false, text: declined ? 'Windows asked for administrator approval and it was declined. The driver cannot be installed without it.' : `The driver installer could not be started: ${launched.err.slice(0, 200)}` };

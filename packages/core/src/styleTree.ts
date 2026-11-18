@@ -4,7 +4,7 @@
 // editor works on that shape directly, with the catalogue (generated from the OS source) telling it what each name
 // takes and gives. The evaluator turns a tree into the simulator's own building blocks; templates it does not know
 // are skipped (a layer that paints nothing, a function that returns its first argument) and reported, so the preview
-// is honest about what it is not showing.
+// is honest about what it is not showing. Templates it shows only roughly are reported as approximate.
 
 import catalogueJson from './proffieCatalogue';
 import { CLASH_G, prims, type ColorFn, type IntFn, type LayerFn, type SimEffect } from './sim';
@@ -103,7 +103,11 @@ export function defaultFor(kind: Kind, def?: string | null): Node {
 export function newNode(name: string): Node {
   const e = CATALOGUE[name];
   if (!e) return { name, args: [] };
-  return { name, args: e.params.filter((p) => !e.variadic || p !== e.params[e.params.length - 1] || e.params.length === 1).map((p) => defaultFor(p.kind, p.default)) };
+  const params = e.params.filter((p) => !e.variadic || p !== e.params[e.params.length - 1] || e.params.length === 1);
+  // A default can name an earlier parameter (LockupL's DRAG_COLOR defaults to LOCKUP): it takes that one's value.
+  const args: Node[] = [];
+  params.forEach((p) => { const same = params.findIndex((q) => q.name === p.default); args.push(same >= 0 && same < args.length ? cloneNode(args[same]) : defaultFor(p.kind, p.default)); });
+  return { name, args };
 }
 
 // ---------------- run on the simulator ----------------
@@ -120,6 +124,29 @@ type Px = { c: RGB; a: number };
 const TRANSPARENT: Px = { c: [0, 0, 0], a: 0 };
 
 export interface EvalReport { unsupported: string[]; approximate: string[] }
+
+/**
+ * What each approximate entry means, in the owner's words. The keys are what evaluateStyle reports: a template name,
+ * or a simplification the evaluator makes (Deep, FireDelay).
+ */
+export const APPROXIMATE_WORDS: Readonly<Record<string, string>> = {
+  ClashImpactF: 'clash strength (soft, or hard with a swing behind it)',
+  SoundLevel: 'sound level (a modelled hum)',
+  WavLen: 'sound lengths (1 second when no font is playing)',
+  VolumeLevel: 'volume',
+  SwingAcceleration: 'swing acceleration',
+  TwistAcceleration: 'twist acceleration',
+  MarbleF: 'the marble (gravity from the tilt only)',
+  OriginalBlastF: 'the original blast shape',
+  Variation: 'colour variation (always the first)',
+  AltF: 'alternative fonts (always the first)',
+  SyncAltToVariance: 'alternative fonts kept in step with colour variation',
+  ColorChange: 'colour change (always the first colour)',
+  TimeBend: 'bent or reversed timing (runs straight)',
+  HardStripes: 'hard stripes (shown soft)',
+  FireDelay: 'the fire’s start delay (starts at once)',
+  Deep: 'parts nested too deep to follow (shown as nothing)',
+};
 
 const NAMED_ARGS: Record<string, number> = { BASE_COLOR_ARG: 1, ALT_COLOR_ARG: 2, STYLE_OPTION_ARG: 3, IGNITION_OPTION_ARG: 4, IGNITION_TIME_ARG: 5, IGNITION_DELAY_ARG: 6, IGNITION_COLOR_ARG: 7, IGNITION_POWER_UP_ARG: 8, BLAST_COLOR_ARG: 9, CLASH_COLOR_ARG: 10, LOCKUP_COLOR_ARG: 11, LOCKUP_POSITION_ARG: 12, DRAG_COLOR_ARG: 13, DRAG_SIZE_ARG: 14, LB_COLOR_ARG: 15, STAB_COLOR_ARG: 16, MELT_SIZE_ARG: 17, SWING_COLOR_ARG: 18, SWING_OPTION_ARG: 19, EMITTER_COLOR_ARG: 20, EMITTER_SIZE_ARG: 21, PREON_COLOR_ARG: 22, PREON_OPTION_ARG: 23, PREON_SIZE_ARG: 24, RETRACTION_OPTION_ARG: 25, RETRACTION_TIME_ARG: 26, RETRACTION_DELAY_ARG: 27, RETRACTION_COLOR_ARG: 28, RETRACTION_POWER_DOWN_ARG: 29, POSTOFF_COLOR_ARG: 30, OFF_COLOR_ARG: 31, OFF_OPTION_ARG: 32, ALT_COLOR2_ARG: 33, ALT_COLOR3_ARG: 34, STYLE_OPTION2_ARG: 35, STYLE_OPTION3_ARG: 36, IGNITION_OPTION2_ARG: 37, RETRACTION_OPTION2_ARG: 38 };
 
@@ -185,7 +212,7 @@ function substitute(n: Node, bind: Map<string, Node | Node[]>): Node {
 }
 
 interface TrFn { begin(): void; run(c: Ctx): void; done(): boolean; get(led: number, a: Px, b: Px): Px }
-type Detector = { run(c: Ctx): boolean; pos: number; wavnum: number; strength: number; at: number };
+type Detector = { run(c: Ctx): boolean; pos: number; wavnum: number; strength: number; at: number; soundLength?: number };
 
 export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalReport } {
   const unsupported = new Set<string>(); const approximate = new Set<string>();
@@ -194,17 +221,20 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
   /** Lockup types the style answers itself (LockupTrL), which the built-in LockupL then leaves alone. */
   const handledLockups = new Set<string>();
   /** A clash detector also answers stabs unless the style handles stabs itself, as OneshotEffectDetector does. */
-  const handlesStab = (function scan(n: Node): boolean { return /EFFECT_STAB$/.test(n.name) || n.args.some(scan); })(root);
+  // Looked for through aliases too: ResponsiveStabL names EFFECT_STAB only in its default (found by ST23).
+  const handlesStab = (function scan(n: Node, d = 0): boolean { if (d > 40) return false; if (/EFFECT_STAB$/.test(n.name) || n.args.some((x) => scan(x, d + 1))) return true; const x = expandAlias(n); return !!x && scan(x, d + 1); })(root);
   let depth = 0;
-  const guard = <T,>(f: () => T, fallback: () => T): T => { if (++depth > 200) { depth--; return fallback(); } try { return f(); } finally { depth--; } };
+  const guard = <T,>(f: () => T, fallback: () => T): T => { if (++depth > 200) { depth--; approx('Deep'); return fallback(); } try { return f(); } finally { depth--; } };
 
   // ---- layers and colours: everything is a LayerFn inside; a ColorFn view is provided where the caller wants one ----
   const opaque = (col: ColorFn): LayerFn => P.opaque(col);
   const asColor = (l: LayerFn): ColorFn & { layer: LayerFn } => Object.assign({ run(c: Ctx) { l.run(c); }, get(led: number) { return l.get(led).c; } }, { layer: l });
   const solid = (c: RGB): LayerFn => opaque(P.solid(c));
   const white = () => solid(P.WHITE);
+  /** What a layer the evaluator cannot follow paints: nothing, so it never covers the blade (ST19). */
+  const nothing = (): LayerFn => ({ run() {}, get: () => TRANSPARENT });
 
-  const layer = (n: Node | undefined): LayerFn => guard(() => layerImpl(n), white);
+  const layer = (n: Node | undefined): LayerFn => guard(() => layerImpl(n), nothing);
   const color = (n: Node | undefined): ColorFn & { layer: LayerFn } => asColor(layer(n));
 
   function layerImpl(n: Node | undefined): LayerFn {
@@ -223,18 +253,18 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
       case 'AlphaMixL': { const f = fn(a[0], 32768); const cols = a.slice(1).map(layer); return { run(c) { f.run(c); for (const x of cols) x.run(c); }, get(led) { const alpha = f.get(led); if (alpha <= 0 || !cols.length) return TRANSPARENT; return scalePx(mixN(cols, alpha, led), alpha); } }; }
       case 'Mix': { const f = fn(a[0], 0); const cols = a.slice(1).map(layer); return { run(c) { f.run(c); for (const x of cols) x.run(c); }, get: (led) => (cols.length ? mixN(cols, f.get(led), led) : TRANSPARENT) }; }
       case 'ColorSelect': { const f = fn(a[0], 0); const cols = a.slice(2).map(layer); return { run(c) { f.run(c); for (const x of cols) x.run(c); }, get: (led) => (cols.length ? cols[clamp(Math.floor((f.get(led) * cols.length) / 32769), 0, cols.length - 1)].get(led) : TRANSPARENT) }; }
-      case 'ColorChange': return layer(a[1]);
+      case 'ColorChange': approx('ColorChange'); return layer(a[1]);
       case 'Gradient': return opaque(P.gradient(a.map(color)));
       case 'Rainbow': return opaque(P.rainbow());
       case 'StripesX': return opaque(P.stripes(fn(a[0], 3000), fn(a[1], -1000), a.slice(2).map(color)));
-      case 'HardStripesX': return opaque(P.stripes(fn(a[0], 3000), fn(a[1], -1000), a.slice(2).map(color)));
+      case 'HardStripesX': approx('HardStripes'); return opaque(P.stripes(fn(a[0], 3000), fn(a[1], -1000), a.slice(2).map(color)));
       case 'BrownNoiseFlickerL': return alphaOf(layer(a[0]), P.brownNoise(num(a[1], 12800)));
       case 'RandomL': return alphaOf(layer(a[0]), P.randomF());
       case 'RandomPerLEDFlickerL': return alphaOf(layer(a[0]), P.randomPerLed());
       case 'HumpFlickerL': return alphaOf(layer(a[0]), P.humpFlicker(num(a[1], 20)));
       case 'HumpFlickerFX': return alphaOf(layer(a[0]), P.humpFlicker(num(a[1], 20)));
       case 'SparkleL': return alphaOf(layer(a[0]), P.sparkleF(num(a[1], 300), num(a[2], 1024)));
-      case 'StyleFire': { const cfg = (x: Node | undefined, d: [number, number, number]) => ({ base: num(x?.args[0], d[0]), rand: num(x?.args[1], d[1]), cooling: num(x?.args[2], d[2]) }); return opaque(P.styleFire(color(a[0]), color(a[1]), num(a[3], 2), cfg(a[4], [0, 2000, 5]), cfg(a[5], [3000, 0, 0]), cfg(a[6], [0, 5000, 10]), cfg(a[7], [0, 0, 5]))); }
+      case 'StyleFire': { if (num(a[2], 0) !== 0) approx('FireDelay'); const cfg = (x: Node | undefined, d: [number, number, number]) => ({ base: num(x?.args[0], d[0]), rand: num(x?.args[1], d[1]), cooling: num(x?.args[2], d[2]) }); return opaque(P.styleFire(color(a[0]), color(a[1]), num(a[3], 2), cfg(a[4], [0, 2000, 5]), cfg(a[5], [3000, 0, 0]), cfg(a[6], [0, 5000, 10]), cfg(a[7], [0, 0, 5]))); }
       case 'BlastL': return P.blastL(color(a[0]), num(a[1], 200), num(a[2], 100), num(a[3], 400));
       case 'SimpleClashL': return P.simpleClashL(color(a[0]), num(a[1], 40));
       case 'Cylon': return opaque(P.layers(color(a[0]), P.alphaL(color(a[1]), P.bump(P.sinF(num(a[3], 60)), P.constInt(num(a[2], 50) * 328)))));
@@ -253,14 +283,14 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
       case 'Remap': { const f = fn(a[0], 0); const col = layer(a[1]); let n = 1; return { run(c) { f.run(c); col.run(c); n = c.n; }, get(led) { let pos = clamp(f.get(led) * n, 0, n * 32768 - 1); const frac = pos & 0x7fff; pos = clamp(pos >> 15, 0, n - 1); return mixPx(col.get(pos), col.get(Math.min(pos + 1, n - 1)), frac, 15); } }; }
       case 'PixelateX': { const col = layer(a[0]); const nF = fn(a[1], 2); let lastLed = -1e9; let lastPx = TRANSPARENT; return { run(c) { col.run(c); nF.run(c); lastLed = -1e9; }, get(led) { if (Math.abs(led - lastLed) >= nF.get(led)) { lastLed = led; lastPx = col.get(led); } return lastPx; } }; }
       case 'TransitionLoopWhileL': { const loop = tr(a[0]); const end = tr(a[1]); const cond = fn(a[2], 1); let run = false; let ending = false; return { run(c) { cond.run(c); const on = cond.get(0) > 0; if (!run && on) { run = true; loop.begin(); } if (run && !on && !ending) { ending = true; end.begin(); } if (run) { if (loop.done()) loop.begin(); loop.run(c); if (ending) { end.run(c); if (end.done()) { ending = false; run = false; } } } }, get(led) { if (!run) return TRANSPARENT; let px = loop.get(led, TRANSPARENT, TRANSPARENT); if (ending) px = end.get(led, px, TRANSPARENT); return px; } }; }
-      case 'SyncAltToVarianceL': return { run() {}, get: () => TRANSPARENT };
+      case 'SyncAltToVarianceL': approx('SyncAltToVariance'); return nothing();
       case 'TransitionPulseL': { const t = tr(a[0]); const pulse = fn(a[1], 0); let running = false; return { run(c) { pulse.run(c); if (pulse.get(0) > 0) { t.begin(); running = true; } if (running) { t.run(c); if (t.done()) running = false; } }, get: (led) => (running ? t.get(led, TRANSPARENT, TRANSPARENT) : TRANSPARENT) }; }
       default: {
         if (e && e.kind === 'COLOR' && e.params.length === 0 && e.doc.startsWith('rgb(')) { const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(e.doc); if (m) return solid([Number(m[1]) * 257, Number(m[2]) * 257, Number(m[3]) * 257]); }
         const x = expandAlias(n);
         if (x) return layer(x);
         skip(n);
-        return a.length && kindOf(a[0]) === 'COLOR' ? layer(a[0]) : white();
+        return nothing();
       }
     }
   }
@@ -290,6 +320,8 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
 
   // ---- effects, read off the simulator's bus the way OneshotEffectDetector does: the newest match, once ----
   const busName = (effect: Node | undefined): string => { const n = (effect?.name ?? 'EFFECT_NONE').replace(/^SaberBase::/, ''); return n === 'EFFECT_CLASH' ? 'clash' : n === 'EFFECT_BLAST' ? 'blast' : n === 'EFFECT_STAB' ? 'stab' : n; };
+  // The effect the last detector to fire saw: what WavLen<> with no effect reads (last_detected_blade_effect).
+  let lastDetected: SimEffect | null = null;
   const detector = (effect: Node | undefined): Detector => {
     const type = busName(effect); const any = type === 'EFFECT_NONE'; const alsoStab = type === 'clash' && !handlesStab;
     let lastSeq = 0;
@@ -297,7 +329,8 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
       let found: SimEffect | null = null;
       for (const e of c.effects) if ((any || e.type === type || (alsoStab && e.type === 'stab')) && e.seq > lastSeq) found = e;
       if (!found) return false;
-      lastSeq = found.seq; d.pos = found.pos; d.wavnum = found.wavnum; d.strength = found.strength; d.at = found.at;
+      lastSeq = found.seq; d.pos = found.pos; d.wavnum = found.wavnum; d.strength = found.strength; d.at = found.at; d.soundLength = found.soundLength;
+      lastDetected = found;
       return true;
     } };
     return d;
@@ -355,6 +388,8 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
   };
 
   // ---- functions ----
+  /** Inside an IgnitionTime / RetractionTime with a time set: its WavLen fallback is not what the preview shows. */
+  let timeSet = 0;
   const fn = (n: Node | undefined, d = 0, bare = false): IntFn => guard(() => fnImpl(n, d, bare), () => P.constInt(d));
   /** `bare`: the name came from stripping an SVF suffix, so do not expand it back into its adapter alias. */
   function fnImpl(n: Node | undefined, d: number, bare: boolean): IntFn {
@@ -393,7 +428,9 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
       case 'IsBetween': { const x = fn(a[0], 0); const lo = fn(a[1], 0); const hi = fn(a[2], 32768); return { run(c) { x.run(c); lo.run(c); hi.run(c); }, get: (led) => (x.get(led) >= lo.get(led) && x.get(led) <= hi.get(led) ? 32768 : 0) }; }
       case 'LayerFunctions': { const fs = a.map((x) => fn(x, 0)); return { run(c) { for (const f of fs) f.run(c); }, get(led) { let inv = 32768; for (const f of fs) inv = Math.trunc((inv * (32768 - clamp(f.get(led), 0, 32768))) / 32768); return 32768 - inv; } }; }
       case 'CenterDistF': { const centre = fn(a[0], 16384); let n = 132; return { run(c) { centre.run(c); n = c.n; }, get: (led) => Math.min(32768, Math.abs(Math.trunc((led * 32768) / n) - centre.get(led)) * 2) }; }
-      case 'Variation': case 'AltF': case 'SyncAltToVarianceF': return P.constInt(0);
+      case 'Variation': approx('Variation'); return P.constInt(0);
+      case 'AltF': approx('AltF'); return P.constInt(0);
+      case 'SyncAltToVarianceF': approx('SyncAltToVariance'); return P.constInt(0);
       case 'EffectPulseF': { const det = detector(a[0]); let v = 0; return { run(c) { v = det.run(c) ? 32768 : 0; }, get: () => v }; }
       case 'LockupPulseF': { const s = (a[0]?.name ?? '').replace(/^SaberBase::/, ''); const type = /MELT/.test(s) ? 'melt' : /DRAG/.test(s) ? 'drag' : /LIGHTNING/.test(s) ? 'lb' : 'normal'; let v = 0; return { run(c) { v = c.lockup === type ? 32768 : 0; }, get: () => v }; }
       case 'IncrementModuloF': { const pulse = fn(a[0], 0); const max = fn(a[1], 32768); const inc = fn(a[2], 1); let v = 0; return { run(c) { pulse.run(c); max.run(c); inc.run(c); if (pulse.get(0)) { const m = max.get(0); v = m ? (v + inc.get(0)) % m : 0; } }, get: () => v }; }
@@ -423,12 +460,25 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
       case 'SwingAccelerationX': case 'SwingAcceleration': { approx('SwingAcceleration'); const max = fn(a[0], 130); let v = 0; let lastSwing = 0; let last = -1; return { run(c) { max.run(c); const dt = last < 0 ? 0 : (c.now - last) / 1000; last = c.now; const acc = dt > 0 ? Math.abs(c.swing - lastSwing) / dt / 100 : 0; lastSwing = c.swing; v = clamp(Math.round((acc / Math.max(1, max.get(0))) * 32768), 0, 32768); }, get: () => v }; }
       case 'TwistAcceleration': { approx('TwistAcceleration'); const max = num(a[0], 90); let v = 0; let lastTwist = 0; let last = -1; return { run(c) { const dt = last < 0 ? 0 : (c.now - last) / 1000; last = c.now; const acc = dt > 0 ? Math.abs(c.twist - lastTwist) / dt / 10 : 0; lastTwist = c.twist; v = clamp(Math.round(((acc * 32768) / 360) / Math.max(1, max)), 0, 32768); }, get: () => v }; }
       case 'MarbleF': { approx('MarbleF'); const offset = fn(a[0], 0); const friction = fn(a[1], 3000); const accel = fn(a[2], 0); const gravity = fn(a[3], 32768); let pos = 0; let speed = 0; let last = -1; let v = 0; return { run(c) { offset.run(c); friction.run(c); accel.run(c); gravity.run(c); const dt = last < 0 ? 0.001 : Math.min(1, (c.now - last) / 1000); last = c.now; const rad = (pos + offset.get(0) / 32768) * Math.PI * 2; const tilt = ((c.angle - 16384) / 16384) * (Math.PI / 2); const downY = Math.cos(tilt); const downZ = -Math.sin(tilt); let acc = (downY * Math.sin(rad) + downZ * Math.cos(rad)) * (gravity.get(0) / 32768); acc += accel.get(0) / 32768; acc -= (speed * friction.get(0)) / 32768; speed += acc * dt; pos = (((pos + speed * dt) % 1) + 1) % 1; v = Math.trunc(pos * 32768); }, get: () => v }; }
-      case 'WavLen': approx('WavLen'); return P.constInt(1000);
+      case 'WavLen': {
+        if (!timeSet) approx('WavLen');
+        // The length of the sound the font played for the effect, in ms. Without a font playing there is no sound
+        // to measure, so a typical one second stands in.
+        const det = a[0] ? detector(a[0]) : null; let v = 0; let seen = -1;
+        const take = (e: { soundLength?: number }) => { v = e.soundLength != null ? Math.round(e.soundLength * 1000) : 1000; };
+        return { run(c) { if (det) { if (det.run(c)) take(det); } else if (lastDetected && lastDetected.seq !== seen) { seen = lastDetected.seq; take(lastDetected); } }, get: () => v };
+      }
       case 'ClashImpactFX': { approx('ClashImpactF'); const lo = fn(a[0], 200); const hi = fn(a[1], 1600); let v = 0; let g = CLASH_G.soft; return { run(c) { lo.run(c); hi.run(c); for (const e of c.effects) if (e.type === 'clash' || e.type === 'stab') g = e.strength || g; v = clamp(Math.trunc(((g * 100 - lo.get(0)) * 32768) / Math.max(1, hi.get(0))), 0, 32768); }, get: () => v }; }
       case 'EffectPosition': { const det = detector(a[0]); let v = 0; return { run(c) { if (det.run(c)) v = Math.round(det.pos * 32768); }, get: () => v }; }
       case 'EffectRandomF': { const det = detector(a[0]); let v = 0; return { run(c) { if (det.run(c)) v = c.rnd(32768); }, get: () => v }; }
-      case 'BendTimePowX': case 'ReverseTimeX': return fn(a[0], d); // the bend shapes the curve, not its length
+      case 'BendTimePowX': case 'ReverseTimeX': approx('TimeBend'); return fn(a[0], d); // the bend shapes the curve, not its length
       case 'SingleValueAdapter': return fn(a[0], d);
+      case 'IgnitionTime': case 'RetractionTime': {
+        // The sound length stands in only when the time is 0; a set time leaves the stand-in unused.
+        const x = expandAlias(n); if (!x) { skip(n); return P.constInt(d); }
+        const set = num(a[0], num(CATALOGUE[n.name].params[0]?.default ? parseStyle(CATALOGUE[n.name].params[0].default!) : undefined, 0)) > 0;
+        if (set) timeSet++; try { return fn(x, d); } finally { if (set) timeSet--; }
+      }
       default: {
         if (/^-?\d+$/.test(n.name)) return P.constInt(Number(n.name));
         if (/SVF$/.test(n.name)) return fn({ name: n.name.replace(/SVF$/, ''), args: a }, d, true);
@@ -569,7 +619,7 @@ export function evaluateStyle(root: Node): { make: () => ColorFn; report: EvalRe
 // ---------------- as a saved look ----------------
 
 /** A look kept as a tree: anything ProffieOS's Layers<> can express. */
-export interface TreeDoc { version: 2; name: string; tree: Node }
+export interface TreeDoc { version: 2; name: string; tree: Node; /** Names given to the layers in the editor, by position in Layers<> (the base is 0). */ labels?: (string | null)[] }
 
 export function isTreeDoc(v: unknown): v is TreeDoc {
   const d = v as TreeDoc;

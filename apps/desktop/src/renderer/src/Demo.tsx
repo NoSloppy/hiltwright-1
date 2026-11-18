@@ -5,14 +5,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { PROPS, SIMULATED_LOOKS, STARTER_LOOKS, argInfo, canSimulateLook, hexToColorWord, propBehaviour, registerLookSim, type LockupType, type LookDef } from '@hiltwright/core';
 import { BLADE_DIAMETERS, DEFAULT_SCENE, DemoScene, STRIP_DENSITIES, ledsFor, type BladeDiameter, type ControlMode, type Motion, type SceneSettings } from './demoScene';
 import { Icon } from './Icon';
-import { DEFAULT_FIT, formatOf, meshFromPack, parseHilt, type HiltFit, type SideFile, type StoredHilt } from './hiltModel';
-import type { PackInfo } from '../../shared/api';
+import { DEFAULT_FIT, formatOf, meshFromPack, parseHilt, type HiltFit, type HiltFormat, type SideFile } from './hiltModel';
+import type { HiltAddMode, HiltInfo, HiltInput, PackInfo } from '../../shared/api';
 import { FontEngine } from './fontEngine';
 import type { Board } from './board';
 import type { FontEntry } from '../../shared/api';
-import { lookAtSlot } from '@hiltwright/core';
-import { listHilts, removeHilt, saveHilt } from './hiltStore';
+import { presetBladeLoad } from './demoFromSaber';
+import { adoptOnce, asArrayBuffer } from './hiltStore';
+import { ContributorLogo, useContributors } from './credits';
 import type { Object3D } from 'three';
+import { Select } from './Select';
+import { LookPreviewNote } from './PreviewNote';
 
 // Hiltwright's own looks; the owner's saved looks (built or pasted) join them once loaded, when they can be simulated.
 /** The hilt the room opens with: a pack that ships inside the app. */
@@ -27,15 +30,19 @@ const SLIDERS: { key: Exclude<keyof SceneSettings, 'grid' | 'bladeInches' | 'bla
   { key: 'roomLight', label: 'Room light', min: 0, max: 2.5, step: 0.05, hint: 'The room\u2019s own lamps. All the way down, only the blade lights the scene', centre: DEFAULT_SCENE.roomLight },
   { key: 'haze', label: 'Haze', min: 0, max: 0.3, step: 0.005, hint: 'How quickly the room fades with distance', centre: DEFAULT_SCENE.haze },
 ];
-function loadScene(): SceneSettings {
-  try { const raw = localStorage.getItem('hiltwright.demo.scene'); return raw ? { ...DEFAULT_SCENE, ...(JSON.parse(raw) as Partial<SceneSettings>) } : { ...DEFAULT_SCENE }; } catch { return { ...DEFAULT_SCENE }; }
-}
+/** A hilt in the room: one the owner loaded (key = its id) or a pack's (key = `pack:<id>`), so neither can stand for the other. */
+interface RoomHilt { key: string; id?: string; name: string; format: HiltFormat; fit: HiltFit; packId?: string; creator?: string; /** Bumped when its model is replaced, to reload it. */ rev?: number }
+/** Notes in the Hilt panel that report something done rather than a problem. */
+const OK_NOTE = /^(Fit copied|Exported|Imported|Brought over)/;
+/** "2 hilts and 1 pack fit" */
+const counted = (r: { added: number; fits: number }) => [r.added ? `${r.added} hilt${r.added === 1 ? '' : 's'}` : '', r.fits ? `${r.fits} pack fit${r.fits === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
 
 const HOLDS: { type: LockupType; label: string; key: string }[] = [{ type: 'normal', label: 'Lockup', key: 'l' }, { type: 'drag', label: 'Drag', key: 'd' }, { type: 'melt', label: 'Melt', key: 'm' }, { type: 'lb', label: 'Lightning', key: 'n' }];
 
 const api = () => window.hiltwright;
+const LIBRARY = 'library';
 
-export function Demo({ initialLook, board }: { initialLook?: string | null; board: Board }) {
+export function Demo({ initialLook, initialFont, board }: { initialLook?: string | null; initialFont?: string | null; board: Board }) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<DemoScene | null>(null);
   const [saved, setSaved] = useState<LookDef[]>([]);
@@ -51,7 +58,7 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
   // The saber panel's tab, and whether the controls legend is up; both remembered.
   type Tab = 'blade' | 'sound' | 'saber' | 'help';
   const toggleHelpRef = useRef(() => {});
-  const [tab, setTab] = useState<Tab>(() => { try { const t = localStorage.getItem('hiltwright.demo.tab'); return t === 'sound' || t === 'saber' || t === 'blade' ? t : 'help'; } catch { return 'help'; } }); // first visit opens on the controls
+  const [tab, setTab] = useState<Tab>(() => { try { const t = localStorage.getItem('hiltwright.demo.tab'); return t === 'sound' || t === 'saber' || t === 'blade' ? t : window.innerHeight < 800 ? 'blade' : 'help'; } catch { return window.innerHeight < 800 ? 'blade' : 'help'; } }); // opens on the controls, except in a short window, where their list would scroll
   const lastTab = useRef<Tab>('blade');
   useEffect(() => { if (tab !== 'help') lastTab.current = tab; try { localStorage.setItem('hiltwright.demo.tab', tab); } catch { /* private mode */ } }, [tab]);
   const toggleHelp = () => setTab((t) => (t === 'help' ? lastTab.current : 'help'));
@@ -66,9 +73,17 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
   useEffect(() => { try { localStorage.setItem('hiltwright.demo.lightOpen', lightOpen ? '1' : '0'); } catch { /* private mode */ } }, [lightOpen]);
   const [failed, setFailed] = useState<string | null>(null);
 
-  // ---- sound: a font from a card, the saber's card, or the font bank, played as the saber would ----
-  type Source = { kind: 'card' | 'bank' | 'pack'; root: string; label: string };
+  // ---- sound: a font from the font library or a pack, played as the saber would ----
+  // Cards are not a source here: reading one over the saber's USB link takes tens of seconds and froze the room.
+  type Source = { kind: 'library' | 'pack'; root: string; label: string };
   const [sources, setSources] = useState<Source[]>([]);
+  // Library fonts go by their folder (what a preset names); the name the owner gave them is shown.
+  const [libNames, setLibNames] = useState<Record<string, string>>({});
+  const libraryEntries = async (): Promise<FontEntry[]> => {
+    const list = await api().fontLibrary.list();
+    setLibNames(Object.fromEntries(list.map((f) => [f.folder, f.meta.name])));
+    return list.map((f) => ({ name: f.folder, path: f.folder, report: f.report }));
+  };
   const [source, setSource] = useState<Source | null>(null);
   const [fonts, setFonts] = useState<FontEntry[]>([]);
   const [fontName, setFontName] = useState<string>('');
@@ -78,28 +93,29 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
   const [soundNote, setSoundNote] = useState<string | null>(null);
   const [volume, setVolume] = useState(() => { try { return Number(localStorage.getItem('hiltwright.demo.volume') ?? 0.8); } catch { return 0.8; } });
   const refreshSources = async () => {
-    const [cards, bank, found] = await Promise.all([api().sd.locate(), api().sd.fontBank(), api().packs.list().catch(() => [] as PackInfo[])]);
-    const next: Source[] = cards.filter((c) => c.proffie).map((c) => ({ kind: 'card' as const, root: c.root, label: `Card at ${c.root}` }));
-    if (bank) next.push({ kind: 'bank', root: bank, label: `Font bank (${bank.split(/[\\/]/).pop()})` });
+    const [lib, found] = await Promise.all([api().fontLibrary.list().catch(() => []), api().packs.list().catch(() => [] as PackInfo[])]);
+    const next: Source[] = lib.length ? [{ kind: 'library', root: LIBRARY, label: `Font library (${lib.length})` }] : [];
     if (found.some((p) => p.kind === 'font' && p.allow.demoPlayback)) next.push({ kind: 'pack', root: 'packs', label: 'Hiltwright fonts' });
     setSources(next);
     setSource((cur) => next.find((n) => n.root === cur?.root) ?? next[0] ?? null);
+    return next;
   };
-  useEffect(() => { void refreshSources(); }, []);
+  // Opened from the font library with a font chosen: switch to the library and load it.
+  useEffect(() => { void refreshSources().then((next) => { const lib = next.find((n) => n.kind === 'library'); if (initialFont && lib) { setSource(lib); void loadFont(initialFont, lib); } }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!source) { setFonts([]); return; }
     let live = true;
-    void (source.kind === 'pack' ? api().packs.list().then((ps) => ps.filter((p) => p.kind === 'font' && p.allow.demoPlayback).map((p) => ({ name: p.name, path: p.id, report: { files: p.sounds, bytes: 0, type: 'unknown' as const, effects: {}, issues: [] } }))) : source.kind === 'bank' ? api().sd.bankFonts() : api().sd.listFonts(source.root)).then((f) => { if (live) setFonts(f); }).catch(() => { if (live) setFonts([]); });
+    void (source.kind === 'pack' ? api().packs.list().then((ps) => ps.filter((p) => p.kind === 'font' && p.allow.demoPlayback).map((p) => ({ name: p.name, path: p.id, report: { files: p.sounds, bytes: 0, type: 'unknown' as const, effects: {}, issues: [] } }))) : libraryEntries()).then((f) => { if (live) setFonts(f); }).catch(() => { if (live) setFonts([]); });
     return () => { live = false; };
   }, [source?.root]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pickBank = async () => { const r = await api().sd.pickFontBank(); if (r) await refreshSources(); };
+  const addToLibrary = async () => { const r = await api().fontLibrary.addFolder(); if (r?.added.length) await refreshSources(); };
   const loadFont = async (name: string, from: Source | null = source) => {
     if (!from || !name) return;
     setFontName(name); setSoundNote(null);
     setLoading({ done: 0, total: 0, what: 'reading' });
     const off = api().sd.onReadFontProgress((p) => setLoading({ done: p.done, total: p.total, what: 'reading' }));
     try {
-      const sounds = from.kind === 'pack' ? await api().packs.font(fonts.find((f) => f.name === name)?.path ?? name) : await api().sd.readFont(from.root, name);
+      const sounds = from.kind === 'pack' ? await api().packs.font(fonts.find((f) => f.name === name)?.path ?? name) : await api().fontLibrary.readFont(name);
       off();
       const wasOn = engineRef.current?.isOn ?? false;
       engineRef.current?.dispose();
@@ -107,8 +123,9 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
       eng.setVolume(volume);
       engineRef.current = eng; setEngine(eng);
       if (sounds.skipped) setSoundNote(`${sounds.skipped} file${sounds.skipped === 1 ? '' : 's'} left out to stay under the memory cap.`);
-      eng.announce();
+      // A preset change while lit, as prop_base SetPreset does it: a fast on (fastout, no preon), then the font's name.
       if (wasOn) eng.ignite();
+      eng.announce();
     } catch (err) { off(); setSoundNote(`Could not load that font: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}`); }
     finally { setLoading(null); }
   };
@@ -120,56 +137,106 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
   const info = board.info;
   const presets = info?.presets ?? saber?.presets ?? [];
   const [presetIndex, setPresetIndex] = useState<number>(() => board.info?.currentPreset ?? 0);
+  const [fromNote, setFromNote] = useState<string | null>(null);
   const loadFromSaber = async (i: number) => {
     setPresetIndex(i);
     const p = presets[i];
     if (!p || !saber) return;
     const mainBlade = (saber.model?.blades.findIndex((b) => b.role === 'main') ?? 0) + 1 || 1;
-    const look = saber.firmware ? lookAtSlot(saber.firmware, i, mainBlade) : null;
-    if (look && LOOKS.some((l) => l.id === look.id)) { setLookId(look.id); setTried({}); }
+    // The preset's style and its own colours, by the one rule the Styles page uses; a style the room cannot show is said so.
+    const base = { model: saber.model, firmware: saber.firmware, saberPresets: presets, preset: i, shown: LOOKS };
+    const main = presetBladeLoad({ ...base, blade: mainBlade, current: LOOKS.find((l) => l.id === lookId)?.name ?? LOOKS[0].name });
+    if (main.lookId) { setLookId(main.lookId); setTried(main.colours); }
     // A staff hilt's second blade: the next blade slot the saber treats as a blade.
     const roles = saber.model?.blades.map((b) => b.role) ?? [];
     const secondBlade = roles.findIndex((r, k) => k !== mainBlade - 1 && (r === 'main' || r === 'side')) + 1;
-    const look2 = secondBlade > 0 && saber.firmware ? lookAtSlot(saber.firmware, i, secondBlade) : null;
-    if (look2 && LOOKS.some((l) => l.id === look2.id)) { setStaffLookId(look2.id); setStaffTried({}); }
+    const second = secondBlade > 0 ? presetBladeLoad({ ...base, blade: secondBlade, current: LOOKS.find((l) => l.id === staffLookId)?.name ?? staffLook.name }) : null;
+    if (second?.lookId) { setStaffLookId(second.lookId); setStaffTried(second.colours); }
+    setFromNote([main.note, look3d.staff ? second?.note : null].filter(Boolean).join(' ') || null);
     const folder = p.font.split(';')[0];
     const from = sources.find((sr) => fonts.some((f) => f.name === folder) && sr.root === source?.root) ?? source;
     // The font may live on a different source than the one selected: try each until one has it.
     for (const sr of [from, ...sources].filter((x): x is Source => !!x)) {
-      const list = sr.root === source?.root ? fonts : sr.kind === 'pack' ? (await api().packs.list().catch(() => [] as PackInfo[])).filter((p) => p.kind === 'font').map((p) => ({ name: p.name, path: p.id })) : await (sr.kind === 'bank' ? api().sd.bankFonts() : api().sd.listFonts(sr.root)).catch(() => []);
+      const list = sr.root === source?.root ? fonts : sr.kind === 'pack' ? (await api().packs.list().catch(() => [] as PackInfo[])).filter((p) => p.kind === 'font').map((p) => ({ name: p.name, path: p.id })) : await libraryEntries().catch(() => []);
       if (list.some((f) => f.name === folder)) { setSource(sr); await loadFont(folder, sr); return; }
     }
-    setSoundNote(`The font "${folder}" is not on any card or in the font bank here. Share the saber's card on Fonts & SD, or point the bank at a folder that has it.`);
+    setSoundNote(`The font "${folder}" is not in the Font library. Add it there to hear it here.`);
   };
   const [control, setControl] = useState<ControlMode>(() => { try { return localStorage.getItem('hiltwright.demo.control') === 'steer' ? 'steer' : 'hold'; } catch { return 'hold'; } });
-  const [look3d, setLook3d] = useState<SceneSettings>(loadScene);
-  // Custom hilts: model files the owner loaded, kept in the browser's database, one of them (or none) in use.
-  const [hilts, setHilts] = useState<StoredHilt[]>([]);
-  const [hiltName, setHiltName] = useState<string>(() => { try { return localStorage.getItem('hiltwright.demo.hilt') ?? ''; } catch { return ''; } });
+  const [look3d, setLook3d] = useState<SceneSettings>({ ...DEFAULT_SCENE });
+  // Hilts: the owner's own models and pack hilts, kept by the app in its data folder (main/hilts.ts) with the scene
+  // settings and the chosen hilt, so every build of the app sees the same ones. One of them (or the built-in) in use.
+  const [hilts, setHilts] = useState<RoomHilt[]>([]);
+  const [hiltKey, setHiltKey] = useState<string>('');
+  // Nothing is saved until what was kept has been read, so the defaults never overwrite it.
+  const [roomReady, setRoomReady] = useState(false);
   const [hiltNote, setHiltNote] = useState<string | null>(null);
   // The fit controls are for placing a hilt on the blade: shown when the owner loads a hilt of their own, folded away otherwise.
   const [fitOpen, setFitOpen] = useState(false);
   const [hiltLength, setHiltLength] = useState<number | null>(null);
-  const loaded = useRef<{ name: string; model: Object3D } | null>(null);
+  const loaded = useRef<{ key: string; model: Object3D } | null>(null);
   // The built-in hilt is a pack that ships with the app; the procedural hilt only stands in when it is missing.
   const builtIn = hilts.find((h) => h.packId === BUILT_IN_PACK) ?? null;
-  const hilt = (hiltName ? hilts.find((h) => h.name === hiltName) : null) ?? builtIn;
+  const hilt = (hiltKey ? hilts.find((h) => h.key === hiltKey) : null) ?? builtIn;
   // Packs beside the app or in the owner's packs folder. A pack hilt is listed with the pack's fit unless the owner
-  // has adjusted it here, in which case their adjustment is kept like any other hilt's.
+  // has adjusted it here, in which case their adjustment is kept apart from their own hilts, by pack id.
   const [packs, setPacks] = useState<PackInfo[]>([]);
+  // A file whose name is taken, waiting for the owner's answer; a removal or reset waiting for confirmation.
+  const [taken, setTaken] = useState<{ input: HiltInput; id: string; name: string; note: string | null } | null>(null);
+  const [confirm, setConfirm] = useState<'remove' | 'reset' | null>(null);
+  const errText = (err: unknown) => String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '');
+  const packEntry = (p: PackInfo, fits: Record<string, HiltFit>): RoomHilt => ({ key: `pack:${p.id}`, name: p.id === BUILT_IN_PACK ? 'Built-in' : p.name, format: 'pack', fit: fits[p.id] ? { ...fits[p.id] } : { ...DEFAULT_FIT, ...(p.fit ?? {}) }, packId: p.id, creator: p.creator });
+  const ownEntry = (h: HiltInfo): RoomHilt => ({ key: h.id, id: h.id, name: h.name, format: h.format, fit: h.fit, ...(h.creator ? { creator: h.creator } : {}) });
+  /** Read the hilts, first bringing over any this page kept itself in an earlier version. */
+  const loadHiltList = async () => {
+    const found = await api().packs.list().catch(() => [] as PackInfo[]);
+    setPacks(found);
+    let moveNote: string | null = null;
+    try {
+      const moved = await adoptOnce(found);
+      if (moved) moveNote = `Brought over ${counted(moved)} from an earlier version of Hiltwright.`;
+    } catch (err) { moveNote = `Could not bring over your earlier hilts: ${errText(err)}`; }
+    const [own, fits, room] = await Promise.all([api().hilts.list(), api().hilts.packFits(), api().hilts.room()]);
+    setHilts([...own.map(ownEntry), ...found.filter((p) => p.kind === 'hilt').map((p) => packEntry(p, fits))]);
+    return { room, moveNote };
+  };
   useEffect(() => {
     void (async () => {
-      const [stored, found] = await Promise.all([listHilts().catch(() => [] as StoredHilt[]), api().packs.list().catch(() => [] as PackInfo[])]);
-      setPacks(found);
-      const packHilts: StoredHilt[] = found.filter((p) => p.kind === 'hilt').map((p) => {
-        const kept = stored.find((h) => h.packId === p.id);
-        const entry = kept ?? { name: p.name, format: 'pack', data: new ArrayBuffer(0), fit: { ...DEFAULT_FIT, ...(p.fit ?? {}) }, packId: p.id, creator: p.creator };
-        return p.id === BUILT_IN_PACK ? { ...entry, name: 'Built-in' } : entry;
-      });
-      setHilts([...stored.filter((h) => !h.packId), ...packHilts]);
+      try {
+        const { room, moveNote } = await loadHiltList();
+        if (room.scene) setLook3d(room.scene);
+        setHiltKey(room.chosen ?? '');
+        if (moveNote) setHiltNote(moveNote);
+        setRoomReady(true);
+      } catch (err) { setHiltNote(`Could not read your hilts: ${errText(err)}`); }
     })();
-  }, []);
-  useEffect(() => { try { localStorage.setItem('hiltwright.demo.hilt', hiltName); } catch { /* private mode */ } }, [hiltName]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Scene settings are saved a moment after the last change, and at once when the room closes.
+  const sceneSave = useRef<{ t: ReturnType<typeof setTimeout>; run: () => void } | null>(null);
+  useEffect(() => {
+    if (!roomReady) return;
+    if (sceneSave.current) clearTimeout(sceneSave.current.t);
+    const run = () => { sceneSave.current = null; void api().hilts.setRoom({ scene: look3d }).catch((err) => setHiltNote(`Could not save the scene settings: ${errText(err)}`)); };
+    sceneSave.current = { t: setTimeout(run, 300), run };
+  }, [look3d, roomReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (roomReady) void api().hilts.setRoom({ chosen: hiltKey || null }).catch((err) => setHiltNote(`Could not remember the chosen hilt: ${errText(err)}`)); }, [hiltKey, roomReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A fit is saved a moment after the last nudge, and at once when another hilt is chosen or the room closes.
+  const fitSave = useRef<{ key: string; t: ReturnType<typeof setTimeout>; run: () => void } | null>(null);
+  const flushFit = () => { const f = fitSave.current; if (f) { clearTimeout(f.t); f.run(); } };
+  const dropFit = (key: string) => { const f = fitSave.current; if (f?.key === key) { clearTimeout(f.t); fitSave.current = null; } };
+  const saveFit = (h: RoomHilt) => {
+    if (fitSave.current && fitSave.current.key !== h.key) flushFit();
+    if (fitSave.current) clearTimeout(fitSave.current.t);
+    const run = () => {
+      fitSave.current = null;
+      void (h.packId ? api().hilts.setPackFit(h.packId, h.fit) : api().hilts.setFit(h.id!, h.fit)).then(
+        () => setHiltNote((n) => (n?.startsWith('Could not save the fit') ? null : n)),
+        (err) => setHiltNote(`Could not save the fit: ${errText(err)}. Your changes are shown but will be lost when you leave the room.`));
+    };
+    fitSave.current = { key: h.key, t: setTimeout(run, 300), run };
+  };
+  useEffect(() => { if (fitSave.current && fitSave.current.key !== hilt?.key) flushFit(); }, [hilt?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { flushFit(); const s = sceneSave.current; if (s) { clearTimeout(s.t); s.run(); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const room = scene.current;
     if (!room) return;
@@ -178,46 +245,90 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
     void (async () => {
       try {
         // Parsing is the slow part: only when the file changes, not for every nudge of a slider.
-        if (loaded.current?.name !== hilt.name) loaded.current = { name: hilt.name, model: hilt.packId ? meshFromPack(await api().packs.mesh(hilt.packId)) : await parseHilt(hilt.format, hilt.data.slice(0), hilt.sideFiles ?? []) };
-        if (live) { setHiltLength(room.setHilt(loaded.current.model, hilt.fit)); setHiltNote(null); }
+        const want = `${hilt.key}#${hilt.rev ?? 0}`;
+        if (loaded.current?.key !== want) {
+          let model: Object3D;
+          if (hilt.packId) model = meshFromPack(await api().packs.mesh(hilt.packId));
+          else { const m = await api().hilts.model(hilt.id!); model = await parseHilt(m.format, asArrayBuffer(m.data), m.sideFiles.map((f) => ({ name: f.name, data: asArrayBuffer(f.data) }))); }
+          loaded.current = { key: want, model };
+        }
+        if (live) { setHiltLength(room.setHilt(loaded.current.model, hilt.fit)); setHiltNote((n) => (n?.startsWith('That model could not be read') ? null : n)); }
       } catch (err) { if (live) { room.setHilt(null, DEFAULT_FIT); setHiltNote(`That model could not be read: ${String(err).replace(/^Error: /, '')}`); } }
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hilt?.name, hilt?.fit.flip, hilt?.fit.rollDeg, hilt?.fit.lengthCm, hilt?.fit.offsetXmm, hilt?.fit.offsetZmm, hilt?.fit.seatMm, hilt?.fit.staffSeatMm, hilt?.fit.tiltXDeg, hilt?.fit.tiltZDeg, hilt?.fit.axis, hilts.length]);
+  }, [hilt?.key, hilt?.rev, hilt?.fit.flip, hilt?.fit.rollDeg, hilt?.fit.lengthCm, hilt?.fit.offsetXmm, hilt?.fit.offsetZmm, hilt?.fit.seatMm, hilt?.fit.staffSeatMm, hilt?.fit.tiltXDeg, hilt?.fit.tiltZDeg, hilt?.fit.axis, hilts.length]);
+  /** Keep a loaded model. A taken name asks first; nothing is listed unless it was kept. */
+  const addHilt = async (input: HiltInput, mode: HiltAddMode, note: string | null) => {
+    try {
+      const r = await api().hilts.add(input, mode);
+      if ('taken' in r) { setTaken({ input, ...r.taken, note }); return; }
+      const entry = ownEntry(r.added);
+      setHilts((all) => (all.some((h) => h.key === entry.key) ? all.map((h) => (h.key === entry.key ? { ...entry, rev: (h.rev ?? 0) + 1 } : h)) : [...all, entry]));
+      setHiltKey(entry.key); setFitOpen(true);
+      setHiltNote(note);
+    } catch (err) { setHiltNote(`Could not keep this hilt: ${errText(err)}. It has not been added.`); }
+  };
   /** One model file, plus for an OBJ its .mtl and any textures, chosen together in the file picker. */
   const loadHiltFiles = async (files: FileList | null) => {
     const all = Array.from(files ?? []);
     const file = all.find((f) => formatOf(f.name));
     if (!file) { if (all.length) setHiltNote('Use a .glb, .obj or .stl file. For an OBJ with colours, select its .mtl (and any texture images) along with it.'); return; }
-    const format = formatOf(file.name)!;
+    const format = formatOf(file.name) as 'glb' | 'obj' | 'stl';
     const sideFiles: SideFile[] = await Promise.all(all.filter((f) => f !== file).map(async (f) => ({ name: f.name, data: await f.arrayBuffer() })));
-    const entry: StoredHilt = { name: file.name.replace(/\.[^.]+$/, ''), format, data: await file.arrayBuffer(), fit: { ...DEFAULT_FIT }, ...(sideFiles.length ? { sideFiles } : {}) };
-    try { await parseHilt(format, entry.data.slice(0), sideFiles); } catch (err) { setHiltNote(`That model could not be read: ${String(err).replace(/^Error: /, '')}`); return; }
-    if (format === 'obj' && !sideFiles.some((f) => /\.mtl$/i.test(f.name))) setHiltNote('Loaded without colours. To keep them, pick the .obj and its .mtl together (Ctrl+click both in the file dialog).');
-    await saveHilt(entry).catch(() => undefined);
-    loaded.current = null;
-    setHilts((all) => [...all.filter((h) => h.name !== entry.name), entry]);
-    setHiltName(entry.name); setFitOpen(true);
-    if (format !== 'obj' || sideFiles.some((f) => /\.mtl$/i.test(f.name))) setHiltNote(null);
+    const data = await file.arrayBuffer();
+    try { await parseHilt(format, data.slice(0), sideFiles); } catch (err) { setHiltNote(`That model could not be read: ${String(err).replace(/^Error: /, '')}`); return; }
+    const note = format === 'obj' && !sideFiles.some((f) => /\.mtl$/i.test(f.name)) ? 'Loaded without colours. To keep them, pick the .obj and its .mtl together (Ctrl+click both in the file dialog).' : null;
+    await addHilt({ name: file.name.replace(/\.[^.]+$/, ''), format, data, sideFiles }, 'new', note);
   };
   const setFit = (patch: Partial<HiltFit>) => {
     if (!hilt) return;
     const next = { ...hilt, fit: { ...hilt.fit, ...patch } };
-    setHilts((all) => all.map((h) => (h.name === hilt.name ? next : h)));
-    void saveHilt(next).catch(() => undefined);
+    setHilts((all) => all.map((h) => (h.key === hilt.key ? next : h)));
+    saveFit(next);
   };
-  /** A loaded hilt is removed; a pack hilt goes back to the pack's own fit. */
-  const forgetHilt = () => {
+  /** Credit a hilt the owner loaded to whoever made it. Kept with the hilt. */
+  const setHiltCreator = async (h: RoomHilt, creator: string) => {
+    if (!h.id) return;
+    try { await api().hilts.setCreator(h.id, creator); } catch (err) { setHiltNote(`Could not save the credit: ${errText(err)}`); return; }
+    setHilts((all) => all.map((x) => { if (x.key !== h.key) return x; const { creator: _old, ...rest } = x; return creator ? { ...rest, creator } : rest; }));
+  };
+  /** After the owner confirms: a loaded hilt is removed; a pack hilt goes back to the pack's own fit. */
+  const forgetHilt = async () => {
+    setConfirm(null);
     if (!hilt) return;
-    if (hilt.packId) { const p = packs.find((x) => x.id === hilt.packId); const reset = { ...hilt, fit: { ...DEFAULT_FIT, ...(p?.fit ?? {}) } }; setHilts((all) => all.map((h) => (h.name === hilt.name ? reset : h))); void removeHilt(hilt.name).catch(() => undefined); return; }
-    void removeHilt(hilt.name).catch(() => undefined); setHilts((all) => all.filter((h) => h.name !== hilt.name)); setHiltName('');
+    dropFit(hilt.key);
+    if (hilt.packId) {
+      const p = packs.find((x) => x.id === hilt.packId);
+      try { await api().hilts.resetPackFit(hilt.packId); } catch (err) { setHiltNote(`Could not reset the fit: ${errText(err)}`); return; }
+      setHilts((all) => all.map((h) => (h.key === hilt.key ? { ...h, fit: { ...DEFAULT_FIT, ...(p?.fit ?? {}) } } : h)));
+      return;
+    }
+    try { await api().hilts.remove(hilt.id!); } catch (err) { setHiltNote(`Could not remove ${hilt.name}: ${errText(err)}`); return; }
+    setHilts((all) => all.filter((h) => h.key !== hilt.key)); setHiltKey('');
+  };
+  /** Every hilt the owner loaded, with its fit and credit, and every pack fit adjustment, to one zip, and back. */
+  const exportHilts = async () => {
+    flushFit();
+    try {
+      const r = await api().hilts.export();
+      if (r) setHiltNote(`Exported ${r.hilts} hilt${r.hilts === 1 ? '' : 's'}${r.packFits ? ` and ${r.packFits} pack fit${r.packFits === 1 ? '' : 's'}` : ''} to ${r.file}.`);
+    } catch (err) { setHiltNote(`Could not export your hilts: ${errText(err)}`); }
+  };
+  const importHilts = async () => {
+    flushFit();
+    try {
+      const r = await api().hilts.import();
+      if (!r) return;
+      await loadHiltList();
+      setHiltNote(`Imported ${r.added || r.fits ? counted(r) : 'nothing new'}${r.skipped ? `; ${r.skipped} ${r.skipped === 1 ? 'was' : 'were'} already here` : ''}.`);
+    } catch (err) { setHiltNote(`Could not import those hilts: ${errText(err)}`); }
   };
   /** The fit as text, for sending to whoever makes the pack. */
   const copyFit = () => { if (!hilt) return; const f = Object.fromEntries(Object.entries(hilt.fit).filter(([k, v]) => v !== (DEFAULT_FIT as unknown as Record<string, unknown>)[k] && v != null)); void navigator.clipboard.writeText(JSON.stringify({ hilt: hilt.packId ?? hilt.name, fit: f })); setHiltNote('Fit copied.'); };
 
   const [sceneOpen, setSceneOpen] = useState(() => { try { return localStorage.getItem('hiltwright.demo.sceneOpen') !== '0'; } catch { return true; } });
-  useEffect(() => { if (look3d.staff) scene.current?.setLook(staffLook.id, staffArgs, 'staff'); scene.current?.applySettings(look3d); try { localStorage.setItem('hiltwright.demo.scene', JSON.stringify(look3d)); } catch { /* private mode */ } }, [look3d]);
+  useEffect(() => { if (look3d.staff) scene.current?.setLook(staffLook.id, staffArgs, 'staff'); scene.current?.applySettings(look3d); }, [look3d]);
   useEffect(() => { try { localStorage.setItem('hiltwright.demo.sceneOpen', sceneOpen ? '1' : '0'); } catch { /* private mode */ } }, [sceneOpen]);
   useEffect(() => { scene.current?.setControlMode(control); try { localStorage.setItem('hiltwright.demo.control', control); } catch { /* private mode */ } }, [control]);
   const look = LOOKS.find((l) => l.id === lookId) ?? LOOKS[0];
@@ -239,12 +350,19 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
     room.setProp(propBehaviour(propKey));
     room.applySettings(look3d);
     room.onMotion = setMotion;
+    room.sound = {
+      preon: () => engineRef.current?.preon() ?? { preon: 0, out: 0 },
+      cancelPreon: () => engineRef.current?.cancelPreon(),
+      retract: () => engineRef.current?.retract() ?? { in: 0, postoff: 0 },
+    };
     room.onEvent = (ev) => {
       const eng = engineRef.current;
       if (!eng) return;
-      if (ev.kind === 'on') eng.ignite(); else if (ev.kind === 'off') eng.retract();
+      // An on or off that did not come through room.setOn (a style's FAST_ON / FAST_OFF) is a fast one: no preon,
+      // no pstoff. When it did, the engine has already been asked and these do nothing more.
+      if (ev.kind === 'on') eng.ignite(); else if (ev.kind === 'off') eng.retract(true);
       else if (ev.kind === 'clash' || ev.kind === 'blast' || ev.kind === 'stab') eng.effect(ev.kind);
-      else if (ev.kind === 'lockup') { if (ev.type) eng.beginLockup(ev.type === 'normal' ? 'lock' : ev.type === 'melt' ? 'drag' : ev.type); else eng.endLockup(); }
+      else if (ev.kind === 'lockup') { if (ev.type) eng.beginLockup(ev.type === 'normal' ? 'lock' : ev.type); else eng.endLockup(); }
       else if (ev.kind === 'sound') { if (propBehaviour(propKey).transitionSounds) eng.transition(ev.n); }
       else if (ev.kind === 'motion') eng.motion(ev.degPerSec, ev.dt);
     };
@@ -338,11 +456,12 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
                     <button type="button" role="tab" aria-selected={bladeTab === 'staff'} className={bladeTab === 'staff' ? 'on' : ''} style={{ height: 26, fontSize: 12, padding: '0 10px' }} onClick={() => setBladeTab('staff')}>Staff blade</button>
                   </div>
                 )}
-                <label className="field"><span className="label">{staff ? 'Staff blade look' : 'Look'}</span>
+                <label className="field"><span className="label">{staff ? 'Staff blade style' : 'Style'}</span>
                   <span className="input sans"><span className="ellip">{cur.name}</span><span className="caret"><Icon name="down" /></span>
-                    <select value={curId} aria-label={staff ? 'Staff blade look' : 'Look'} onChange={(e) => setId(e.target.value)}><optgroup label="Hiltwright">{STARTERS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</optgroup>{saved.length > 0 && <optgroup label="Your looks">{saved.map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}</option>)}</optgroup>}</select></span>
+                    <Select value={curId} aria-label={staff ? 'Staff blade style' : 'Style'} onChange={(e) => setId(e.target.value)}><optgroup label="Hiltwright">{STARTERS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</optgroup>{saved.length > 0 && <optgroup label="Your styles">{saved.map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}</option>)}</optgroup>}</Select></span>
                 </label>
                 <span className="hint" style={{ fontSize: 12 }}>{cur.description}</span>
+                <LookPreviewNote look={cur} />
                 {cols.length > 0 && (
                   <div className="col" style={{ gap: 6 }}>
                     <span className="label">Colours</span>
@@ -364,12 +483,13 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
                 {presets.length > 0 && (
                   <div className="col" style={{ gap: 6, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
                     <span className="label">From {saber?.name ?? 'the saber'}</span>
-                    <div className="row" style={{ gap: 6 }} title="Set the look and the font from one of the saber's presets">
+                    <div className="row" style={{ gap: 6 }} title="Set the style, its colours and the font from one of the saber's presets">
                       <span className="input sans grow" style={{ height: 28, fontSize: 12 }}><span className="ellip">{presets[presetIndex]?.name.replace(/\s*\n\s*/g, ' ') ?? 'Preset'}</span><span className="caret"><Icon name="down" /></span>
-                        <select value={presetIndex} aria-label="Saber preset" onChange={(e) => setPresetIndex(Number(e.target.value))}>{presets.map((p, i) => <option key={i} value={i}>{i + 1}. {p.name.replace(/\s*\n\s*/g, ' ')}</option>)}</select></span>
+                        <Select value={presetIndex} aria-label="Saber preset" onChange={(e) => setPresetIndex(Number(e.target.value))}>{presets.map((p, i) => <option key={i} value={i}>{i + 1}. {p.name.replace(/\s*\n\s*/g, ' ')}</option>)}</Select></span>
                       <button type="button" className="chip" disabled={!!loading} onClick={() => void loadFromSaber(presetIndex)}><Icon name="play" />Load</button>
                     </div>
-                    <span className="hint" style={{ fontSize: 11.5 }}>The preset's look and its font, as they are on the saber.</span>
+                    <span className="hint" style={{ fontSize: 11.5 }}>The preset's style, colours and font, as they are on the saber.</span>
+                    {fromNote && <span className="hint" style={{ fontSize: 11.5 }} role="status">{fromNote}</span>}
                   </div>
                 )}
               </>
@@ -381,28 +501,28 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
               <div className="col" style={{ gap: 6 }}>
                 <span className="label">Fonts from</span>
                 {sources.length === 0
-                  ? <span className="hint">No fonts to hand. Put a card in a reader, share the saber's card on Fonts &amp; SD, or <button type="button" className="holo" onClick={() => void pickBank()}>choose a folder of fonts</button> on this computer.</span>
+                  ? <span className="hint">No fonts to hand. <button type="button" className="holo" onClick={() => void addToLibrary()}>Add a font folder</button> to the Font library to hear it here.</span>
                   : (
                     <div className="row" style={{ gap: 6 }}>
                       <span className="input sans grow" style={{ height: 28, fontSize: 12 }}><span className="ellip">{source?.label ?? 'Source'}</span><span className="caret"><Icon name="down" /></span>
-                        <select value={source?.root ?? ''} aria-label="Where the fonts are" onChange={(e) => setSource(sources.find((x) => x.root === e.target.value) ?? null)}>{sources.map((x) => <option key={x.root} value={x.root}>{x.label}</option>)}</select></span>
-                      <button type="button" className="chip" title="Choose a folder of fonts on this computer" onClick={() => void pickBank()}><Icon name="import" /></button>
-                      <button type="button" className="chip" title="Look again for cards" onClick={() => void refreshSources()}><Icon name="undo" /></button>
+                        <Select value={source?.root ?? ''} aria-label="Where the fonts are" onChange={(e) => setSource(sources.find((x) => x.root === e.target.value) ?? null)}>{sources.map((x) => <option key={x.root} value={x.root}>{x.label}</option>)}</Select></span>
+                      <button type="button" className="chip" title="Add a font folder to the Font library" onClick={() => void addToLibrary()}><Icon name="import" /></button>
+                      <button type="button" className="chip" title="Look again" onClick={() => void refreshSources()}><Icon name="undo" /></button>
                     </div>
                   )}
               </div>
               {source && (
                 <div className="col" style={{ gap: 6 }}>
-                  <div className="row between"><span className="label">Font</span>{engine && <span className="hint" style={{ fontSize: 11.5 }}>{engine.hasSmoothSwing ? 'SmoothSwing' : 'no swing sounds'}</span>}</div>
-                  <span className="input sans" style={{ height: 28, fontSize: 12 }}><span className="ellip">{fontName || (fonts.length ? 'Pick a font' : 'No fonts here')}</span><span className="caret"><Icon name="down" /></span>
-                    <select value={fontName} aria-label="Sound font" disabled={!!loading} onChange={(e) => void loadFont(e.target.value)}><option value="">Pick a font</option>{fonts.map((f) => <option key={f.name} value={f.name}>{f.name}</option>)}</select></span>
+                  <div className="row between"><span className="label">Font</span>{engine && <span className="hint" style={{ fontSize: 11.5 }}>{engine.hasSmoothSwing ? 'SmoothSwing' : engine.hasPlainSwings ? 'Swing sounds, no SmoothSwing' : 'no swing sounds'}</span>}</div>
+                  <span className="input sans" style={{ height: 28, fontSize: 12 }}><span className="ellip">{(fontName && (libNames[fontName] ?? fontName)) || (fonts.length ? 'Pick a font' : 'No fonts here')}</span><span className="caret"><Icon name="down" /></span>
+                    <Select value={fontName} aria-label="Sound font" disabled={!!loading} onChange={(e) => void loadFont(e.target.value)}><option value="">Pick a font</option>{fonts.map((f) => <option key={f.name} value={f.name}>{libNames[f.name] ?? f.name}</option>)}</Select></span>
                 </div>
               )}
               <label className="col" style={{ gap: 6 }}>
                 <div className="row between"><span className="label">Volume</span><span className="mono mute" style={{ fontSize: 11 }}>{Math.round(volume * 100)}%</span></div>
                 <input type="range" min={0} max={1} step={0.05} value={volume} aria-label="Volume" onChange={(e) => setVolume(Number(e.target.value))} />
               </label>
-              {loading && <span className="hint">{loading.what === 'reading' ? 'Reading' : 'Decoding'} {loading.done}{loading.total ? ` of ${loading.total}` : ''}{source?.kind === 'card' ? ' (slow over the saber’s USB link)' : ''}…</span>}
+              {loading && <span className="hint">{loading.what === 'reading' ? 'Reading' : 'Decoding'} {loading.done}{loading.total ? ` of ${loading.total}` : ''}…</span>}
               {soundNote && <span className="hint">{soundNote}</span>}
               {!engine && !loading && source && <span className="hint" style={{ fontSize: 11.5 }}>Pick a font and the saber hums, swings, clashes and answers every effect with its sounds.</span>}
             </>
@@ -421,13 +541,13 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
             <>
               <label className="field"><span className="label">Prop file</span>
                 <span className="input sans"><span className="ellip">{prop.name}</span><span className="caret"><Icon name="down" /></span>
-                  <select value={propKey} aria-label="Prop file" onChange={(e) => setPropKey(e.target.value)}>{Object.keys(PROPS).map((k) => <option key={k} value={k}>{PROPS[k].name}{k === saberProp ? ' (this saber)' : ''}</option>)}</select></span>
+                  <Select value={propKey} aria-label="Prop file" onChange={(e) => setPropKey(e.target.value)}>{Object.keys(PROPS).map((k) => <option key={k} value={k}>{PROPS[k].name}{k === saberProp ? ' (this saber)' : ''}</option>)}</Select></span>
               </label>
               <ul className="col" style={{ gap: 4, margin: 0, paddingLeft: 16, fontSize: 12, color: 'var(--dim)' }}>
-                <li>{prop.stylesCanPower ? 'A look can turn the saber off and back on itself.' : 'A look cannot turn the saber off or on; those parts of a look do not happen.'}</li>
+                <li>{prop.stylesCanPower ? 'A style can turn the saber off and back on itself.' : 'A style cannot turn the saber off or on; those parts of a style do not happen.'}</li>
                 <li>{prop.abilities ? `Special abilities: ${prop.abilityGesture}.` : 'No special abilities.'}</li>
-                <li>{prop.transitionSounds ? 'Plays a look’s own sounds (tr files).' : 'Does not play a look’s own sounds.'}</li>
-                {prop.abilitiesDefine && <li>Hiltwright adds {prop.abilitiesDefine} to the build when a look uses abilities.</li>}
+                <li>{prop.transitionSounds ? 'Plays a style’s own sounds (tr files).' : 'Does not play a style’s own sounds.'}</li>
+                {prop.abilitiesDefine && <li>Hiltwright adds {prop.abilitiesDefine} to the build when a style uses abilities.</li>}
               </ul>
               <div className="col" style={{ gap: 6, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
                 <span className="label">Mouse control</span>
@@ -446,7 +566,7 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
                     <span className="mono mute" style={{ width: 40, textAlign: 'right', fontSize: 11 }}>{motion[key]}°</span>
                   </label>
                 ))}
-                <span className="hint" style={{ fontSize: 11.5 }}>For seeing what a look does with direction. Uses tilt-and-swing control, where the hand stays put; the mouse takes over again as soon as you drag.</span>
+                <span className="hint" style={{ fontSize: 11.5 }}>For seeing what a style does with direction. Uses tilt-and-swing control, where the hand stays put; the mouse takes over again as soon as you drag.</span>
               </div>
             </>
           )}
@@ -455,7 +575,7 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
         {/* The deck: everything you can do to the saber, with its key. */}
         <div className="col" style={{ gap: 8, padding: 12, borderTop: '1px solid var(--line)', background: 'rgba(8,12,17,.6)' }}>
           <div className="row" style={{ gap: 8 }}>
-            <button type="button" className="btn sm pri grow" style={{ justifyContent: 'center' }} onClick={() => { room?.setOn(!motion.on); setHold(null); }}><span className="b"><span className="i">{motion.on ? 'Retract' : 'Ignite'}<kbd className="kbd">Space</kbd></span></span></button>
+            <button type="button" className="btn sm pri grow" style={{ justifyContent: 'center' }} title={motion.preon ? 'Preon is playing; pressing again cancels it, as on the saber' : undefined} onClick={() => { room?.setOn(!room.isOn); setHold(null); }}><span className="b"><span className="i">{motion.on ? 'Retract' : motion.preon ? 'Cancel preon' : 'Ignite'}<kbd className="kbd">Space</kbd></span></span></button>
             <button type="button" className="chip" aria-pressed={tab === 'help'} title="Every mouse and keyboard control" onClick={toggleHelp}><kbd className="kbd" style={{ margin: '0 6px 0 0' }}>?</kbd>Controls</button>
           </div>
           <div className="col" style={{ gap: 4 }}>
@@ -510,10 +630,10 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
               <input type="range" min={20} max={40} step={1} value={look3d.bladeInches} aria-label="Blade length in inches" style={{ flex: 1, minWidth: 0 }} onChange={(e) => setLook3d((v) => ({ ...v, bladeInches: Number(e.target.value) }))} />
               <span className="mono mute" style={{ width: 34, textAlign: 'right' }}>{look3d.bladeInches}"</span>
             </label>
-            <div className="row" style={{ gap: 8 }} title="How densely the strip inside is populated. The count follows from the length: a shorter blade has fewer LEDs, and every look runs on that many.">
+            <div className="row" style={{ gap: 8 }} title="How densely the strip inside is populated. The count follows from the length: a shorter blade has fewer LEDs, and every style runs on that many.">
               <span className="dim" style={{ width: 76, flex: 'none' }}>Strip</span>
               <span className="input sans" style={{ height: 28, fontSize: 12, width: 92, flex: 'none' }}><span className="ellip">{look3d.ledsPerMetre}/m</span><span className="caret"><Icon name="down" /></span>
-                <select value={look3d.ledsPerMetre} aria-label="LEDs per metre of strip" onChange={(e) => setLook3d((v) => ({ ...v, ledsPerMetre: Number(e.target.value) }))}>{STRIP_DENSITIES.map((d) => <option key={d} value={d}>{d} per metre</option>)}</select></span>
+                <Select value={look3d.ledsPerMetre} aria-label="LEDs per metre of strip" onChange={(e) => setLook3d((v) => ({ ...v, ledsPerMetre: Number(e.target.value) }))}>{STRIP_DENSITIES.map((d) => <option key={d} value={d}>{d} per metre</option>)}</Select></span>
               <span className="mono mute" style={{ flex: 1, textAlign: 'right' }}>{ledsFor(look3d.bladeInches * 0.0254, look3d.ledsPerMetre)} LEDs</span>
             </div>
             <div className="row" style={{ gap: 8 }}>
@@ -534,10 +654,23 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
             <div className="row" style={{ gap: 8 }}>
               <span className="dim" style={{ width: 76, flex: 'none' }}>Model</span>
               <span className="input sans" style={{ height: 28, fontSize: 12 }}><span className="ellip">{hilt?.name ?? 'Built-in'}</span><span className="caret"><Icon name="down" /></span>
-                <select value={hilt && hilt !== builtIn ? hilt.name : ''} aria-label="Hilt model" onChange={(e) => setHiltName(e.target.value)}><option value="">Built-in</option>{hilts.filter((h) => h !== builtIn).map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}</select></span>
+                <Select value={hilt && hilt !== builtIn ? hilt.key : ''} aria-label="Hilt model" onChange={(e) => { setConfirm(null); setHiltKey(e.target.value); }}><option value="">Built-in</option>
+                  {hilts.some((h) => !h.packId) && <optgroup label="Your hilts">{hilts.filter((h) => !h.packId).map((h) => <option key={h.key} value={h.key}>{h.name}</option>)}</optgroup>}
+                  {hilts.some((h) => h.packId && h !== builtIn) && <optgroup label="From packs">{hilts.filter((h) => h.packId && h !== builtIn).map((h) => <option key={h.key} value={h.key}>{h.name}</option>)}</optgroup>}
+                </Select></span>
               <label className="chip" style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden' }} title="Load a .glb, .obj or .stl file. For an OBJ, select its .mtl and textures with it."><Icon name="import" />Load
                 <input type="file" multiple accept=".glb,.gltf,.obj,.stl,.mtl,.png,.jpg,.jpeg,.webp,.tga" aria-label="Load a hilt model" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={(e) => { void loadHiltFiles(e.target.files); e.target.value = ''; }} /></label>
             </div>
+            {taken && (
+              <div className="note amber" role="alertdialog" aria-label="A hilt with this name is already here"><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+                <span>You already have a hilt called {taken.name}. Replace its model, keeping its fit and credit, or keep both?</span>
+                <span className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn sm pri" onClick={() => { const t = taken; setTaken(null); void addHilt(t.input, { replace: t.id }, t.note); }}><span className="b"><span className="i">Replace</span></span></button>
+                  <button type="button" className="btn sm" onClick={() => { const t = taken; setTaken(null); void addHilt(t.input, 'keepBoth', t.note); }}><span className="b"><span className="i">Keep both</span></span></button>
+                  <button type="button" className="btn sm ghost" onClick={() => setTaken(null)}><span className="b"><span className="i">Cancel</span></span></button>
+                </span>
+              </span></div>
+            )}
             {hilt && (
               <button type="button" className="row nowrap" style={{ gap: 6, alignSelf: 'flex-start' }} aria-expanded={fitOpen} onClick={() => setFitOpen((o) => !o)}><span style={{ display: 'flex', width: 14, height: 14, color: 'var(--mute)' }}><Icon name={fitOpen ? 'down' : 'chev'} /></span><span className="small dim">Fit and placement</span></button>
             )}
@@ -586,15 +719,56 @@ export function Demo({ initialLook, board }: { initialLook?: string | null; boar
                   </div>
                 </div>
                 <label className="row" style={{ gap: 10 }}><button type="button" className={`tog ${hilt.fit.flip ? 'on' : ''}`} role="switch" aria-checked={hilt.fit.flip} aria-label="Blade comes out of the other end" onClick={() => setFit({ flip: !hilt.fit.flip })}><i /></button><span className="dim">Blade at the other end</span></label>
-                <div className="row" style={{ gap: 14, justifyContent: 'flex-end' }}><button type="button" className="holo small" title="Copy the fit as text" onClick={copyFit}>Copy fit</button><button type="button" className="holo small" onClick={forgetHilt}>{hilt.packId ? 'Reset fit' : 'Remove'}</button></div>
+                <div className="row" style={{ gap: 14, justifyContent: 'flex-end' }}><button type="button" className="holo small" title="Copy the fit as text" onClick={copyFit}>Copy fit</button><button type="button" className="holo small" onClick={() => setConfirm(hilt.packId ? 'reset' : 'remove')}>{hilt.packId ? 'Reset fit' : 'Remove'}</button></div>
+                {confirm && (
+                  <div className="note amber" role="alertdialog" aria-label={confirm === 'remove' ? 'Remove this hilt' : 'Reset this fit'}><Icon name="warn" /><span className="col" style={{ gap: 8 }}>
+                    <span>{confirm === 'remove' ? `Remove ${hilt.name} from Hiltwright? Its fit and credit go with it. Your original file is not touched.` : `Reset the fit of ${hilt === builtIn ? 'the built-in hilt' : hilt.name} to the pack's own? Your adjustments will be lost.`}</span>
+                    <span className="row" style={{ gap: 8 }}>
+                      <button type="button" className="btn sm danger" onClick={() => void forgetHilt()}><span className="b"><span className="i">{confirm === 'remove' ? 'Remove' : 'Reset'}</span></span></button>
+                      <button type="button" className="btn sm ghost" onClick={() => setConfirm(null)}><span className="b"><span className="i">Keep</span></span></button>
+                    </span>
+                  </span></div>
+                )}
               </>
             )}
-            {hilt?.creator && <span className="hint">{hilt === builtIn ? 'Punk Saber' : hilt.name} by {hilt.creator}{packs.find((p) => p.id === hilt.packId)?.licence ? `, ${packs.find((p) => p.id === hilt.packId)!.licence}` : ''}</span>}
-            {hiltNote && <span className={hiltNote === 'Fit copied.' ? 'hint' : 'red small'}>{hiltNote}</span>}
+            {hilt && <HiltCredit key={hilt.key} hilt={hilt} title={hilt === builtIn ? 'Punk Saber' : hilt.name} licence={packs.find((p) => p.id === hilt.packId)?.licence ?? null} onCreator={(creator) => void setHiltCreator(hilt, creator)} />}
+            {hiltNote && <span className={OK_NOTE.test(hiltNote) ? 'hint' : 'red small'} role={OK_NOTE.test(hiltNote) ? undefined : 'alert'}>{hiltNote}</span>}
+            <div className="row" style={{ gap: 14 }} title="Keep your hilts, their fits and credits in one zip file, to move to another computer or keep safe">
+              <button type="button" className="holo small" onClick={() => void exportHilts()}>Export hilts…</button>
+              <button type="button" className="holo small" onClick={() => void importHilts()}>Import hilts…</button>
+            </div>
           </div>
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Who made the hilt in the room, with their logo. A pack's creator comes with the pack; a hilt the owner loaded can
+ * be credited here, and then counts among that person's work on the Contributors page.
+ */
+function HiltCredit({ hilt, title, licence, onCreator }: { hilt: RoomHilt; title: string; licence: string | null; onCreator: (creator: string) => void }) {
+  const people = useContributors();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const own = !hilt.packId;
+  if (editing) {
+    return (
+      <form className="row" style={{ gap: 6 }} onSubmit={(e) => { e.preventDefault(); onCreator(draft.trim()); setEditing(false); }}>
+        <span className="input sans grow" style={{ height: 28 }}><input type="text" autoFocus value={draft} placeholder="Who made this hilt" aria-label={`Who made ${title}`} onChange={(e) => setDraft(e.target.value)} /></span>
+        <button type="submit" className="btn sm pri"><span className="b"><span className="i">Save</span></span></button>
+        <button type="button" className="chip" aria-label="Cancel" onClick={() => setEditing(false)}><Icon name="x" /></button>
+      </form>
+    );
+  }
+  if (!hilt.creator) return own ? <button type="button" className="holo small" style={{ alignSelf: 'flex-start' }} onClick={() => { setDraft(''); setEditing(true); }}>Credit who made this hilt</button> : null;
+  return (
+    <span className="row" style={{ gap: 8 }}>
+      <ContributorLogo name={hilt.creator} logo={people.logoFor(hilt.creator)} size={24} />
+      <span className="hint grow">{title} by {hilt.creator}{licence ? `, ${licence}` : ''}</span>
+      {own && <button type="button" className="holo small" onClick={() => { setDraft(hilt.creator ?? ''); setEditing(true); }}>Edit</button>}
+    </span>
   );
 }
 

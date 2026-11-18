@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { importXenoFont, scanXenoCard } from '../src/main/importer';
+import { NO_XENO_FONTS } from '../src/shared/importWords';
 
 /** A tiny but valid 44.1 kHz 16-bit mono WAV. */
 function wav(samples = 441): Buffer {
@@ -59,5 +60,19 @@ describe('Xenopixel import', () => {
     await expect(importXenoFont(join(card, '1'), proffie, 'Proffie Gold', false)).rejects.toThrow(/already on the card/);
     await expect(importXenoFont(join(card, '1'), proffie, '../escape', false)).rejects.toThrow(/cannot be used/);
     await expect(importXenoFont(join(card, '1'), proffie, 'Proffie Gold', true)).resolves.toBeTruthy();
+  });
+});
+
+// Audit of baseline-sd-fonts, xenopixel-import (sd-fonts-test-coverage design D4).
+describe('xenopixel-import audit', () => {
+  it('3.1 choosing the wrong folder: nothing found, and the words ask for the top of the card', async () => {
+    const wrong = await mkdtemp(join(tmpdir(), 'hw-wrong-'));
+    // A ProffieOS-style card, or any folder of named folders, has no numbered font slots.
+    await mkdir(join(wrong, 'Ember')); await writeFile(join(wrong, 'Ember', 'hum01.wav'), Buffer.alloc(44));
+    await mkdir(join(wrong, 'tracks'));
+    expect(await scanXenoCard(wrong)).toEqual([]);
+    expect(NO_XENO_FONTS).toMatch(/^No Xenopixel font folders found there\./);
+    expect(NO_XENO_FONTS).toMatch(/Choose the top of the card: the folder that holds the numbered folders 1, 2, 3/);
+    await rm(wrong, { recursive: true, force: true });
   });
 });

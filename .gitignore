@@ -17,3 +17,6 @@ apps/desktop/release/
 
 # encrypted asset packs: built locally, distributed separately
 packs/
+
+# the free ProffieOS font packs (about 100 MB): rebuilt by npm run fontpacks, shipped by the installer, kept out of the repo
+apps/desktop/resources/packs/

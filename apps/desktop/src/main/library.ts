@@ -1,38 +1,41 @@
-// Saber library: one JSON file in userData. Small, human-readable, written atomically.
+// Saber library: one JSON file in userData, kept by the safe store (jsonStore.ts): writes queued, a backup copy, and
+// a file that cannot be read is set aside rather than overwritten.
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import type { PresetRecord, SaberConfigModel } from '@hiltwright/core';
+import type { LookDef, PresetRecord, SaberConfigModel } from '@hiltwright/core';
 import type { SaberIdentity, SaberPatch, SaberRecord } from '../shared/api';
+import { JsonStore } from './jsonStore';
 
 interface LibraryFile { version: 1; sabers: SaberRecord[] }
 
+/** The saber that was just installed, expected back after its reboot: the config the install wrote. */
+export interface ReinstallExpectation { id: string; configName: string }
+
+const isStr = (v: unknown): v is string => typeof v === 'string';
+const isRecord = (v: unknown): v is SaberRecord => {
+  const r = v as Partial<SaberRecord> | null;
+  return !!r && isStr(r.id) && isStr(r.name) && isStr(r.firstSeen) && isStr(r.lastSeen)
+    && !!r.identity && typeof r.identity === 'object' && Array.isArray(r.identity.pixelBlades)
+    && Array.isArray(r.presets) && Array.isArray(r.fonts) && Array.isArray(r.tracks);
+};
+
+/** The saber records that have the expected shape, and how many did not. Null when the file is not a saber list. */
+export function cleanLibrary(raw: unknown): { value: LibraryFile; dropped: number } | null {
+  const f = raw as Partial<LibraryFile> | null;
+  if (!f || f.version !== 1 || !Array.isArray(f.sabers)) return null;
+  const sabers = f.sabers.filter(isRecord);
+  return { value: { version: 1, sabers }, dropped: f.sabers.length - sabers.length };
+}
+
 export class Library {
-  private cache: LibraryFile | null = null;
-  constructor(private file: string) {}
-
-  private async load(): Promise<LibraryFile> {
-    if (this.cache) return this.cache;
-    try {
-      const parsed = JSON.parse(await readFile(this.file, 'utf8')) as LibraryFile;
-      this.cache = parsed.version === 1 && Array.isArray(parsed.sabers) ? parsed : { version: 1, sabers: [] };
-    } catch {
-      this.cache = { version: 1, sabers: [] };
-    }
-    return this.cache;
-  }
-
-  private async persist(): Promise<void> {
-    const data = this.cache ?? { version: 1, sabers: [] };
-    await mkdir(dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-    await rename(tmp, this.file);
+  private store: JsonStore<LibraryFile>;
+  constructor(file: string) {
+    this.store = new JsonStore(file, { name: 'saber list', place: 'data', empty: () => ({ version: 1, sabers: [] }), clean: cleanLibrary });
   }
 
   async list(): Promise<SaberRecord[]> {
-    return [...(await this.load()).sabers].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+    return [...(await this.store.read()).sabers].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
   }
 
   /** A board is the same saber when the USB serial matches; failing that, when config, install stamp and blade layout all match. */
@@ -45,83 +48,113 @@ export class Library {
   }
 
   /** A saber set up before its hilt: no identity, no presets read, just a name and a build model. */
-  async plan(name: string, model: SaberConfigModel): Promise<SaberRecord> {
-    const lib = await this.load();
-    const now = new Date().toISOString();
-    const rec: SaberRecord = {
-      id: randomBytes(6).toString('hex'), name, planned: true,
-      identity: { usbSerial: null, configName: null, version: null, prop: null, buttons: null, installed: null, pixelBlades: [], bladeConfig: null },
-      firstSeen: now, lastSeen: now, presets: [], fonts: [], tracks: [], model,
-    };
-    lib.sabers.push(rec);
-    await this.persist();
-    return rec;
+  plan(name: string, model: SaberConfigModel): Promise<SaberRecord> {
+    return this.store.update((lib) => {
+      const now = new Date().toISOString();
+      const rec: SaberRecord = {
+        id: randomBytes(6).toString('hex'), name, planned: true,
+        identity: { usbSerial: null, configName: null, version: null, prop: null, buttons: null, installed: null, pixelBlades: [], bladeConfig: null },
+        firstSeen: now, lastSeen: now, presets: [], fonts: [], tracks: [], model,
+      };
+      lib.sabers.push(rec);
+      return rec;
+    });
   }
 
   /** The real saber takes the plan's model (wiring, prop, presets, looks); the plan itself goes. */
-  async adopt(plannedId: string, targetId: string): Promise<SaberRecord> {
-    const lib = await this.load();
-    const plan = lib.sabers.find((s) => s.id === plannedId && s.planned);
-    const target = lib.sabers.find((s) => s.id === targetId && !s.planned);
-    if (!plan || !target) throw new Error('No such plan or saber');
-    if (plan.model) target.model = { ...plan.model, name: target.model?.name ?? plan.model.name };
-    if (!/^(hiltwright_)?saber/i.test(plan.name) && target.name === defaultName(target.identity)) target.name = plan.name;
-    lib.sabers = lib.sabers.filter((s) => s.id !== plannedId);
-    await this.persist();
-    return target;
+  adopt(plannedId: string, targetId: string): Promise<SaberRecord> {
+    return this.store.update((lib) => {
+      const plan = lib.sabers.find((s) => s.id === plannedId && s.planned);
+      const target = lib.sabers.find((s) => s.id === targetId && !s.planned);
+      if (!plan || !target) throw new Error('No such plan or saber');
+      if (plan.model) target.model = { ...plan.model, name: target.model?.name ?? plan.model.name };
+      if (!/^(hiltwright_)?saber/i.test(plan.name) && target.name === defaultName(target.identity)) target.name = plan.name;
+      lib.sabers = lib.sabers.filter((s) => s.id !== plannedId);
+      return target;
+    });
   }
 
-  async upsert(input: { identity: SaberIdentity; presets: PresetRecord[]; fonts: string[]; tracks: string[]; name?: string }): Promise<SaberRecord> {
-    const lib = await this.load();
-    const now = new Date().toISOString();
-    let rec = lib.sabers.find((s) => Library.matches(s.identity, input.identity));
-    if (rec) {
-      rec.identity = { ...rec.identity, ...input.identity, usbSerial: input.identity.usbSerial ?? rec.identity.usbSerial };
-      rec.presets = input.presets;
-      rec.fonts = input.fonts;
-      rec.tracks = input.tracks;
-      rec.lastSeen = now;
-      if (input.name) rec.name = input.name;
-    } else {
-      rec = {
-        id: randomBytes(6).toString('hex'),
-        name: input.name ?? defaultName(input.identity),
-        identity: input.identity,
-        firstSeen: now,
-        lastSeen: now,
-        presets: input.presets,
-        fonts: input.fonts,
-        tracks: input.tracks,
-      };
-      lib.sabers.push(rec);
-    }
-    await this.persist();
-    return rec;
+  /**
+   * Match the board to its record, or make one. Order: USB serial; then, with no serial, the saber just installed
+   * when the board reports the config that install wrote (`expect`); then config, install stamp and blade layout.
+   */
+  upsert(input: { identity: SaberIdentity; presets: PresetRecord[]; fonts: string[]; tracks: string[]; name?: string }, expect?: ReinstallExpectation | null): Promise<SaberRecord> {
+    return this.store.update((lib) => {
+      const now = new Date().toISOString();
+      const id = input.identity;
+      let rec = id.usbSerial ? lib.sabers.find((s) => !s.planned && s.identity.usbSerial === id.usbSerial) : undefined;
+      if (!rec && !id.usbSerial && expect && id.configName === expect.configName) rec = lib.sabers.find((s) => s.id === expect.id && !s.planned);
+      rec ??= lib.sabers.find((s) => Library.matches(s.identity, id));
+      if (rec) {
+        rec.identity = { ...rec.identity, ...id, usbSerial: id.usbSerial ?? rec.identity.usbSerial };
+        rec.presets = input.presets;
+        rec.fonts = input.fonts;
+        rec.tracks = input.tracks;
+        rec.lastSeen = now;
+        if (input.name) rec.name = input.name;
+      } else {
+        rec = { id: randomBytes(6).toString('hex'), name: input.name ?? defaultName(id), identity: id, firstSeen: now, lastSeen: now, presets: input.presets, fonts: input.fonts, tracks: input.tracks };
+        lib.sabers.push(rec);
+      }
+      return rec;
+    });
   }
 
-  async rename(id: string, name: string): Promise<SaberRecord> {
-    const lib = await this.load();
-    const rec = lib.sabers.find((s) => s.id === id);
-    if (!rec) throw new Error(`Unknown saber ${id}`);
-    rec.name = name.trim() || rec.name;
-    await this.persist();
-    return rec;
+  rename(id: string, name: string): Promise<SaberRecord> {
+    return this.store.update((lib) => {
+      const rec = lib.sabers.find((s) => s.id === id);
+      if (!rec) throw new Error(`Unknown saber ${id}`);
+      rec.name = name.trim() || rec.name;
+      return rec;
+    });
   }
 
-  async update(id: string, patch: SaberPatch): Promise<SaberRecord> {
-    const lib = await this.load();
-    const rec = lib.sabers.find((s) => s.id === id);
-    if (!rec) throw new Error(`Unknown saber ${id}`);
-    if (patch.model !== undefined) { if (patch.model) rec.model = patch.model; else delete rec.model; }
-    if (patch.firmware !== undefined) { if (patch.firmware) rec.firmware = patch.firmware; else delete rec.firmware; }
-    await this.persist();
-    return rec;
+  update(id: string, patch: SaberPatch): Promise<SaberRecord> {
+    return this.store.update((lib) => {
+      const rec = lib.sabers.find((s) => s.id === id);
+      if (!rec) throw new Error(`Unknown saber ${id}`);
+      if (patch.model !== undefined) { if (patch.model) rec.model = patch.model; else delete rec.model; }
+      if (patch.firmware !== undefined) { if (patch.firmware) rec.firmware = patch.firmware; else delete rec.firmware; }
+      if (patch.presets !== undefined) rec.presets = patch.presets;
+      return rec;
+    });
   }
 
-  async remove(id: string): Promise<void> {
-    const lib = await this.load();
-    lib.sabers = lib.sabers.filter((s) => s.id !== id);
-    await this.persist();
+  /**
+   * What the saber's bootloader showed at an install: its serial and flash size, and so the board type. A serial is one
+   * board, so any other record holding it loses it. Refuses what no Proffieboard bootloader reports.
+   */
+  noteBootloader(id: string, seen: { serial: string | null; flashBytes: number }): Promise<SaberRecord> {
+    const board = seen.flashBytes === 262144 ? 'V2' : seen.flashBytes === 524288 ? 'V3' : null;
+    if (!board) return Promise.reject(new Error(`Not a Proffieboard flash size: ${seen.flashBytes}`));
+    if (seen.serial !== null && !/^[A-Za-z0-9]{1,40}$/.test(seen.serial)) return Promise.reject(new Error('Not a USB serial'));
+    return this.store.update((lib) => {
+      const rec = lib.sabers.find((s) => s.id === id);
+      if (!rec) throw new Error(`Unknown saber ${id}`);
+      if (seen.serial) for (const s of lib.sabers) if (s !== rec && s.bootloader?.serial === seen.serial) delete s.bootloader;
+      rec.bootloader = { serial: seen.serial, flashBytes: seen.flashBytes, board, at: new Date().toISOString() };
+      return rec;
+    });
+  }
+
+  /**
+   * A style was saved again: every saber whose plan holds a copy of it (planned or not) gets the new version for its
+   * next build. Returns how many records changed.
+   */
+  replaceLook(look: LookDef): Promise<number> {
+    return this.store.update((lib) => {
+      let n = 0;
+      for (const s of lib.sabers) {
+        const looks = s.model?.looks;
+        const i = looks ? looks.findIndex((l) => l.id === look.id) : -1;
+        if (s.model && looks && i >= 0) { s.model = { ...s.model, looks: looks.map((l, k) => (k === i ? look : l)) }; n++; }
+      }
+      return n;
+    });
+  }
+
+  remove(id: string): Promise<void> {
+    return this.store.update((lib) => { lib.sabers = lib.sabers.filter((s) => s.id !== id); });
   }
 }
 

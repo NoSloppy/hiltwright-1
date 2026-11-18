@@ -5,7 +5,7 @@
 // role onto that saber's blades. Loading replaces the saber's presets with the bank's at the next install.
 
 import type { BladeRole, SaberConfigModel } from './config/generate';
-import { STARTER_LOOKS, type FirmwareManifest, type LookDef } from './looks';
+import { STARTER_LOOKS, starterLookFor, type FirmwareManifest, type LookDef } from './looks';
 import { parseStyleArgs } from './looks';
 import { parseBuiltin, type PresetRecord } from './protocol/presets';
 
@@ -36,23 +36,39 @@ export function isBank(v: unknown): v is PresetBank {
 export const newBank = (name = 'New bank'): PresetBank => ({ id: `bank_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name, presets: [], updated: new Date().toISOString() });
 export const newBankPreset = (name = 'New preset'): BankPreset => ({ name, font: 'common', track: '', looks: {} });
 
+/** What a preset with no name, or no font, gets when a set is loaded. */
+const nameInstead = (i: number) => `Preset ${i + 1}`;
+const FONT_INSTEAD = 'common';
+
+/** The styles a set can use on this saber: the starters, those the saber's model carries, and the style library's. */
+function styleIndex(model: Pick<SaberConfigModel, 'looks'>, allLooks: readonly LookDef[]): Map<string, LookDef> {
+  const out = new Map<string, LookDef>();
+  for (const l of [...STARTER_LOOKS, ...(model.looks ?? []), ...allLooks]) if (!out.has(l.id)) out.set(l.id, l);
+  return out;
+}
+
 /**
  * The saber's model with the bank's presets in place of its own. Each role maps onto every blade of that role; looks
  * the model does not carry yet are added from `allLooks`. `presetsFrom` marks the model so the draft keeps these
  * presets rather than re-reading the saber's, and so the install knows to clear the saber's presets.ini.
+ * Never throws on a set that no longer fits (HW-2026-09-24d): a style missing from the library gives that blade the
+ * saber's default style (and drops its colours, which belonged to the missing style), a preset without a name or a
+ * font gets one. `bankLoadCheck` says each of these before the set is loaded.
  */
 export function bankToModel(bank: PresetBank, model: SaberConfigModel, allLooks: readonly LookDef[]): SaberConfigModel {
   const looks = [...(model.looks ?? [])];
-  const known = new Set([...STARTER_LOOKS.map((l) => l.id), ...looks.map((l) => l.id)]);
-  const presets = bank.presets.map((p) => {
-    const row = model.blades.map((b) => p.looks[b.role] ?? null);
-    const argRow = model.blades.map((b) => p.lookArgs?.[b.role] ?? null);
+  const carried = new Set([...STARTER_LOOKS.map((l) => l.id), ...looks.map((l) => l.id)]);
+  const index = styleIndex(model, allLooks);
+  const presets = bank.presets.map((p, i) => {
+    const chosen = model.blades.map((b) => p.looks?.[b.role] ?? null);
+    const row = chosen.map((id) => (id && index.has(id) ? id : null));
+    const argRow = model.blades.map((b, k) => (chosen[k] && !row[k] ? null : p.lookArgs?.[b.role] ?? null));
     for (const id of row) {
-      if (!id || known.has(id)) continue;
-      const def = allLooks.find((l) => l.id === id);
-      if (def) { looks.push(def); known.add(id); }
+      if (!id || carried.has(id)) continue;
+      looks.push(index.get(id)!);
+      carried.add(id);
     }
-    return { font: p.font, track: p.track, name: p.name, ...(row.some(Boolean) ? { looks: row } : {}), ...(argRow.some(Boolean) ? { lookArgs: argRow } : {}) };
+    return { font: p.font.trim() ? p.font : FONT_INSTEAD, track: p.track, name: p.name.trim() ? p.name : nameInstead(i), ...(row.some(Boolean) ? { looks: row } : {}), ...(argRow.some(Boolean) ? { lookArgs: argRow } : {}) };
   });
   return { ...model, looks, presets, presetsFrom: { bank: bank.id, name: bank.name, at: new Date().toISOString() } };
 }
@@ -78,19 +94,44 @@ export function bankFromSaber(name: string, presets: readonly PresetRecord[], bl
   return bank;
 }
 
-/** Problems that would stop a bank loading cleanly onto a saber with these blades. */
-export function bankProblems(bank: PresetBank, blades: readonly { role: BladeRole }[], allLooks: readonly LookDef[]): string[] {
+/**
+ * Problems a bank has on a saber with these blades, each saying what the affected preset gets instead (what
+ * `bankToModel` does about it). `carried`: styles the saber's model already carries, which a set may name too.
+ */
+export function bankProblems(bank: PresetBank, blades: readonly { role: BladeRole }[], allLooks: readonly LookDef[], carried: readonly LookDef[] = []): string[] {
   const out: string[] = [];
-  if (!bank.presets.length) out.push('The bank has no presets.');
+  if (!bank.presets.length) out.push('The set has no presets, so there is nothing to load.');
   const roles = new Set(blades.map((b) => b.role));
-  const known = new Set([...STARTER_LOOKS.map((l) => l.id), ...allLooks.map((l) => l.id)]);
+  const index = styleIndex({ looks: [...carried] }, allLooks);
   bank.presets.forEach((p, i) => {
-    if (!p.name.trim()) out.push(`Preset ${i + 1} has no name.`);
-    if (!p.font.trim()) out.push(`"${p.name || i + 1}" has no font.`);
-    for (const [role, id] of Object.entries(p.looks)) {
-      if (id && !known.has(id)) out.push(`"${p.name || i + 1}": look "${id}" is not in the library any more.`);
-      if (id && !roles.has(role as BladeRole)) out.push(`"${p.name || i + 1}" sets a look for a ${role} blade, which this saber does not have; it will be ignored.`);
+    const who = p.name.trim() ? `"${p.name.replace(/\s*\n\s*/g, ' ')}"` : `Preset ${i + 1}`;
+    if (!p.name.trim()) out.push(`Preset ${i + 1} has no name, so it is named "${nameInstead(i)}".`);
+    if (!p.font.trim()) out.push(`${who} has no font, so it gets the "${FONT_INSTEAD}" folder as its font.`);
+    for (const [role, id] of Object.entries(p.looks ?? {})) {
+      if (!id) continue;
+      if (!roles.has(role as BladeRole)) { out.push(`${who} sets a style for a ${role} blade, which this saber does not have, so that style is left out.`); continue; }
+      if (!index.has(id)) out.push(`${who}, ${role} blade: its style "${id}" is not in the style library any more, so it gets the saber's default style for that blade (${starterLookFor(role as BladeRole).name}) instead${p.lookArgs?.[role as BladeRole] ? ', and the colours chosen for the missing style are left out' : ''}.`);
     }
   });
   return out;
+}
+
+export interface BankLoadCheck {
+  /** Loading is possible: the set has presets. */
+  canLoad: boolean;
+  /** The set's problems, each with what the affected preset gets instead. */
+  problems: string[];
+  /** Said when loading replaces staged edits that are not on the saber yet (F35); null when nothing is staged. */
+  replacesStaged: string | null;
+  /** Ask before loading: there are problems to read, or staged edits would be replaced. */
+  needsConfirm: boolean;
+}
+
+/** What loading `bank` onto this saber's model would do, worked out before anything changes. */
+export function bankLoadCheck(bank: PresetBank, model: SaberConfigModel, allLooks: readonly LookDef[]): BankLoadCheck {
+  const problems = bankProblems(bank, model.blades, allLooks, model.looks ?? []);
+  const canLoad = bank.presets.length > 0;
+  const n = model.presets.length;
+  const replacesStaged = model.presetsFrom ? `Loading it replaces the ${n} preset${n === 1 ? '' : 's'} staged here (${model.presetsFrom.name}), which are not on the saber yet.` : null;
+  return { canLoad, problems, replacesStaged, needsConfirm: !canLoad || problems.length > 0 || replacesStaged !== null };
 }

@@ -49,5 +49,5 @@ The Presets page changed preset 3's font on the same V2.2 through the app and pu
 - `set_preset 2` → confirmed index 2, font `GeneralPrincess;common`.
 - `set_font TeensySF;common` → confirmed by read-back after 1 attempt in 411 ms.
 - restore → confirmed after 1 attempt in 406 ms. `list_presets` afterwards shows preset 3 back on `GeneralPrincess;common`.
-- Read-backs were fast this time; the multi-second delay seen from PowerShell the day before was the first save creating `presets.ini`. The client still allows up to three read-backs with a 6 s ceiling each.
+- Read-backs were fast this time; the multi-second delay seen from PowerShell the day before was the first save creating `presets.ini`. The client still allows up to three read-backs with a 10 s ceiling each (`READBACK_TIMEOUT` in `packages/core/src/protocol/session.ts`).
 - One stale-buffer incident: the first command after opening the port answered in 4 ms with leftovers from a killed session, and a stale `installed:` line satisfied `version`. The transport now waits 250 ms after opening and discards what arrives, the same settle the PowerShell recorder used.

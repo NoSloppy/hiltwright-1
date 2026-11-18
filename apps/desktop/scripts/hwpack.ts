@@ -6,10 +6,12 @@
 //   node scripts/hwpack.ts show <file.hwpack>
 //   node scripts/hwpack.ts credit <file.hwpack> --creator "Name" [--licence "..."]   (rewrites the plain manifest in place)
 //
-// A hilt takes the .mtl beside the .obj. --copy allows copying a font to a card; without it the app only plays it.
+// A hilt takes the .mtl beside the .obj. --copy allows copying a font to a card and packs the whole folder (every file, licence and readme included);
+// without it the app only plays it, and only the playable sounds are packed.
 
-import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, statSync, mkdirSync } from 'node:fs';
 import { basename, join, extname } from 'node:path';
+import { collectFontItems } from '../src/main/fontPackFiles.ts';
 import { writePack, readManifest, objToMesh, encodeMesh, type PackManifest } from '../src/main/hwpack.ts';
 
 const [, , mode, target, ...rest] = process.argv;
@@ -73,14 +75,7 @@ if (mode === 'hilt') {
   const dir = target;
   const name = opts.name ?? basename(dir);
   const id = opts.id ?? `font-${slug(name)}`;
-  const PLAYABLE = /^(hum|humm|out|poweron|in|poweroff|clsh|clash|blst|blaster|stab|force|font|boot|lock|lockup|bgnlock|endlock|drag|bgndrag|enddrag|lb|bgnlb|endlb|swingl|swingh|lswing|hswing|swng|swing)$/i;
-  const items: { name: string; kind: 'wav' | 'ini'; data: Buffer }[] = [];
-  for (const f of readdirSync(dir)) {
-    const p = join(dir, f);
-    const st = statSync(p);
-    if (st.isFile() && /\.wav$/i.test(f) && PLAYABLE.test(f.replace(/\d*\.wav$/i, ''))) items.push({ name: f, kind: 'wav', data: readFileSync(p) });
-    else if (st.isDirectory() && PLAYABLE.test(f)) for (const g of readdirSync(p)) if (/\.wav$/i.test(g)) items.push({ name: `${f}/${g}`, kind: 'wav', data: readFileSync(join(p, g)) });
-  }
+  const items = collectFontItems(dir, opts.copy === 'true');
   const read = (f: string) => { try { return readFileSync(join(dir, f), 'utf8'); } catch { return ''; } };
   const manifest: Omit<PackManifest, 'items' | 'packed'> = {
     id, kind: 'font', name, creator: need('creator'), licence: need('licence'),
@@ -89,7 +84,7 @@ if (mode === 'hilt') {
   };
   const out = join(outDir, `${id}.hwpack`);
   writeFileSync(out, writePack(manifest, items));
-  console.log(`wrote ${out}: ${items.length} sounds, ${(statSync(out).size / 1048576).toFixed(1)} MB`);
+  console.log(`wrote ${out}: ${items.filter((i) => i.kind === 'wav').length} sounds, ${items.length} files, ${(statSync(out).size / 1048576).toFixed(1)} MB`);
 } else {
   console.error('usage: hwpack.ts hilt <file.obj> | font <folder> | show <file.hwpack>');
   process.exit(2);

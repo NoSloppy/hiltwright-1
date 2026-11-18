@@ -11,8 +11,21 @@ export class WebSerialTransport implements Transport {
   private decoder = new TextDecoder('latin1');
   private encoder = new TextEncoder();
   private closed = false;
+  /** Development aid (hiltwrightMuteBoard): read as usual but hand nothing on, so the app meets a silent saber. */
+  static muted = false;
+  /** Development aid (hiltwrightStallBoard): like `muted`, but only until a port is opened again, as a stalled link is. */
+  static stalled = false;
+  private readonly onClose: (reason: string) => void;
 
-  constructor(readonly port: SerialPort, private onClose: (reason: string) => void = () => {}) {}
+  constructor(readonly port: SerialPort, onClose: (reason: string) => void = () => {}) {
+    // However the port goes (a read error, a read that just ends, the system's disconnect event), the owner of this
+    // transport hears about it once.
+    let told = false;
+    this.onClose = (reason) => { if (told || this.closed) return; told = true; onClose(reason); };
+  }
+
+  /** The port is gone (the system reported the device removed): tell the owner, as a failed read would. */
+  lost(reason: string): void { this.onClose(reason); }
 
   async open(baudRate = 115200): Promise<void> {
     const attempts: SerialOptions[] = [
@@ -34,6 +47,7 @@ export class WebSerialTransport implements Transport {
       }
     }
     if (lastErr) throw lastErr;
+    WebSerialTransport.stalled = false;
     // ProffieOS treats a console with DTR asserted as attached; the spike used the same signals.
     await this.port.setSignals({ dataTerminalReady: true, requestToSend: true });
     this.writer = this.port.writable!.getWriter();
@@ -44,25 +58,30 @@ export class WebSerialTransport implements Transport {
   }
 
   private async readLoop(): Promise<void> {
-    while (!this.closed && this.port.readable) {
+    // A read error that is not fatal gives the port a fresh stream, so the loop takes a new reader. A read that ends
+    // (`done`) is the end of the stream: the loop stops rather than asking a finished stream again.
+    let ended = false;
+    while (!ended && !this.closed && this.port.readable) {
       const reader = this.port.readable.getReader();
       this.reader = reader;
       try {
         for (;;) {
           const { value, done } = await reader.read();
-          if (done) break;
-          if (value?.length) {
+          if (done) { ended = true; break; }
+          if (value?.length && !WebSerialTransport.muted && !WebSerialTransport.stalled) {
             const text = this.decoder.decode(value, { stream: true });
             for (const l of this.listeners) l(text);
           }
         }
       } catch (err) {
-        if (!this.closed) this.onClose(String(err));
+        this.onClose(String(err));
         return;
       } finally {
         reader.releaseLock();
       }
     }
+    // The stream ended without an error: when the device goes away quietly, this is all there is to notice it by.
+    this.onClose('the serial read ended');
   }
 
   async write(text: string): Promise<void> {

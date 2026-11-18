@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="dark" />
+<title>Style editor: What / Where / When mock</title>
+<!-- The app's own stylesheet, so the mock stays in step with the real UI. Serve the repo root to open this page. -->
+<link rel="stylesheet" href="../../apps/desktop/src/renderer/src/styles.css" />
+<style>
+  .stack .li{min-height:40px;padding:0 10px;gap:10px;cursor:pointer}
+  .stack .li .sq{width:12px;height:12px;flex:none;border:1px solid rgba(255,255,255,.25)}
+  .stack .li .nm{flex:1;min-width:0;font-size:13px;font-weight:600}
+  .stack .li.muted .nm,.stack .li.muted .sq{opacity:.4}
+  .stack .li .when{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--mute);text-transform:uppercase}
+  .stack .pinned{border-top:1px dashed var(--line2)}
+  .stack .sep{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);padding:10px 10px 6px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;color:var(--mute);flex:none}
+  .iconbtn:hover{color:#fff}
+  .iconbtn svg{width:16px;height:16px}
+  .sect{display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px 14px;padding:14px 0;border-top:1px solid var(--line)}
+  .sect>.label{padding-top:7px}
+  .seg.sm button{height:28px;padding:0 11px;font-size:12px}
+  .prow{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px 12px;align-items:center}
+  .react{border:1px solid rgba(95,211,255,.35);background:rgba(95,211,255,.04);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .react .ends{display:grid;grid-template-columns:96px minmax(0,1fr) 44px;gap:6px 10px;align-items:center;font-size:12px;color:var(--dim)}
+  .react .ends .v{font-family:var(--mono);font-size:11px;color:var(--text);text-align:right}
+  .range-vis{position:relative;height:18px}
+  .range-vis .track{position:absolute;left:0;right:0;top:8px;height:2px;background:#1b2836}
+  .range-vis .span{position:absolute;top:7px;height:4px;background:var(--holo-dim)}
+  .range-vis .now{position:absolute;top:3px;width:2px;height:12px;background:#fff;box-shadow:0 0 6px var(--holo)}
+  .range-vis .tick{position:absolute;top:0;font-family:var(--mono);font-size:9.5px;color:var(--mute)}
+  .zap{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px dashed var(--line2);font-size:11.5px;color:var(--dim);white-space:nowrap}
+  .zap svg{width:13px;height:13px}
+  .zap:hover{border-color:var(--holo);color:var(--holo)}
+  .zap.on{border-style:solid;border-color:var(--holo);color:var(--holo);background:rgba(95,211,255,.08)}
+  .val{font-family:var(--mono);font-size:11.5px;color:var(--text);min-width:40px;text-align:right}
+  .leds{display:flex;height:14px;gap:1px;flex:1;min-width:0}
+  .leds i{flex:1;display:block}
+  .bladebox{display:flex;align-items:center;gap:0;padding:26px 8px;background:#06090d;border:1px solid var(--line)}
+  .mockflag{position:fixed;right:14px;bottom:10px;z-index:60;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--amber);border:1px solid rgba(255,181,71,.5);background:#0d131a;padding:3px 8px;text-transform:uppercase}
+  .sentence{font-size:13.5px;color:var(--dim);line-height:1.5;text-wrap:pretty}
+  .sentence b{color:var(--text);font-weight:600}
+  .tree{border-left:1px solid var(--line2);padding-left:10px;display:flex;flex-direction:column;gap:6px;font-size:12.5px}
+  select.plain{height:28px;background:#0b1016;border:1px solid var(--line2);color:var(--text);padding:0 8px;font-size:12.5px}
+  input.num{height:28px;width:70px;background:#0b1016;border:1px solid var(--line2);color:var(--text);padding:0 8px;font-family:var(--mono);font-size:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">HILTWRIGHT</div>
+    <nav class="nav">
+      <div class="sec">Saber</div>
+      <a href="#"><span class="stepn">·</span>Armory</a>
+      <a href="#"><span class="stepn">1</span>Wiring</a>
+      <a href="#"><span class="stepn">2</span>Presets</a>
+      <a href="#"><span class="stepn">3</span>Fonts &amp; SD</a>
+      <a href="#"><span class="stepn">4</span>Build &amp; Install</a>
+      <div class="sec">Workshop</div>
+      <a href="#">Styles</a>
+      <a href="#" class="on">Style editor</a>
+      <a href="#">Font library</a>
+      <a href="#">Contributors</a>
+      <a href="#">Demo room</a>
+    </nav>
+  </aside>
+  <header class="top"><h1>Style editor</h1><span class="chip"><span class="dot"></span>Not connected</span></header>
+  <main class="main">
+    <div class="work" style="grid-template-columns:minmax(0,1fr) 440px">
+      <section class="panel fill" aria-label="Layers">
+        <div class="ph">
+          <div class="row" style="gap:10px;min-width:0">
+            <span class="input sans" style="height:32px;width:220px"><input type="text" value="Blue flicker, dripping lockup" aria-label="Style name" /></span>
+            <div class="seg" style="height:32px;flex:none;flex-wrap:nowrap"><button type="button" style="height:30px;padding:0 12px;font-size:12px">Simple</button><button type="button" class="on" style="height:30px;padding:0 12px;font-size:12px">Full</button></div>
+          </div>
+          <div class="row" style="gap:8px">
+            <button type="button" class="chip">Paste a style</button>
+            <button type="button" class="chip" id="allcode">Show the code</button>
+            <button type="button" class="btn sm pri"><span class="b"><span class="i">Save as a style</span></span></button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:250px minmax(0,1fr);flex:1;min-height:0">
+          <div class="scroll" style="border-right:1px solid var(--line)">
+            <div class="row between" style="padding:12px 10px 8px"><span class="small" style="font-weight:600">Layers</span><button type="button" class="btn sm" id="add"><span class="b"><span class="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg>Add</span></span></button></div>
+            <div class="hint" style="padding:0 10px 8px">Top paints over the ones below.</div>
+            <div class="list stack" id="stack"></div>
+          </div>
+          <div class="scroll" style="padding:16px 20px" id="inspector"></div>
+        </div>
+      </section>
+
+      <section class="panel fill" aria-label="Preview">
+        <div class="ph"><h2>On the blade</h2><span class="hint">Mock preview</span></div>
+        <div class="pb col scroll" style="gap:14px">
+          <div class="bladebox"><svg class="hilt" viewBox="0 0 64 20" aria-hidden="true"><rect x="0" y="4" width="60" height="12" fill="#2a3542"/><rect x="8" y="4" width="3" height="12" fill="#465666"/><rect x="18" y="4" width="3" height="12" fill="#465666"/><rect x="56" y="2" width="8" height="16" fill="#3b4c5e"/></svg><div class="leds" id="leds"></div></div>
+          <div class="row wrap" style="gap:6px">
+            <button type="button" class="chip" id="bOn">Retract</button>
+            <button type="button" class="chip" id="bClash">Clash</button>
+            <button type="button" class="chip" id="bLock">Lockup</button>
+          </div>
+          <div class="col" style="gap:6px">
+            <label class="row" style="gap:10px"><span class="small dim" style="width:92px">Blade angle</span><span class="slider"><span class="track"></span><span class="fill" id="fsAngle" style="width:50%"></span><input type="range" min="0" max="100" value="50" id="sAngle" /></span><span class="val" id="vAngle"></span></label>
+            <label class="row" style="gap:10px"><span class="small dim" style="width:92px">Swing speed</span><span class="slider"><span class="track"></span><span class="fill" id="fsSwing" style="width:0%"></span><input type="range" min="0" max="100" value="0" id="sSwing" /></span><span class="val" id="vSwing"></span></label>
+          </div>
+          <span class="hint">Tilt the blade with Lockup held: the lockup spot runs to whichever end is lower. Swing to widen it. The marker on each ⚡ setting follows along.</span>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer class="status"><span>Mock of the What / Where / When layer card</span></footer>
+</div>
+<div class="mockflag">Design mock, not wired up</div>
+
+<script>
+const ICON = {
+  eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>',
+  eyeOff: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><path d="M4 4l16 16"/>',
+  bolt: '<path d="M13 2L5 14h6l-1 8 8-12h-6z"/>',
+  play: '<path d="M7 4l13 8-13 8z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 018 0v4"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  copy: '<rect x="9" y="9" width="11" height="11"/><path d="M5 15V4h11"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  tree: '<path d="M5 4v16M5 8h7M5 16h7"/><rect x="12" y="5" width="7" height="6"/><rect x="12" y="13" width="7" height="6"/>',
+  code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>',
+  power: '<path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1011.4 0"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.5"/>',
+};
+const ic = (n, s = 16) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+
+// What each ⚡ source reads from, and how its two ends are named.
+const SOURCES = {
+  angle: { name: 'Blade angle', lo: 'Pointing down', hi: 'Pointing up', cpp: 'BladeAngle<>' },
+  swing: { name: 'Swing speed', lo: 'Held still', hi: 'Fast swing', cpp: 'SwingSpeed<400>' },
+  sound: { name: 'Sound level', lo: 'Quiet', hi: 'Loud', cpp: 'SoundLevel' },
+  battery: { name: 'Battery', lo: 'Empty', hi: 'Full', cpp: 'BatteryLevel' },
+  twist: { name: 'Twist', lo: 'Untwisted', hi: 'Twisted', cpp: 'TwistAngle<>' },
+};
+const pct = (raw) => Math.round((raw / 32768) * 100);
+const TRANS = ['Instant', 'Fade', 'Wipe', 'Wipe in', 'Center wipe', 'Sparkle'];
+const COLOURS = { '#ffffff': 'White', '#0000ff': 'Blue', '#000080': 'Navy', '#ff0000': 'Red', '#ffa500': 'Orange', '#000000': 'Black' };
+const colourCpp = (h) => COLOURS[h] && h !== '#000080' ? COLOURS[h] : `Rgb<${[1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(',')}>`;
+const trCpp = (t) => t.name === 'Instant' ? 'TrInstant' : `Tr${t.name.replace(/(^| )(\w)/g, (_, __, c) => c.toUpperCase())}<${t.ms}>`;
+
+// The pasted style, as the card model would recognise it. Top of the stack first.
+const layers = [
+  { id: 'clash', name: 'Clash flash', role: 'effect', muted: false,
+    what: { hex: '#ffffff', live: 'Clash colour' },
+    where: { shape: 'spot', pos: { src: 'angle', a: 4000, b: 26000 }, size: { v: 10000 } },
+    when: { type: 'effect', effect: 'Clash', inTr: { name: 'Instant', ms: 0 }, outTr: { name: 'Fade', ms: 200 } },
+    template: 'ResponsiveClashL' },
+  { id: 'lockup', name: 'Lockup spot', role: 'lockup', muted: false,
+    what: { hex: '#ffffff', live: null },
+    where: { shape: 'spot', pos: { src: 'angle', a: 26000, b: 6000 }, size: { src: 'swing', a: 9000, b: 14000 } },
+    when: { type: 'lockup', lockup: 'Normal', inTr: { name: 'Instant', ms: 0 }, outTr: { name: 'Fade', ms: 100 } },
+    template: 'LockupTrL' },
+  { id: 'loop', name: 'Transition loop', role: 'custom', muted: true, template: 'TransitionLoopL',
+    cpp: 'TransitionLoopL<TrConcat<TrFade<800>,AlphaL<White,Int<8000>>,TrFade<800>>>' },
+];
+const base = { id: 'base', name: 'Blade', role: 'base', template: 'AudioFlicker', what: { type: 'flicker', a: '#0000ff', b: '#000080' } };
+const onoff = { id: 'onoff', name: 'Ignition and retraction', role: 'onoff', template: 'InOutTrL', inTr: { name: 'Wipe', ms: 300 }, outTr: { name: 'Wipe in', ms: 500 }, off: '#000000' };
+let sel = 'lockup';
+let showCode = false;
+const sensors = { angle: 0.5, swing: 0 };
+const find = (id) => layers.find((l) => l.id === id) ?? (id === 'base' ? base : id === 'onoff' ? onoff : null);
+
+// ---------------- the plain-language sentence and the C++ ----------------
+const num = (n) => n.src ? `Scale<${SOURCES[n.src].cpp},Int<${n.a}>,Int<${n.b}>>` : `Int<${n.v}>`;
+function cppOf(l) {
+  if (l.cpp) return l.cpp;
+  if (l.role === 'base') return `AudioFlicker<${colourCpp(l.what.a)},${colourCpp(l.what.b)}>`;
+  if (l.role === 'onoff') return `InOutTrL<${trCpp(l.inTr)},${trCpp(l.outTr)}>`;
+  const col = l.what.live ? `RgbArg<${l.what.live.toUpperCase().replace(/ COLOUR$/, '').replace(/ /g, '_')}_COLOR_ARG,${colourCpp(l.what.hex)}>` : colourCpp(l.what.hex);
+  const shaped = l.where.shape === 'whole' ? col : l.where.shape === 'spot' ? `AlphaL<${col},Bump<${num(l.where.pos)},${num(l.where.size)}>>` : `AlphaL<${col},SmoothStep<${num(l.where.pos)},Int<${l.where.shape === 'tip' ? 1 : -1}>>>`;
+  if (l.when.type === 'lockup') return `LockupTrL<${shaped},${trCpp(l.when.inTr)},${trCpp(l.when.outTr)},SaberBase::LOCKUP_${l.when.lockup.toUpperCase()}>`;
+  if (l.when.type === 'effect') return `TransitionEffectL<TrConcat<${trCpp(l.when.inTr)},${shaped},${trCpp(l.when.outTr)}>,EFFECT_${l.when.effect.toUpperCase()}>`;
+  return shaped;
+}
+function moves(n, what) {
+  if (!n.src) return '';
+  const s = SOURCES[n.src]; const up = n.b > n.a;
+  if (what === 'pos') return n.src === 'angle' ? ` It runs to whichever end of the blade is lower.` : ` It moves toward the ${up ? 'tip' : 'hilt'} with ${s.name.toLowerCase()}.`;
+  return ` It gets ${up ? 'wider' : 'narrower'} with ${s.name.toLowerCase()}.`;
+}
+function sentence(l) {
+  if (l.role === 'base') return `The blade flickers between <b>${COLOURS[l.what.a] ?? l.what.a}</b> and <b>${COLOURS[l.what.b] ?? l.what.b}</b> with the sound of the hum. Every layer above paints over it.`;
+  if (l.role === 'onoff') return `Ignites with a <b>${l.inTr.name.toLowerCase()}</b> over ${l.inTr.ms} ms and retracts with a <b>${l.outTr.name.toLowerCase()}</b> over ${l.outTr.ms} ms.`;
+  const col = `<b>${(COLOURS[l.what.hex] ?? l.what.hex).toLowerCase()}</b>`;
+  const shape = l.where.shape === 'whole' ? 'the whole blade' : l.where.shape === 'spot' ? `a ${col} spot` : l.where.shape === 'tip' ? `${col} from the tip` : `${col} from the hilt`;
+  const when = l.when.type === 'lockup' ? `while you hold a <b>${l.when.lockup.toLowerCase()} lockup</b>` : l.when.type === 'effect' ? `on each <b>${l.when.effect.toLowerCase()}</b>` : '<b>all the time</b>';
+  const lead = l.where.shape === 'whole' ? `The whole blade turns ${col} ${when}.` : `Paints ${shape} ${when}.`;
+  return lead + (l.where.pos ? moves(l.where.pos, 'pos') : '') + (l.where.size ? moves(l.where.size, 'size') : '');
+}
+const whenTag = (l) => l.role === 'custom' ? 'custom' : l.when.type === 'lockup' ? 'lockup' : l.when.type === 'effect' ? l.when.effect : 'always';
+
+// ---------------- the stack ----------------
+function renderStack() {
+  const row = (l, pinned) => {
+    const hex = l.role === 'base' ? l.what.a : l.role === 'onoff' ? null : l.what?.hex;
+    return `<div class="li ${sel === l.id ? 'on' : ''} ${l.muted ? 'muted' : ''} ${pinned ? 'pinned' : ''}" data-sel="${l.id}">
+      ${pinned ? `<span class="iconbtn" title="Always at the bottom">${ic('lock', 14)}</span>` : `<svg class="grip" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>`}
+      ${l.role === 'custom' ? `<span class="sq" style="border-style:dashed;background:none"></span>` : hex ? `<span class="sq" style="background:${hex};box-shadow:0 0 6px ${hex}"></span>` : `<span class="iconbtn" style="width:12px;color:var(--dim)">${ic('power', 14)}</span>`}
+      <span class="nm ellip">${l.name}</span>
+      ${pinned ? '' : `<span class="when">${whenTag(l)}</span><button type="button" class="iconbtn" data-mute="${l.id}" aria-label="${l.muted ? 'Show' : 'Hide'} this layer in the preview" title="${l.muted ? 'Hidden in the preview' : 'Hide in the preview'}">${ic(l.muted ? 'eyeOff' : 'eye')}</button>`}
+    </div>`;
+  };
+  document.getElementById('stack').innerHTML = layers.map((l) => row(l)).join('') + `<div class="sep">Underneath everything</div>` + row(base, true) + row(onoff, true);
+}
+
+// ---------------- the inspector ----------------
+const colourCtl = (hex, key, label) => `<label class="swatch" style="display:inline-flex;width:auto;height:30px;padding:0 10px 0 8px;gap:8px"><span class="sq" style="width:14px;height:14px;background:${hex};box-shadow:0 0 8px ${hex}"></span><span class="small nowrap">${label ?? COLOURS[hex] ?? hex}</span><span class="mono mute" style="font-size:11px">${hex}</span><input type="color" value="${hex}" data-colour="${key}" aria-label="Colour" /></label>`;
+const trSelect = (tr, key) => `<select class="plain" data-tr="${key}">${TRANS.map((t) => `<option ${t === tr.name ? 'selected' : ''}>${t}</option>`).join('')}</select>${tr.name === 'Instant' ? '' : `<input class="num" type="number" value="${tr.ms}" data-trms="${key}" aria-label="Milliseconds" /><span class="hint">ms</span>`}`;
+
+// One number. Fixed: a slider and a way to make it react. Reacting: what it follows, and its value at each end.
+function numberCtl(n, key, label, hint) {
+  const bar = (v) => `<span class="slider"><span class="track"></span><span class="fill" style="width:${pct(v)}%"></span>`;
+  if (!n.src) {
+    return `<div class="react" style="border-color:var(--line);background:none">
+      <div class="row" style="gap:10px"><span class="small" style="font-weight:600;width:70px" title="${hint}">${label}</span>${bar(n.v)}<input type="range" min="0" max="32768" step="328" value="${n.v}" data-num="${key}" /></span><span class="val">${pct(n.v)}%</span>
+      <button type="button" class="zap" data-zap="${key}" title="Make it follow the saber's motion or sound">${ic('bolt', 13)}React to…</button></div></div>`;
+  }
+  const s = SOURCES[n.src];
+  const lo = Math.min(n.a, n.b), hi = Math.max(n.a, n.b);
+  return `<div class="react">
+      <div class="row" style="gap:10px">
+        <span class="small" style="font-weight:600;width:70px" title="${hint}">${label}</span>
+        <span class="small dim">follows</span><select class="plain" data-src="${key}">${Object.entries(SOURCES).map(([k, v]) => `<option value="${k}" ${k === n.src ? 'selected' : ''}>${v.name}</option>`).join('')}</select>
+        <span style="flex:1"></span>
+        <button type="button" class="zap on" data-zap="${key}" title="Stop following: use a fixed value">${ic('bolt', 13)}Reacting</button>
+      </div>
+      <div class="ends">
+        <span></span><div class="range-vis" aria-hidden="true"><span class="track"></span><span class="span" style="left:${pct(lo)}%;width:${pct(hi) - pct(lo)}%"></span><span class="now" data-now="${key}" style="left:0"></span><span class="tick" style="left:0;top:-4px">hilt</span><span class="tick" style="right:0;top:-4px">tip</span></div><span class="v" data-nowv="${key}"></span>
+        <span>${s.lo}</span>${bar(n.a)}<input type="range" min="0" max="32768" step="328" value="${n.a}" data-end="${key}:a" /></span><span class="v">${pct(n.a)}%</span>
+        <span>${s.hi}</span>${bar(n.b)}<input type="range" min="0" max="32768" step="328" value="${n.b}" data-end="${key}:b" /></span><span class="v">${pct(n.b)}%</span>
+      </div>
+    </div>`;
+}
+
+function renderInspector() {
+  const l = find(sel);
+  const el = document.getElementById('inspector');
+  const head = (extra = '') => `
+    <div class="row" style="gap:10px">
+      <span class="input sans" style="height:34px;max-width:320px;flex:1"><input type="text" value="${l.name}" data-name aria-label="Layer name" /></span>
+      <span class="mono mute" style="font-size:11px" title="The ProffieOS template behind this card">${l.template ?? ''}</span>
+      <span style="flex:1"></span>
+      ${extra}
+    </div>
+    <p class="sentence" style="margin:10px 0 4px">${l.role === 'custom' ? 'Hiltwright has no card for this layer yet, so it is shown as a tree. It compiles exactly as written.' : sentence(l)}</p>`;
+  const foot = `<div class="row" style="gap:8px;padding-top:12px;border-top:1px solid var(--line)">
+      <button type="button" class="chip" data-code>${ic('code', 13)}${showCode ? 'Hide' : 'Show'} this layer's code</button>
+      ${l.role === 'custom' || l.role === 'onoff' ? '' : `<button type="button" class="chip">${ic('tree', 13)}Open as a tree</button>`}
+    </div>
+    ${showCode ? `<pre class="console" style="margin:10px 0 0;font-size:11px">${cppOf(l).replace(/</g, '&lt;')}</pre>` : ''}`;
+
+  if (l.role === 'custom') {
+    el.innerHTML = head(`<button type="button" class="chip" data-mute="${l.id}">${ic(l.muted ? 'eyeOff' : 'eye', 13)}${l.muted ? 'Hidden in preview' : 'Shown'}</button><button type="button" class="chip" aria-label="Remove">${ic('trash', 13)}</button>`) + `
+      <div class="note amber" style="margin:10px 0">${ic('info')}<span>Layers the card doesn't recognise keep today's tree editor, so nothing the official editor can do is lost.</span></div>
+      <div class="tree" style="margin-bottom:14px">
+        <div class="row" style="gap:8px"><span class="small dim" style="width:110px">Transition</span><span class="input sans" style="height:28px;width:200px"><span class="ellip">Concatenate</span></span></div>
+        <div class="tree"><div class="row" style="gap:8px"><span class="small dim" style="width:100px">1</span><span class="input sans" style="height:28px;width:180px"><span class="ellip">Fade</span></span><input class="num" value="800" /></div>
+        <div class="row" style="gap:8px"><span class="small dim" style="width:100px">2</span><span class="input sans" style="height:28px;width:180px"><span class="ellip">Alpha</span></span><span class="hint">White at 24%</span></div>
+        <div class="row" style="gap:8px"><span class="small dim" style="width:100px">3</span><span class="input sans" style="height:28px;width:180px"><span class="ellip">Fade</span></span><input class="num" value="800" /></div></div>
+      </div>` + foot;
+    return bind();
+  }
+  if (l.role === 'onoff') {
+    el.innerHTML = head() + `
+      <div class="sect"><span class="label">Ignition</span><div class="row" style="gap:8px">${trSelect(l.inTr, 'in')}</div></div>
+      <div class="sect"><span class="label">Retraction</span><div class="row" style="gap:8px">${trSelect(l.outTr, 'out')}</div></div>
+      <div class="sect"><span class="label">When off</span><div class="row" style="gap:8px">${colourCtl(l.off, 'off')}<span class="hint">What the blade shows when it is off (black is dark).</span></div></div>` + foot;
+    return bind();
+  }
+  if (l.role === 'base') {
+    el.innerHTML = head() + `
+      <div class="sect"><span class="label">What</span><div class="col" style="gap:10px">
+        <div class="row" style="gap:8px"><select class="plain"><option>Solid colour</option><option selected>Flicker with the sound</option><option>Two colours, mixed</option><option>Fire</option><option>Rainbow</option><option>More patterns…</option></select></div>
+        <div class="prow"><span class="small dim">Quiet</span><div>${colourCtl(l.what.a, 'a')}</div><span class="small dim">Loud</span><div>${colourCtl(l.what.b, 'b')}</div></div>
+      </div></div>
+      <div class="sect"><span class="label">Where</span><span class="small dim" style="padding-top:5px">The whole blade, underneath every layer.</span></div>
+      <div class="sect"><span class="label">When</span><span class="small dim" style="padding-top:5px">Always, while the blade is on.</span></div>` + foot;
+    return bind();
+  }
+
+  const w = l.where, wn = l.when;
+  el.innerHTML = head(`<button type="button" class="btn sm" data-trigger><span class="b"><span class="i">${ic('play', 14)}${wn.type === 'lockup' ? 'Hold lockup' : 'Trigger'}</span></span></button>
+      <button type="button" class="chip" data-mute="${l.id}">${ic(l.muted ? 'eyeOff' : 'eye', 13)}${l.muted ? 'Hidden' : 'Shown'}</button>
+      <button type="button" class="chip" aria-label="Duplicate">${ic('copy', 13)}</button><button type="button" class="chip" aria-label="Remove">${ic('trash', 13)}</button>`) + `
+    <div class="sect"><span class="label">What</span><div class="col" style="gap:10px">
+      <div class="row wrap" style="gap:10px"><select class="plain"><option selected>Solid colour</option><option>Flicker</option><option>Two colours, mixed</option><option>More patterns…</option></select>${colourCtl(w && l.what.hex, 'hex')}</div>
+      <label class="row" style="gap:10px"><span class="tog ${l.what.live ? 'on' : ''}" data-live><i></i></span><span class="small">${l.what.live ? `Changeable on Presets as the <b>${l.what.live}</b>, without a rebuild` : 'Changeable on Presets without a rebuild'}</span></label>
+    </div></div>
+    <div class="sect"><span class="label">Where</span><div class="col" style="gap:12px">
+      <div class="seg sm">${[['whole', 'Whole blade'], ['spot', 'A spot'], ['hilt', 'From the hilt'], ['tip', 'From the tip']].map(([k, t]) => `<button type="button" class="${w.shape === k ? 'on' : ''}" data-shape="${k}">${t}</button>`).join('')}</div>
+      ${w.shape === 'whole' ? '' : numberCtl(w.pos, 'pos', w.shape === 'spot' ? 'Position' : 'Reaches', '0% is the hilt, 100% the tip') + (w.shape === 'spot' ? numberCtl(w.size, 'size', 'Width', 'How much of the blade the spot covers') : '')}
+    </div></div>
+    <div class="sect"><span class="label">When</span><div class="col" style="gap:10px">
+      <div class="seg sm">${[['always', 'Always'], ['effect', 'On an effect'], ['lockup', 'During a lockup']].map(([k, t]) => `<button type="button" class="${wn.type === k ? 'on' : ''}" data-when="${k}">${t}</button>`).join('')}</div>
+      ${wn.type === 'lockup' ? `<div class="prow"><span class="small dim">Lockup</span><div><select class="plain" data-lockup>${['Normal', 'Drag', 'Melt', 'Lightning block'].map((t) => `<option ${t === wn.lockup ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div>` : ''}
+      ${wn.type === 'effect' ? `<div class="prow"><span class="small dim">Effect</span><div><select class="plain" data-effect>${['Clash', 'Blast', 'Stab', 'Force', 'Swing accent', 'Preon'].map((t) => `<option ${t === wn.effect ? 'selected' : ''}>${t}</option>`).join('')}</select></div></div>` : ''}
+      ${wn.type === 'always' ? '' : `<div class="prow"><span class="small dim">Comes in</span><div class="row" style="gap:8px">${trSelect(wn.inTr, 'in')}</div><span class="small dim">Goes out</span><div class="row" style="gap:8px">${trSelect(wn.outTr, 'out')}</div></div>`}
+    </div></div>` + foot;
+  bind();
+}
+
+function bind() {
+  const l = find(sel);
+  const on = (sel, ev, fn) => document.querySelectorAll(sel).forEach((e) => e.addEventListener(ev, fn));
+  const numOf = (key) => key === 'pos' ? l.where.pos : l.where.size;
+  const setNum = (key, v) => { if (key === 'pos') l.where.pos = v; else l.where.size = v; };
+  on('[data-name]', 'input', (e) => { l.name = e.target.value; renderStack(); });
+  on('[data-code]', 'click', () => { showCode = !showCode; renderInspector(); });
+  on('[data-shape]', 'click', (e) => { l.where.shape = e.currentTarget.dataset.shape; l.where.pos ??= { v: 16384 }; l.where.size ??= { v: 10000 }; rerender(); });
+  on('[data-when]', 'click', (e) => { const t = e.currentTarget.dataset.when; l.when.type = t; if (t === 'lockup') l.when.lockup ??= 'Normal'; if (t === 'effect') l.when.effect ??= 'Clash'; rerender(); });
+  on('[data-lockup]', 'change', (e) => { l.when.lockup = e.target.value; rerender(); });
+  on('[data-effect]', 'change', (e) => { l.when.effect = e.target.value; rerender(); });
+  on('[data-tr]', 'change', (e) => { const k = e.target.dataset.tr; const tr = l.role === 'onoff' ? (k === 'in' ? l.inTr : l.outTr) : (k === 'in' ? l.when.inTr : l.when.outTr); tr.name = e.target.value; if (!tr.ms) tr.ms = 200; rerender(); });
+  on('[data-trms]', 'change', (e) => { const k = e.target.dataset.trms; const tr = l.role === 'onoff' ? (k === 'in' ? l.inTr : l.outTr) : (k === 'in' ? l.when.inTr : l.when.outTr); tr.ms = Math.max(0, Number(e.target.value) || 0); rerender(); });
+  on('[data-colour]', 'input', (e) => { const k = e.target.dataset.colour; if (l.role === 'base') l.what[k] = e.target.value; else if (l.role === 'onoff') l.off = e.target.value; else l.what.hex = e.target.value; renderStack(); });
+  on('[data-colour]', 'change', () => renderInspector());
+  on('[data-live]', 'click', () => { l.what.live = l.what.live ? null : (l.role === 'lockup' ? 'Lockup colour' : 'Clash colour'); renderInspector(); });
+  on('[data-zap]', 'click', (e) => { const k = e.currentTarget.dataset.zap; const n = numOf(k); setNum(k, n.src ? { v: n.a } : { src: k === 'pos' ? 'angle' : 'swing', a: n.v, b: Math.max(0, Math.min(32768, n.v + (k === 'pos' ? -16000 : 6000))) }); renderInspector(); });
+  on('[data-src]', 'change', (e) => { numOf(e.target.dataset.src).src = e.target.value; rerender(); });
+  on('[data-num]', 'input', (e) => { numOf(e.target.dataset.num).v = Number(e.target.value); e.target.closest('.row').querySelector('.val').textContent = pct(Number(e.target.value)) + '%'; e.target.previousElementSibling.style.width = pct(Number(e.target.value)) + '%'; });
+  on('[data-num]', 'change', () => renderInspector());
+  on('[data-end]', 'input', (e) => { const [k, end] = e.target.dataset.end.split(':'); numOf(k)[end] = Number(e.target.value); e.target.closest('.slider').nextElementSibling.textContent = pct(Number(e.target.value)) + '%'; e.target.previousElementSibling.style.width = pct(Number(e.target.value)) + '%'; });
+  on('[data-end]', 'change', () => renderInspector());
+  on('[data-trigger]', 'click', () => { if (l.when.type === 'lockup') toggleLockup(); else fire(l.id); });
+  bindMute();
+}
+function bindMute() { document.querySelectorAll('[data-mute]').forEach((e) => { e.onclick = (ev) => { ev.stopPropagation(); const l = find(e.dataset.mute); l.muted = !l.muted; rerender(); }; }); }
+function rerender() { renderStack(); renderInspector(); }
+document.getElementById('stack').addEventListener('click', (e) => { const r = e.target.closest('[data-sel]'); if (r && !e.target.closest('[data-mute]')) { sel = r.dataset.sel; rerender(); } });
+
+// ---------------- the preview: a rough model, enough to see what each setting does ----------------
+const N = 72;
+const ledsEl = document.getElementById('leds');
+ledsEl.innerHTML = '<i></i>'.repeat(N);
+const leds = [...ledsEl.children];
+const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, t) => a.map((x, i) => x + (b[i] - x) * t);
+let lit = 1, litFrom = 1, litTo = 1, litStart = 0, litMs = 1, isOn = true;
+let lockupOn = false, lockupOff = -1e9;
+const fired = {};
+let hum = 0.3;
+const readNum = (n) => n.src ? (n.a + (n.b - n.a) * (n.src === 'angle' ? sensors.angle : n.src === 'swing' ? sensors.swing : n.src === 'sound' ? hum : n.src === 'battery' ? 0.8 : 0)) / 32768 : n.v / 32768;
+function mask(l, x) {
+  const w = l.where;
+  if (w.shape === 'whole') return 1;
+  const p = readNum(w.pos);
+  if (w.shape === 'spot') { const half = Math.max(0.02, readNum(w.size) / 2); const d = (x - p) / half; return Math.max(0, 1 - d * d); }
+  const edge = w.shape === 'tip' ? 1 - x : x;
+  return Math.max(0, Math.min(1, (p - edge) * 12 + 0.5));
+}
+function strength(l, now) {
+  if (l.muted || l.role === 'custom') return 0;
+  const inMs = Math.max(1, l.when.inTr.name === 'Instant' ? 1 : l.when.inTr.ms), outMs = Math.max(1, l.when.outTr.name === 'Instant' ? 1 : l.when.outTr.ms);
+  if (l.when.type === 'always') return 1;
+  if (l.when.type === 'lockup') return lockupOn ? 1 : Math.max(0, 1 - (now - lockupOff) / outMs);
+  const t = now - (fired[l.id] ?? -1e9);
+  return t < inMs ? t / inMs : Math.max(0, 1 - (t - inMs) / outMs);
+}
+function frame(now) {
+  hum += (Math.random() - 0.5) * 0.35; hum = Math.max(0, Math.min(1, hum));
+  const t = Math.min(1, (now - litStart) / litMs); lit = litFrom + (litTo - litFrom) * t;
+  const baseA = rgb(base.what.a), baseB = rgb(base.what.b), off = rgb(onoff.off);
+  const active = [...layers].reverse().map((l) => ({ l, s: strength(l, now), c: l.what ? rgb(l.what.hex) : null })).filter((a) => a.s > 0.001);
+  for (let i = 0; i < N; i++) {
+    const x = (i + 0.5) / N;
+    let c = mix(baseA, baseB, hum);
+    for (const a of active) c = mix(c, a.c, a.s * mask(a.l, x));
+    if (x > lit) c = off;
+    leds[i].style.background = `rgb(${c.map(Math.round).join(',')})`;
+    leds[i].style.boxShadow = x > lit ? 'none' : `0 0 8px rgb(${c.map(Math.round).join(',')})`;
+  }
+  document.querySelectorAll('[data-now]').forEach((m) => { const n = m.dataset.now === 'pos' ? find(sel).where?.pos : find(sel).where?.size; if (n?.src) { m.style.left = (readNum(n) * 100).toFixed(1) + '%'; const v = document.querySelector(`[data-nowv="${m.dataset.now}"]`); if (v) v.textContent = 'now ' + Math.round(readNum(n) * 100) + '%'; } });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+function fire(id) { fired[id] = performance.now(); }
+function toggleLockup() { lockupOn = !lockupOn; if (!lockupOn) lockupOff = performance.now(); document.getElementById('bLock').classList.toggle('sel', lockupOn); }
+document.getElementById('bClash').onclick = () => fire('clash');
+document.getElementById('bLock').onclick = toggleLockup;
+document.getElementById('bOn').onclick = (e) => { isOn = !isOn; litFrom = lit; litTo = isOn ? 1 : 0; litStart = performance.now(); litMs = isOn ? onoff.inTr.ms : onoff.outTr.ms; e.target.textContent = isOn ? 'Retract' : 'Ignite'; };
+const sA = document.getElementById('sAngle'), sS = document.getElementById('sSwing');
+const sync = () => { sensors.angle = sA.value / 100; sensors.swing = sS.value / 100; document.getElementById('vAngle').textContent = sA.value < 35 ? 'down' : sA.value > 65 ? 'up' : 'level'; document.getElementById('vSwing').textContent = sS.value + '%'; document.getElementById('fsAngle').style.width = sA.value + '%'; document.getElementById('fsSwing').style.width = sS.value + '%'; };
+sA.oninput = sS.oninput = sync;
+const hash = new URLSearchParams(location.hash.slice(1));
+if (hash.get('sel')) sel = hash.get('sel');
+if (hash.has('angle')) sA.value = hash.get('angle');
+if (hash.has('swing')) sS.value = hash.get('swing');
+if (hash.has('code')) showCode = true;
+if (hash.has('lock')) toggleLockup();
+sync();
+rerender();
+</script>
+</body>
+</html>

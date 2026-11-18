@@ -1,6 +1,7 @@
 {
   "name": "@hiltwright/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0-beta.1",
+  "license": "GPL-3.0-or-later",
   "private": true,
   "type": "module",
   "description": "Hiltwright desktop app (Electron). Walking skeleton: connect to a Proffieboard over Web Serial, read version and presets.",
@@ -10,8 +11,12 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "dist": "electron-vite build && electron-builder --win --publish never",
-    "test": "vitest run"
+    "fontpacks": "node scripts/fontpacks.mjs",
+    "dist": "node scripts/fontpacks.mjs --check && electron-vite build && electron-builder --win --publish never",
+    "test": "vitest run",
+    "shots": "node scripts/shots.mjs",
+    "icons": "electron scripts/icons.mjs",
+    "notices": "node scripts/notices.mjs"
   },
   "dependencies": {
     "@hiltwright/core": "*",
@@ -48,9 +53,29 @@
       {
         "from": "resources/builtin",
         "to": "builtin"
+      },
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "../../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../../THIRD-PARTY-NOTICES.md",
+        "to": "THIRD-PARTY-NOTICES.md"
+      },
+      {
+        "from": "resources/packs",
+        "to": "packs",
+        "filter": [
+          "*.hwpack"
+        ]
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -64,6 +89,7 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
+      "license": "../../LICENSE",
       "artifactName": "Hiltwright-${version}-setup.${ext}"
     },
     "mac": {

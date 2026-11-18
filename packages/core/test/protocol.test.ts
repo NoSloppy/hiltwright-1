@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  BoardClient, LineBuffer, emitPresetsIni, formatBuiltin, isNoise, isPresetBlockEnd, parseBattery, parseBuiltin, parseId, parseInteger,
-  parseList, parsePresetBlocks, parsePresetsIni, parseScanId, parseVersion, presetCommands, splitLines, wasRejected, type Transport,
+  BoardClient, LineBuffer, emitPresetsIni, formatBuiltin, isNoise, isPresetBlockEnd, parseBattery, parseBatteryVoltage, parseBuiltin, parseId, parseInteger,
+  parseList, parsePresetBlocks, parsePresetsIni, parseScanId, parseVersion, presetCommands, splitLines, wasRejected, type Response, type Transport,
 } from '../src';
 
 const transcript = (name: string) => readFileSync(new URL(`./transcripts/${name}`, import.meta.url), 'latin1');
@@ -31,6 +31,12 @@ describe('recorded OS 8.10 transcripts (Hiltwright build on the same V2.2)', () 
   it('version is a git keyword followed by an unsolicited battery line', () => {
     expect(parseVersion(os8('01-version.txt'))).toEqual({ version: 'git-ce12a06', major: null, config: 'config/hiltwright_hote2.h', prop: 'SaberSA22CButtons', buttons: 2, installed: 'Sep  9 2026 15:24:29' });
   });
+  it('battery_voltage prints the voltage alone, plain and tagged (recorded 2026-11-14)', () => {
+    expect(parseBatteryVoltage(os8('36-battery_voltage.txt'))).toBe(3.5);
+    const tagged = os8('37-tagged_battery_voltage.txt');
+    expect(tagged).toEqual(['1,4,b1|3.50']);
+    expect(parseBatteryVoltage(tagged.map((l) => l.replace(/^\d+,\d+,[A-Za-z0-9_]+\|/, '')))).toBe(3.5);
+  });
   it('integers survive trailing SD and amplifier events', () => {
     expect(parseInteger(os8('03-get_volume.txt'))).toBe(1800);
     expect(parseInteger(os8('04-get_preset.txt'))).toBe(2);
@@ -54,7 +60,7 @@ describe('recorded OS 8.10 transcripts (Hiltwright build on the same V2.2)', () 
     expect(styles.slice(0, 8)).toEqual(['standard', 'advanced', 'fire', 'unstable', 'strobe', 'cycle', 'rainbow', 'charging']);
     expect(styles.filter((s) => s.startsWith('builtin '))).toHaveLength(13 * 3);
   });
-  it('OS 8.10 still has no tag framing, help, id, list_named_style (singular) or get_style', () => {
+  it('OS 8.10 rejects help, id, list_named_style (singular) and get_style, and tags written without a space after the pipe', () => {
     for (const f of ['08-list_named_style.txt', '11-id.txt', '14-help.txt', '15-sb1_version.txt', '16-sb2_get_preset.txt', '17-sb3_list_presets.txt', '25-list_current_tracks.txt', '28-variation.txt', '29-get_style_1.txt', '30-get_gesture.txt']) expect(wasRejected(os8(f)), f).toBe(true);
   });
   it('dir lists the card with sizes; fonts and tracks drop the unmount notice', () => {
@@ -97,6 +103,11 @@ describe('recorded OS 7.8 transcripts', () => {
   });
   it('battery and volume', () => {
     expect(parseBattery(lines('02-battery.txt'))).toBe(3.5);
+    // `battery_voltage` prints the number alone (usb-power-connect D1).
+    expect(parseBatteryVoltage(['0.03'])).toBe(0.03);
+    expect(parseBatteryVoltage(['3.92'])).toBe(3.92);
+    expect(parseBatteryVoltage(['Unmounting SD Card.', '3.92'])).toBe(3.92);
+    expect(parseBatteryVoltage(['Battery voltage: 3.92', 'Whut? :battery_voltage'])).toBeNull();
     expect(parseInteger(lines('03-get_volume.txt'))).toBe(1400);
     expect(parseInteger(lines('16-get_preset.txt'))).toBe(0);
   });
@@ -163,6 +174,21 @@ describe('presets.ini', () => {
     const back = parsePresetsIni(text);
     expect(back.terminated).toBe(true);
     expect(back.installed).toBe('Sep 11 2024 17:34:59');
+    expect(back.presets).toEqual(presets);
+  });
+  // presets-ini 5.3 (baseline audit).
+  it('5.3 writes a preset with no track as an empty track= line, reads it back empty, and ends with end', () => {
+    const presets = [
+      { font: 'Valkyrie;common', track: '', styles: ['builtin 0 1'], name: 'Valkyrie', variation: 0 },
+      { font: 'Kylo;common', track: 'tracks/kylo.wav', styles: ['builtin 1 1'], name: 'Kylo', variation: 3 },
+    ];
+    const text = emitPresetsIni({ installed: null, presets, terminated: true });
+    const lines = text.split('\n');
+    expect(lines[2]).toBe('track=');
+    expect(text.endsWith('variation=3\nend\n')).toBe(true);
+    const back = parsePresetsIni(text);
+    expect(back.terminated).toBe(true);
+    expect(back.presets[0].track).toBe('');
     expect(back.presets).toEqual(presets);
   });
   it('reads the documented hand-written form, comments and mixed case', () => {
@@ -261,5 +287,102 @@ describe('BoardClient', () => {
     const r = await p;
     expect(r.lines).toEqual([]);
     expect(r.timedOut).toBe(false); // idle fires first: silence is a legitimate empty answer for writes
+  });
+});
+
+// connection-robustness: a board that says nothing at all is told apart from a slow one (HW-2026-09-26b, F3).
+describe('BoardClient silence', () => {
+  /** An OS 8 board that answers the tag probe, then answers nothing (dead), or only prints status lines (talking). */
+  class TaggedBoard implements Transport {
+    cb: ((chunk: string) => void) | null = null;
+    sent: string[] = [];
+    mode: 'answer' | 'dead' | 'talking' = 'answer';
+    constructor(private timers: FakeTimers) {}
+    write(text: string) {
+      this.sent.push(text);
+      const probe = /^hwt\| version/.test(text);
+      if (probe) { this.timers.after(10, () => this.cb?.('0,5,hwt|v8.10\r\n')); return; }
+      const m = /^(h\d+)\| (.*)\n(h\d+x)\| hw_end/.exec(text);
+      if (!m || this.mode === 'dead') return;
+      const answer = () => this.cb?.(`0,3,${m[1]}|ok\r\nWhut? :${m[3]}|\r\n`);
+      if (this.mode === 'answer') { this.timers.after(10, answer); return; }
+      // Talking: a status line every 2 s, and the answer after 15 s.
+      for (let t = 2000; t < 15000; t += 2000) this.timers.after(t, () => this.cb?.('Battery voltage: 3.90\r\n'));
+      this.timers.after(15000, answer);
+    }
+    onData(cb: (chunk: string) => void) { this.cb = cb; return () => { this.cb = null; }; }
+  }
+  async function tagged(mode: TaggedBoard['mode']) {
+    const timers = new FakeTimers();
+    const board = new TaggedBoard(timers);
+    const silent: Response[] = [];
+    const client = new BoardClient(board, { now: () => timers.now, setTimer: (fn, ms) => timers.after(ms, fn), clearTimer: (h) => timers.cancel(h), onSilent: (r) => silent.push(r) });
+    const probe = client.detectTagging();
+    await timers.run(2000);
+    expect(await probe).toBe(true);
+    board.mode = mode;
+    return { client, timers, board, silent };
+  }
+
+  it('a dead tagged board ends the command after 10 s of silence, not 30, and reports it once', async () => {
+    const { client, timers, silent } = await tagged('dead');
+    const t0 = timers.now;
+    const p = client.send('cat common/voicepack.ini');
+    await timers.run(t0 + 12000);
+    const r = await p;
+    expect(r).toMatchObject({ timedOut: true, silent: true });
+    expect(r.ms).toBeGreaterThanOrEqual(10000);
+    expect(r.ms).toBeLessThan(11000);
+    expect(silent).toHaveLength(1);
+  });
+
+  it('a queued command ends at once once the client is closed after a silence', async () => {
+    const { client, timers, silent } = await tagged('dead');
+    const t0 = timers.now;
+    const first = client.send('battery');
+    const second = client.send('get_volume');
+    await timers.run(t0 + 10900);
+    expect((await first).silent).toBe(true);
+    client.close();
+    await timers.run(t0 + 11000);
+    const r = await second;
+    expect(r.timedOut).toBe(true);
+    expect(timers.now - t0).toBeLessThan(11100);
+    expect(silent).toHaveLength(1); // closed: the queued one is not reported again
+  });
+
+  it('a board that keeps printing is not silent, however long the command takes', async () => {
+    const { client, timers, silent } = await tagged('talking');
+    const t0 = timers.now;
+    const p = client.send('list_fonts');
+    await timers.run(t0 + 16000);
+    const r = await p;
+    expect(r).toMatchObject({ timedOut: false, silent: false, lines: ['ok'] });
+    expect(silent).toEqual([]);
+  });
+
+  it('a command that expects silence (RebootDFU) is not reported', async () => {
+    const { client, timers, silent } = await tagged('dead');
+    const t0 = timers.now;
+    const p = client.send('RebootDFU', { expectSilence: true });
+    await timers.run(t0 + 12000);
+    expect((await p).silent).toBe(true);
+    expect(silent).toEqual([]);
+  });
+
+  it('untagged: the tag probe to a board that prints nothing times out silent; a command that ends after a quiet is not', async () => {
+    const silent: Response[] = [];
+    const timers = new FakeTimers();
+    const transport = new Replay({}, timers);
+    const client = new BoardClient(transport, { idleMs: 300, timeoutMs: 8000, now: () => timers.now, setTimer: (fn, ms) => timers.after(ms, fn), clearTimer: (h) => timers.cancel(h), onSilent: (r) => silent.push(r) });
+    const probe = client.detectTagging();
+    await timers.run(7000);
+    expect(await probe).toBe(false);
+    expect(silent.map((r) => [r.command, r.timedOut, r.silent])).toEqual([['hwt| version', true, true]]);
+    // On ProffieOS 7 a command ends after a short quiet, as a write that prints nothing does: never silent.
+    const read = client.send('version', { until: (l) => /^installed:/.test(l) });
+    await timers.run(9000);
+    expect(await read).toMatchObject({ timedOut: false, silent: false, lines: [] });
+    expect(silent).toHaveLength(1);
   });
 });

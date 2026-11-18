@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="t"><title id="t">Hiltwright</title><g color="#e6edf3"><path d="M51.05 5H251V204.95L204.95 251H5V51.05Z" fill="none" stroke="currentColor" stroke-width="10"/><g transform="translate(128 128) rotate(45) scale(1.12) translate(-128 -109.5)" fill="none"><path d="M128 104V-4" stroke="currentColor" stroke-width="18" stroke-linecap="round"/><g fill="currentColor"><path fill-rule="evenodd" d="M113 132h30v68h-30z M117 142h22v4h-22z M117 154h22v4h-22z M117 166h22v4h-22z M117 178h22v4h-22z M117 190h22v4h-22z"/></g>
+    <path d="M110 102h36v8l-4 12h-28l-4-12z" fill="currentColor"/>
+    <rect x="117" y="122" width="22" height="10" fill="none"/>
+    
+    <rect x="113" y="142" width="30" height="4" fill="none" stroke="#0a0e13" stroke-width="0"/><rect x="113" y="154" width="30" height="4" fill="none" stroke="#0a0e13" stroke-width="0"/><rect x="113" y="166" width="30" height="4" fill="none" stroke="#0a0e13" stroke-width="0"/><rect x="113" y="178" width="30" height="4" fill="none" stroke="#0a0e13" stroke-width="0"/><rect x="113" y="190" width="30" height="4" fill="none" stroke="#0a0e13" stroke-width="0"/>
+    <rect x="143" y="146" width="7" height="14" fill="currentColor"/>
+    <path d="M111 200h34v22l-8 10h-18l-8-10z" fill="currentColor"/></g></g></svg>

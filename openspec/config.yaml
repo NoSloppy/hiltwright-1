@@ -1,0 +1,41 @@
+schema: spec-driven
+
+context: |
+  Hiltwright is a desktop app for owners of ProffieOS lightsabers (Proffieboard V2.2 and V3):
+  plan a saber, choose and build blade styles, manage sound fonts, demo them, compile and
+  install firmware over USB, and edit presets live, without Arduino or code. Target users
+  come from simpler boards (CFX, Xenopixel, LGT); Beta 1 testers are experts (installers,
+  style builders). Optimise for non-technical owners: plain language, no C++ required
+  (code may be shown, never required), no raw compiler or driver errors.
+
+  Stack: npm workspaces. packages/core is pure TypeScript (config.h codec and generator,
+  presets.ini codec, board protocol, style tree parser/evaluator, blade simulator, style
+  library). apps/desktop is Electron 37 + electron-vite + React 19; the board link runs in
+  the renderer over Web Serial; main runs the toolchain (arduino-cli, ProffieOS pinned at
+  8.10), dfu-util flashing, SD card access and stores in userData. PixiJS 8 draws 2D blade
+  previews, three.js the demo room. Tests: vitest (`npm test`), `npm run typecheck`;
+  toolchain and hardware tests are gated by HILTWRIGHT_* environment variables.
+
+  Constraints: Windows first (Beta 1 is Windows only, unsigned). GPL-3.0 (the simulator is
+  ported from ProffieOS's GPL headers); the repository is public. Never copy Fett263 or other
+  library style code into the app; credit creators. Repo is LF (.gitattributes); board
+  transcripts are byte-exact. Hardware checks run on the owner's V2.2 (hote2) and V3.
+  User-facing wording says "style", never "look" (code identifiers keep "look").
+  Roadmap and milestones: openspec/changes/beta-1-roadmap (M1 baseline, M2 Beta 1
+  blockers, M3 Beta 1, M4 Beta 2, M5+ later).
+
+rules:
+  proposal:
+    - "Start with a **Milestone:** line naming one of M1, M2, M3, M4 or M5+."
+    - Include a Non-goals section.
+    - A refinement discovered while applying another change is proposed as its own change; it never widens the change being applied.
+    - After M1, a change not tied to the Beta 1 promise or to a Beta 1 blocker is placed in M4 or later unless the owner says otherwise.
+  specs:
+    - Describe behaviour an owner or the saber can observe; leave module and function names to design.md.
+    - Say "style" in requirement and scenario text, never "look".
+    - Where a scenario can only be confirmed on a real board, say which (V2.2, V3 or either).
+  design:
+    - Record rejected alternatives for each decision.
+  tasks:
+    - A change touching the board link, config generation, build, install or the SD card includes a hardware-verification task naming the board (V2.2, V3); the change is not archived until that task is done.
+    - Each task states how it is verified (test file, command, or a named hardware check).

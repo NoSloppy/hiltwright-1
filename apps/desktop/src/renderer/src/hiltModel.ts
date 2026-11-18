@@ -13,40 +13,12 @@ import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 
 export type HiltFormat = 'glb' | 'obj' | 'stl' | 'pack';
-export interface HiltFit {
-  flip: boolean;
-  rollDeg: number;
-  /** Overall length in centimetres; null keeps the guess from the file. */
-  lengthCm: number | null;
-  /** Sideways shift of the model so the blade sits in its bore, in millimetres of finished hilt, in the hilt's own frame (before the turn). */
-  offsetXmm?: number;
-  offsetZmm?: number;
-  /**
-   * How much deeper the blade sits in the hilt than the model's top, in millimetres. An emitter with a long shroud,
-   * a curved one, or a flared one that extends past the socket needs the blade to start below the model's highest point.
-   */
-  seatMm?: number;
-  /**
-   * Tilt of the hilt relative to the blade, in degrees, about the point where the blade enters it: for a curved hilt
-   * whose longest dimension does not run along the bore, so standing it up by that dimension leans the emitter.
-   * tiltX leans it toward or away from the front (the control side after the turn), tiltZ to the sides.
-   */
-  tiltXDeg?: number;
-  tiltZDeg?: number;
-  /** For a staff: how deep the second blade sits in the pommel, in millimetres. */
-  staffSeatMm?: number;
-  /**
-   * Where the blade's axis is in the file. 'origin': the model was drawn around the bore, so the file's own axis is
-   * the blade's. 'box': the middle of the model's bounding box. 'auto' (the default) uses the origin when it runs
-   * through the model, and the box otherwise (a file modelled off in space).
-   */
-  axis?: 'auto' | 'origin' | 'box';
-}
+export { DEFAULT_FIT, type HiltFit } from '../../shared/demoSettings';
+import type { HiltFit } from '../../shared/demoSettings';
 /** A file that came with the model: an OBJ's .mtl, and any textures the .mtl names. */
 export interface SideFile { name: string; data: ArrayBuffer }
 /** A hilt the owner loaded, or one from a pack (format 'pack': `data` is empty, the mesh comes from the pack by `packId`). */
 export interface StoredHilt { name: string; format: HiltFormat; data: ArrayBuffer; fit: HiltFit; sideFiles?: SideFile[]; packId?: string; creator?: string }
-export const DEFAULT_FIT: HiltFit = { flip: false, rollDeg: 0, lengthCm: null, offsetXmm: 0, offsetZmm: 0, seatMm: 0, tiltXDeg: 0, tiltZDeg: 0, staffSeatMm: 0, axis: 'auto' };
 
 export function formatOf(fileName: string): HiltFormat | null {
   const ext = fileName.toLowerCase().split('.').pop();

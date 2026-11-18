@@ -27,6 +27,13 @@ export interface SendOptions {
   idleMs?: number;
   /** Give up after this many ms in total. */
   timeoutMs?: number;
+  /** The board is expected to go quiet (RebootDFU): a silent ending is not reported through `onSilent`. */
+  expectSilence?: boolean;
+  /**
+   * This command's own silence limit, in place of the client's `silentMs`. For the few commands a healthy board is
+   * known to be quiet through (`sd 1`, `sd 0`: the saber lets go of its card, or takes it back, before it answers).
+   */
+  silentMs?: number;
 }
 
 export interface Response {
@@ -38,6 +45,11 @@ export interface Response {
   timedOut: boolean;
   /** True when at least one line carried this command's tag (OS 8 framing in effect). */
   tagged: boolean;
+  /**
+   * Timed out because the board said nothing: not a byte since the command was written, or nothing for `silentMs`.
+   * A board that keeps printing, answered or not, is never silent.
+   */
+  silent: boolean;
 }
 
 export interface ClientOptions {
@@ -51,7 +63,22 @@ export interface ClientOptions {
   maxKicks?: number;
   /** Total timeout used in tagged mode, where the sentinel ends the response and only a dead board is left to wait for. */
   taggedTimeoutMs?: number;
+  /**
+   * A tagged command ends early when the board has sent nothing at all, kicks unanswered, for this long: a live
+   * ProffieOS 8 board answers a kick at once, so only a dead one stays quiet. Default 10 s.
+   */
+  silentMs?: number;
+  /** Called for each command that timed out silent (see Response.silent), unless it expected silence. */
+  onSilent?: (response: Response) => void;
+  /**
+   * The number of the first tag (`h<n>`) and kick (`k<n>`) this client sends. A client made for a port opened again
+   * carries on from the old one's `lastSeq` and `lastKick`, so a stale answer still on its way never matches a new tag.
+   */
+  firstSeq?: number;
+  firstKick?: number;
   onEvent?: (line: string) => void;
+  /** Every line written to the board ('sent', kicks and sentinels included) and every line it sends ('heard'), raw. */
+  onTraffic?: (direction: 'sent' | 'heard', text: string) => void;
   now?: () => number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
@@ -84,10 +111,15 @@ export class BoardClient {
   private readonly taggedTimeoutMs: number;
   private readonly kickMs: number;
   private readonly maxKicks: number;
+  private readonly silentMs: number;
+  private readonly onSilent: (response: Response) => void;
+  /** Chunks received so far: a command that sees none arrive heard nothing at all. */
+  private chunks = 0;
   private kicks = 0;
   /** When the board last sent anything at all. A board that is talking is not stuck, however long the command runs. */
   private lastHeard = 0;
   private readonly onEvent: (line: string) => void;
+  private readonly onTraffic: ((direction: 'sent' | 'heard', text: string) => void) | null;
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (handle: unknown) => void;
@@ -99,7 +131,12 @@ export class BoardClient {
     this.taggedTimeoutMs = opts.taggedTimeoutMs ?? 30000;
     this.kickMs = opts.kickMs ?? 800;
     this.maxKicks = opts.maxKicks ?? 30;
+    this.silentMs = opts.silentMs ?? 10000;
+    this.onSilent = opts.onSilent ?? (() => {});
+    this.seq = Math.max(0, (opts.firstSeq ?? 1) - 1);
+    this.kicks = Math.max(0, (opts.firstKick ?? 1) - 1);
     this.onEvent = opts.onEvent ?? (() => {});
+    this.onTraffic = opts.onTraffic ?? null;
     this.now = opts.now ?? (() => Date.now());
     this.setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
@@ -116,9 +153,18 @@ export class BoardClient {
   /** Write to the transport; a failure (port gone) ends the current command instead of surfacing as an unhandled rejection. */
   private out(text: string): void {
     if (this.closed) return;
+    if (this.onTraffic) for (const l of text.split('\n')) if (l) this.onTraffic('sent', l);
     Promise.resolve()
       .then(() => this.transport.write(text))
       .catch((err) => { this.onEvent(`(write failed: ${String(err)})`); this.current?.resolve(false); });
+  }
+
+  /** The number of the last tag and the last kick sent (0 before the first). */
+  get lastSeq(): number {
+    return this.seq;
+  }
+  get lastKick(): number {
+    return this.kicks;
   }
 
   /** Whether commands are being tagged (OS 8 framing). */
@@ -139,7 +185,9 @@ export class BoardClient {
 
   private receive(chunk: string): void {
     this.lastHeard = this.now();
+    this.chunks++;
     for (const raw of this.lines.push(chunk)) {
+      this.onTraffic?.('heard', raw);
       const cur = this.current;
       const m = TAGGED.exec(raw);
       if (m) {
@@ -194,7 +242,9 @@ export class BoardClient {
       const explicit = /^([A-Za-z0-9_]+)\| /.exec(command)?.[1] ?? null;
       const useTags = this.tagged && !explicit;
       const opts = { idleMs: options.idleMs ?? this.idleMs, timeoutMs: options.timeoutMs ?? (useTags ? this.taggedTimeoutMs : this.timeoutMs), ...options };
+      const silentMs = options.silentMs ?? this.silentMs;
       const started = this.now();
+      const chunksAtStart = this.chunks;
       let idleHandle: unknown = null;
       let timeoutHandle: unknown = null;
       let kickHandle: unknown = null;
@@ -207,7 +257,11 @@ export class BoardClient {
         if (kickHandle !== null) this.clearTimer(kickHandle);
         const cur = this.current!;
         this.current = null;
-        resolveOuter({ command, lines: cur.lines, events: cur.events, ms: this.now() - started, timedOut, tagged: cur.sawTag });
+        const quietFor = this.now() - Math.max(this.lastHeard, started);
+        const silent = timedOut && (this.chunks === chunksAtStart || quietFor >= silentMs);
+        const response: Response = { command, lines: cur.lines, events: cur.events, ms: this.now() - started, timedOut, tagged: cur.sawTag, silent };
+        if (silent && !opts.expectSilence && !this.closed) this.onSilent(response);
+        resolveOuter(response);
       };
       const touch = () => {
         if (useTags) return; // the sentinel ends a tagged response; idle means nothing on a busy board
@@ -228,6 +282,8 @@ export class BoardClient {
         const kick = () => {
           if (settled) return;
           const need = useTags || !this.current?.sawTag;
+          // Nothing at all for silentMs, kicks included: the board is not going to answer. Stop waiting for the ceiling.
+          if (need && this.now() - Math.max(this.lastHeard, started) >= silentMs) { finish(true); return; }
           // Only a silent board gets kicked. Long commands (font scans, listings) keep printing and need no help.
           const silent = this.now() - Math.max(this.lastHeard, started) >= this.kickMs;
           if (need && silent && sent < this.maxKicks) {
