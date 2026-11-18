@@ -13,14 +13,19 @@ Before you start: build the installer with `npm run dist` and install it, so the
 
 ## 2. V3 smoke
 
-- [ ] Connect. The app knows it is a V3 and matches it to its own record.
-- [ ] Back up the firmware.
-- [ ] Build and install. Note the flash percentage shown (a plain saber was 36% in a test build).
-- [ ] It reconnects by itself after the install.
-- [ ] Change one preset's font and one colour live. Both are confirmed.
-- [ ] Share the card over USB, then give it back.
-- [ ] Restore the backup.
-- [ ] Ten preset selections, each after 30 s idle. Count the ones that stall, and check each recovers.
+Run by the owner on 2026-11-18 on a bare V3.9 (serial 207A349A5430), USB power only, with a card of seven library fonts. From the app's log:
+
+- [x] Connect. Matched to its own record, before and after the install and after the restore. No second record.
+- [x] Back up the firmware. 524288 bytes read in 1.1 s; the bootloader's flash size identified it as a V3.
+- [x] Build and install. Built in 19.8 s at 43% of the V3's flash; written in 58 s.
+- [x] It reconnects by itself after the install.
+- [x] Restore the backup. Written in 140 s; the saber came back on its old firmware and matched its record.
+- [ ] Change one preset's font and one colour live. Not run.
+- [ ] Share the card over USB, then give it back. `sd 1` was sent on the old firmware; the result was not recorded. Not run on the Hiltwright build.
+- [ ] Ten preset selections, each after 30 s idle. Only four were made, close together: one stalled and recovered by itself ("ok after a pause").
+- [ ] With a battery. Waits until the board is in a hilt.
+
+Found: the installed presets named the default fonts (TeensySF, SmthJedi and others), which were not on the card, so the saber said "font directory not found" and "voice pack not found" on every preset change. Build & Install did not warn before installing, and the voice pack check passed because `common` is on the card, although no preset uses it.
 
 ## 3. hote2: the promise path
 
