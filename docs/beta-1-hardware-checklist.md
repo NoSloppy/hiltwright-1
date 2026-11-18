@@ -29,8 +29,10 @@ Found: the installed presets named the default fonts (TeensySF, SmthJedi and oth
 
 ## 3. hote2: the promise path
 
-- [ ] Plan, choose styles and fonts, build and install, with a pasted style and an editor-built style among the presets.
-- [ ] After the install, live preset edits are confirmed.
+Passed by the owner on hote2, 2026-11-18, as reported; the lines were not gone through one by one with me. The V3 has no blade, so the V3 half of the blade comparison is not run.
+
+- [x] Plan, choose styles and fonts, build and install, with a pasted style and an editor-built style among the presets.
+- [x] After the install, live preset edits are confirmed.
 
 ## 4. hote2: "Use it in" from Styles
 
@@ -73,11 +75,13 @@ Re-run the same day in a hidden copy of the app on a copy of the owner's data, w
 
 ## 8. Blade against preview (hote2, then the same six on the V3)
 
+Passed by the owner on hote2, 2026-11-18, as reported; the lines were not gone through one by one with me. The V3 has no blade, so the V3 half of the blade comparison is not run.
+
 Two built-in styles, two pasted, two built in the editor. For each: idle, ignition, clash, blast, lockup, retraction.
 
-- [ ] Each matches the preview closely enough that a style builder would not call it wrong.
-- [ ] Where the preview shows "approximate" or "not modelled", the note is true.
-- [ ] Known difference to confirm: on built-in styles, drag and lightning block change with twist and blade angle on the blade but not in the preview.
+- [x] Each matches the preview closely enough that a style builder would not call it wrong.
+- [x] Where the preview shows "approximate" or "not modelled", the note is true.
+- [x] Known difference to confirm: on built-in styles, drag and lightning block change with twist and blade angle on the blade but not in the preview.
 
 ## 9. Listening (demo room, no saber needed)
 
