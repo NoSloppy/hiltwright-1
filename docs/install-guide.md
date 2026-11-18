@@ -53,11 +53,11 @@ To check:
 
 **On** blocks unsigned apps. **Evaluation** may turn itself off, or may switch to **On**. **Off** does nothing.
 
-On the developer's PC, with Smart App Control turned back on, the installer ran and was not blocked. That is one PC, so yours may differ.
+On the developer's PC, with Smart App Control set to **On**, the downloaded installer ran and was not blocked. That is one PC, so yours may differ.
 
 If Smart App Control does block Hiltwright, do not turn it off just for this. Tell us what it said and at which step (section 7): the installer, the one-time setup download, or the first build.
 
-TODO(owner): whether Smart App Control said On or Evaluation during that test, and whether the setup download and a build were also run with it on
+TODO(owner): whether the one-time setup download and a first build were also run with Smart App Control on
 
 ## 4 First run: the one-time setup download
 
