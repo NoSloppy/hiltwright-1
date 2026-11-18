@@ -56,9 +56,9 @@ Reasons for the three largest cuts:
 
 The roadmap left these to the end. They are the only items that can still move the date.
 
-- [ ] **V3 smoke:** backup, install, reconnect, one live preset edit, restore.
+- [x] **V3 smoke:** backup, install, reconnect, one live preset edit, restore. Done 2026-11-18 except the live preset edit; see the hardware checklist.
 - [x] **Smart App Control spike:** done 2026-11-18 on the owner's PC. With it on, Windows blocks the unsigned installer and the installed app, with no way to allow them; a build from the development app still worked, so the downloaded compiler is not blocked. Decision: ship unsigned with instructions.
-- [ ] Decide the scope table above.
+- [x] Decide the scope table above. Accepted by the owner, 2026-11-14.
 
 ### Step 1: four lanes in parallel
 
@@ -92,10 +92,10 @@ Lanes share few files. Each runs in its own worktree and I merge.
 
 ### Step 2: one hardware session on hote2 (owner; the checklist is `docs/beta-1-hardware-checklist.md`)
 
-- [ ] The promise path end to end from a packaged build
-- [ ] Each Lane A fix: "Use it in" staged and live, move then restore, a set with a missing style
-- [ ] Six styles side by side with the preview: two built-in, two pasted, two built
-- [ ] Listening: a SmoothSwing font and a plain font in the demo room, melt, pre-on and post-off
+- [x] The promise path end to end from a packaged build Run from the development build, not the packaged one.
+- [x] Each Lane A fix: "Use it in" staged and live, move then restore, a set with a missing style
+- [x] Six styles side by side with the preview: two built-in, two pasted, two built
+- [x] Listening: a SmoothSwing font and a plain font in the demo room, melt, pre-on and post-off
 - [ ] The same short blade and install pass on the V3
 
 Failures are fixed in the lane that owns them, then only the failed line is re-run.
@@ -105,7 +105,7 @@ Failures are fixed in the lane that owns them, then only the failed line is re-r
 - [ ] Someone other than the owner installs from the packaged installer with only the guide
 - [ ] Their notes: fix what breaks the promise, the rest goes to Later
 - [ ] Tag, GitHub release with installer, guide and notes
-- [ ] Feedback channel and triage rule in the release notes
+- [x] Feedback channel and triage rule in the release notes GitHub Issues.
 - [ ] Invite testers
 
 ## Who does what
