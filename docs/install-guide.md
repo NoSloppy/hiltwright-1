@@ -58,11 +58,13 @@ To check:
 If yours is **On**, you have two choices:
 
 - Use another PC for this beta.
-- Turn Smart App Control off. This lowers the protection of your PC for every app, not only Hiltwright. On some versions of Windows it cannot be turned back on without resetting Windows, so read Microsoft's page first: https://support.microsoft.com/topic/what-is-smart-app-control-285ea03d-fa88-4d56-882e-6698afdb7003
+- Turn Smart App Control off: on the same screen, choose **Off**. This lowers the protection of your PC for every app, not only Hiltwright. On current Windows 11 you can choose **On** again later; on older versions you cannot turn it back on without resetting Windows, so check that **On** can still be chosen on your PC, and read Microsoft's page first: https://support.microsoft.com/topic/what-is-smart-app-control-285ea03d-fa88-4d56-882e-6698afdb7003
+
+![Smart App Control settings in Windows Security, with On, Evaluation and Off](images/smart-app-control.png)
+
+Turning it off only for the install is probably not enough. The installed app is unsigned too, and so are the compiler and flashing tool it downloads, so expect to leave Smart App Control off while you use this beta. This has not been confirmed yet.
 
 A signed build, which Smart App Control accepts, is planned for the next beta.
-
-The one-time setup download and the first build have not been tried with Smart App Control on yet. They run a compiler and a flashing tool that Hiltwright downloads, so they may be blocked as well.
 
 ## 4 First run: the one-time setup download
 
