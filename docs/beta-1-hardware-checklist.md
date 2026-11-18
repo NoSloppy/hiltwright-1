@@ -38,7 +38,7 @@ First, second and fourth lines passed by the owner on hote2, 2026-11-18.
 
 - [x] Live list, a style already installed, preset 2, with a blast colour you tried on Styles: the saber confirms, the blade keeps its base colour, and after a reconnect the button reads "Already in" preset 2.
 - [x] The same style on a preset that already has it: the button is disabled and says so.
-- [ ] Load a preset set so presets are staged, then "Use it in" the first staged preset: the saber does not change, and Presets shows the style in the staged preset.
+- [x] With presets staged, "Use it in" the first staged preset: the saber is not written to, the page says the style goes into the staged preset and reaches the saber with the next install, and the button then reads "Already in" that preset. Run in the hidden copy with a simulated connection, 2026-11-18.
 - [x] Share the card, then try "Use it in": nothing is sent, and the page says the card is shared.
 - [ ] Rebuild after the first step: preset 2 keeps the style.
 
@@ -55,10 +55,14 @@ Passed by the owner on hote2, 2026-11-18. In History only the newest entry says 
 
 ## 6. Preset sets
 
-Run on hote2, 2026-11-18. Found: a style removed from the style library but still carried by the saber's plan was shown on Presets as "Saber's default", although the plan still installs it. Presets now lists such styles under "Only on this saber". Both lines need a re-run.
+Run on hote2 by the owner, 2026-11-18. Found: a style removed from the style library but still carried by the saber's plan was shown on Presets as "Saber's default", although the plan still installs it. Presets now lists such styles under "Only on this saber", with their preview.
 
-- [ ] Load a set that names a style you have since deleted: the problems are shown first, "Load it anyway" works, and Build accepts it.
-- [ ] Stage some edits, then load a set: you are asked before they are replaced.
+Re-run the same day in a hidden copy of the app on a copy of the owner's data, with board access off and a simulated connection (no saber involved):
+
+- [x] Load a set whose style was removed from the library but is still in the saber's plan ("hotetest presets"): it loads with no warning and the preset shows the style ("My style").
+- [x] Load a set that names a style gone from both the library and the plan ("hote2 presets"): the problem is listed first, and the button reads "Load it anyway".
+- [x] With presets staged, load a set: the page says it replaces the staged presets and waits for "Load it" or Cancel.
+- [ ] After "Load it anyway", Build accepts the plan. Not run.
 
 ## 7. Cards and fonts
 

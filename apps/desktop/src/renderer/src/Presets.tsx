@@ -86,6 +86,8 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
   // stay choosable here, or a preset using one would read as "Saber's default" while the plan installs the style (hote2, 2026-11-18).
   const keptLooks = useMemo(() => (model?.looks ?? []).filter((l) => !saved.some((x) => x.id === l.id) && !STARTER_LOOKS.some((x) => x.id === l.id)), [model?.looks, saved]);
   const keptIds = useMemo(() => new Set(keptLooks.map((l) => l.id)), [keptLooks]);
+  // Their previews need registering like the library's own.
+  useEffect(() => { for (const l of keptLooks) registerLookSim(l); }, [keptLooks]);
   const allLooks = useMemo(() => [...STARTER_LOOKS, ...saved, ...keptLooks], [saved, keptLooks]);
   const lookById = (id: string | null | undefined) => (id ? allLooks.find((l) => l.id === id) ?? null : null);
   const compiled = new Set((saber?.firmware?.looks ?? []).map((l) => l.id));
