@@ -21,8 +21,7 @@ You need:
 
 The installer installs for your account only. It does not ask for administrator approval.
 
-**Browser.** Edge or Chrome may say the file is not commonly downloaded and may be harmful. Choose to keep it.
-TODO(owner): the exact button names in current Edge and Chrome.
+**Browser.** Edge and Chrome flag the download and ask whether to keep the file. Choose to keep it. The exact words differ between browsers and versions; look for **Keep**, sometimes under a **…** or arrow menu beside the download.
 
 **Unblock.** Windows marks downloaded files. To clear the mark:
 
@@ -54,11 +53,11 @@ To check:
 
 **On** blocks unsigned apps. **Evaluation** may turn itself off, or may switch to **On**. **Off** does nothing.
 
-Turning it off is one-way. Do not turn it off yet. Microsoft's page says recent Windows updates may let you turn it back on, but treat it as one-way until we confirm.
+On the developer's PC, with Smart App Control turned back on, the installer ran and was not blocked. That is one PC, so yours may differ.
 
-TODO(owner): result of the Smart App Control test
+If Smart App Control does block Hiltwright, do not turn it off just for this. Tell us what it said and at which step (section 7): the installer, the one-time setup download, or the first build.
 
-TODO(owner): whether Windows still lets you turn Smart App Control back on without resetting Windows
+TODO(owner): whether Smart App Control said On or Evaluation during that test, and whether the setup download and a build were also run with it on
 
 ## 4 First run: the one-time setup download
 
