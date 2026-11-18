@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasMenuSounds, parseVoicePackIni, voicePackFromSerial, voicePackVerdict } from '../src';
+import { hasMenuSounds, presetsWithoutCommon, parseVoicePackIni, voicePackFromSerial, voicePackVerdict } from '../src';
 
 describe('voice pack', () => {
   it('parses voicepack.ini; a file without the key counts as version 1, like ProffieOS', () => {
@@ -47,5 +47,21 @@ describe('voice pack', () => {
     expect(unread.text).toMatch(/the saber is not answering/);
     // Not being able to read the card is not the pack being missing.
     expect(unread.text).not.toMatch(/No voice pack found|speaks a voice pack error|Put the Fett263/);
+  });
+
+  it('a pack in common is not seen by presets whose font path leaves common out', () => {
+    const pack = { ini: true, version: 2, menuSounds: true };
+    const presets = [{ font: 'TeensySF' }, { font: 'SmthJedi' }, { font: 'Good;common' }, { font: 'common' }];
+    expect(presetsWithoutCommon(presets)).toBe(2);
+    expect(presetsWithoutCommon([])).toBe(0);
+    expect(voicePackVerdict('fett263', pack, null, 0)).toMatchObject({ ok: true, tone: 'green' });
+    const v = voicePackVerdict('fett263', pack, null, 2)!;
+    expect(v).toMatchObject({ ok: false, tone: 'amber' });
+    expect(v.text).toMatch(/2 presets/);
+    expect(v.text).toMatch(/voice pack not found/);
+    expect(v.text).toMatch(/Also use common sounds/);
+    // A card that could not be read, or a prop without the pack, says nothing about presets.
+    expect(voicePackVerdict('fett263', null, 'x', 2)!.text).not.toMatch(/voice pack not found/);
+    expect(voicePackVerdict('sa22c', pack, null, 2)).toBeNull();
   });
 });

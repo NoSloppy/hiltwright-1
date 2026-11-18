@@ -26,3 +26,32 @@ export function fontsForPresets(presets: { font: string }[], cardFonts: Pick<Fon
     inLibrary,
   };
 }
+
+export interface MissingFontWarning {
+  /** Presets whose font is not on the card. */
+  presets: number;
+  /** Those fonts, each once, as the presets spell them. */
+  fonts: string[];
+  text: string;
+}
+
+/**
+ * The presets that will be on the saber, judged against the card's font folders. Null when nothing is missing, and
+ * also when the card's contents are not known (`cardFonts` null): not knowing is not the same as missing.
+ * A preset whose font path is only `common` names no font of its own.
+ */
+export function missingFontWarning(presets: { font: string }[], cardFonts: string[] | null): MissingFontWarning | null {
+  if (!cardFonts) return null;
+  const onCard = (f: string) => cardFonts.some((x) => x.toLowerCase() === f.toLowerCase());
+  const first = (p: { font: string }) => p.font.split(';')[0]?.trim() ?? '';
+  const bad = presets.filter((p) => { const f = first(p); return f && f.toLowerCase() !== 'common' && !onCard(f); });
+  if (!bad.length) return null;
+  const fonts: string[] = [];
+  for (const p of bad) if (!fonts.some((f) => f.toLowerCase() === first(p).toLowerCase())) fonts.push(first(p));
+  const n = bad.length;
+  return {
+    presets: n,
+    fonts,
+    text: `${n} preset${n === 1 ? ' names' : 's name'} ${fonts.length === 1 ? 'a font' : 'fonts'} that ${fonts.length === 1 ? 'is' : 'are'} not on the card (${fonts.join(', ')}). The saber will say "font directory not found" for ${n === 1 ? 'it' : 'them'}. Copy ${fonts.length === 1 ? 'it' : 'them'} over on Fonts & SD, or choose another font on the Presets page.`,
+  };
+}

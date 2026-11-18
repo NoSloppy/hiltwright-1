@@ -2,9 +2,10 @@
 // this page shows the config they make, builds it, and installs: backup → bootloader → write → verify.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { voicePackFromSerial, voicePackVerdict, wiringConfirmed, withWiringConfirmation, type VoicePackStatus } from '@hiltwright/core';
+import { presetsWithoutCommon, voicePackFromSerial, voicePackVerdict, wiringConfirmed, withWiringConfirmation, type VoicePackStatus } from '@hiltwright/core';
 import { firmwareHasStaged, queuedLookIds } from './saberModel';
 import { PROPS } from './Wiring';
+import { missingFontWarning } from './fontNeeds';
 import type { Workspace } from './workspace';
 import type { BackupInfo, BuildResult, JobEvent, ToolchainStatus } from '../../shared/api';
 import type { SaberConfigModel } from '@hiltwright/core';
@@ -351,7 +352,11 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const nowStep = !wiringOk ? 1 : !tool?.ready ? 2 : !built ? 3 : step === 'done' ? 0 : 4;
   // An install armed for a build that has since gone out of date is disarmed.
   if (stale && armed) setArmed(false);
-  const verdict = voicePackVerdict(prop, voice, voiceWhy);
+  // The presets that will be on the saber: the staged list when presets are staged, else the saber's own (both are model.presets).
+  const willHave = model?.presets ?? [];
+  const verdict = voicePackVerdict(prop, voice, voiceWhy, presetsWithoutCommon(willHave));
+  // Only a card read from a connected saber counts as known; otherwise say nothing about fonts.
+  const fontWarn = missingFontWarning(willHave, connectedNow && !cardShared && !saber?.planned && info && info.fonts.length ? info.fonts : null);
   const canBuild = !busy && !!tool?.ready && !!model && !preview?.errors.length;
 
   return (
@@ -483,6 +488,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
 
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span className="col" style={{ gap: 8 }}><span>{note.text}</span>{(note.tone === 'red' || step === 'failed') && <SaveDiagnostics small />}</span></div>}
         {notes.map((n) => <div key={n.text} className={`note ${n.tone}`}><Icon name={n.tone === 'green' ? 'check' : n.tone === 'red' ? 'x' : 'warn'} /><span>{n.text}</span></div>)}
+        {fontWarn && <div className="note amber"><Icon name="warn" /><span className="col" style={{ gap: 6 }}><span>{fontWarn.text}</span><span className="row" style={{ gap: 8 }}><button type="button" className="holo" onClick={() => go('fonts')}>Fonts &amp; SD</button><button type="button" className="holo" onClick={() => go('presets')}>Presets</button></span></span></div>}
         {verdict && <div className={`note ${verdict.tone}`}><Icon name={verdict.ok ? 'check' : 'warn'} /><span>{verdict.text}</span></div>}
         {preview?.warnings.map((w) => <div key={w} className="note"><Icon name="info" /><span>{w}</span></div>)}
         {step === 'failed' && <span className="hint">{STOPPED_HINT}</span>}

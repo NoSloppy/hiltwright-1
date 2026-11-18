@@ -44,6 +44,14 @@ export function voicePackFromSerial(catLines: string[], dirLines: string[]): Voi
   return { ...parsed, menuSounds: hasMenuSounds(names) };
 }
 
+/**
+ * How many presets leave `common` out of their font path (`Font;common`). The saber looks for the voice pack only in
+ * the folders a preset's font names, so a pack in `common` is invisible to these presets.
+ */
+export function presetsWithoutCommon(presets: { font: string }[]): number {
+  return presets.filter((p) => !p.font.split(';').some((part) => part.trim().toLowerCase() === 'common')).length;
+}
+
 export interface VoicePackVerdict { ok: boolean; tone: 'green' | 'amber'; text: string }
 
 /**
@@ -52,7 +60,7 @@ export interface VoicePackVerdict { ok: boolean; tone: 'green' | 'amber'; text: 
  * answer). A card that could not be read is not a card without the pack, so that warning says only that it could
  * not check and why: it never says the pack is missing or that the saber will speak an error.
  */
-export function voicePackVerdict(prop: Prop, s: VoicePackStatus | null, couldNotRead?: string | null): VoicePackVerdict | null {
+export function voicePackVerdict(prop: Prop, s: VoicePackStatus | null, couldNotRead?: string | null, presetsWithoutCommon = 0): VoicePackVerdict | null {
   if (prop !== 'fett263') return null;
   const need = FETT263_REQUIRED_VOICE_PACK;
   const fix = `Put the Fett263 Voice Pack version ${need} in the common folder on the SD card (voicepack.ini plus its menu sounds). Until then the saber speaks a voice pack error on every preset change; everything else works.`;
@@ -60,5 +68,9 @@ export function voicePackVerdict(prop: Prop, s: VoicePackStatus | null, couldNot
   if (!s.menuSounds && !s.ini) return { ok: false, tone: 'amber', text: `No voice pack found in the common folder. ${fix}` };
   if ((s.version ?? 1) < need) return { ok: false, tone: 'amber', text: `The card has voice pack version ${s.version ?? 1}, and this firmware needs version ${need}. ${fix}` };
   if (!s.menuSounds) return { ok: false, tone: 'amber', text: `voicepack.ini says version ${s.version}, but the menu sounds (mnum) are missing from the common folder. ${fix}` };
+  if (presetsWithoutCommon > 0) {
+    const n = presetsWithoutCommon;
+    return { ok: false, tone: 'amber', text: `The card has voice pack version ${s.version}, but ${n} preset${n === 1 ? '' : 's'} on the saber ${n === 1 ? 'does' : 'do'} not use the common folder, which is where the pack lives. The saber will say "voice pack not found" on ${n === 1 ? 'it' : 'them'}. On the Presets page, turn on "Also use common sounds" for ${n === 1 ? 'that preset' : 'each of them'}.` };
+  }
   return { ok: true, tone: 'green', text: `Voice pack version ${s.version} found on the card. Fett263 button controls will speak their menus.` };
 }
