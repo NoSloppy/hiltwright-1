@@ -36,8 +36,6 @@ If you do not see **Unblock**, the file is not marked. Go on.
 1. Choose **More info**.
 2. Choose **Run anyway**.
 
-TODO(owner): confirm these names on a clean Windows 10 and Windows 11 PC.
-
 If there is no **Run anyway** button, read the next section.
 
 ## 3 Smart App Control
@@ -103,8 +101,6 @@ Unsigned files are sometimes flagged by mistake. If Defender or another antiviru
 2. Note the file name and the warning.
 3. Tell us (section 7).
 4. You can submit the file to Microsoft at https://www.microsoft.com/wdsi/filesubmission. Say it is a false positive.
-
-TODO(owner): whether the installer or the downloaded tools have been checked with Defender
 
 ## 7 Where to report a problem
 
