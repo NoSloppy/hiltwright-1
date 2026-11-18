@@ -14,7 +14,7 @@ import { lookUpWanted, proffieSerials } from './usb';
 import { activeWant, wantSerial } from './serialGate';
 import { checkFontDir, copyFont, listFonts, listTracks, lookForCards, readVoicePack, ejectVolume, readFontSounds, hasFolder } from './sd';
 import { cancelSetup, ensureToolchainRoot, installToolchain, lockFolder, plannedToolchainRoot, setupOnce, toolchainStatus, userBuildRoot } from './toolchain';
-import { listPacks, packFont, packMesh, userPacksDir } from './packs';
+import { copyFontToCard, listPacks, packFont, packMesh, userPacksDir } from './packs';
 import { FontLibrary, type ImportResult } from './fontLibrary';
 import { ContributorStore, cleanUrl } from './contributors';
 import { HiltStore } from './hilts';
@@ -322,6 +322,13 @@ export function registerIpc(): void {
   handle('packs:dir', () => userPacksDir());
   handle('packs:mesh', (_e, id: unknown) => packMesh(str(id, 200)));
   handle('packs:font', (_e, id: unknown) => packFont(str(id, 200)));
+  handle('packs:copyFontToCard', async (e, packId: unknown, r: unknown, opts: unknown) => {
+    const id = str(packId, 200);
+    const cardRoot = root(r);
+    const name = (await listPacks()).find((p) => p.id === id)?.name ?? id;
+    // Progress goes to the page as each file lands, as for sd:copyFont.
+    return copyFontToCard(id, cardRoot, { replace: (opts as { replace?: unknown } | null)?.replace === true, onProgress: (done, total) => e.sender.send('sd:copy:progress', { name, done, total }) });
+  });
   handle('sd:listTracks', (_e, r: unknown) => listTracks(root(r)));
   handle('sd:voicePack', (_e, r: unknown) => readVoicePack(root(r)));
   let pickedFonts = new Set<string>();

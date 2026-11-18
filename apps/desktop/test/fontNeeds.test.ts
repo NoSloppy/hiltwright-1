@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FontLibrary } from '../src/main/fontLibrary';
 import { listFonts } from '../src/main/sd';
-import { fontsForPresets } from '../src/renderer/src/fontNeeds';
+import { fontsForPresets, packCredit } from '../src/renderer/src/fontNeeds';
+import type { LibraryFont } from '../src/shared/api';
 
 /** A minimal 16-bit mono 44.1 kHz PCM wav header with no samples. */
 function wav(): Buffer {
@@ -38,5 +39,36 @@ describe('the fonts the presets use', () => {
     const after = fontsForPresets(presets, await listFonts(cardRoot), await lib.list());
     expect(after.copyable).toEqual([]);
     expect((await listFonts(cardRoot)).map((f) => f.name)).toEqual(['Ember', 'Mara', 'Valkyrie']);
+  });
+});
+
+describe('fonts in a pack that allows copying', () => {
+  const pack = (name: string, copyToCard = true, kind: 'font' | 'hilt' = 'font') => ({ id: `font-${name.toLowerCase()}`, kind, name, creator: 'KRSABERS.COM', licence: 'CC BY-SA 4.0', allow: { copyToCard, demoPlayback: true } });
+  const presets = [{ font: 'TeensySF;common' }, { font: 'SmthJedi' }, { font: 'Nowhere;common' }, { font: 'OnCard' }, { font: 'Both' }, { font: 'NoCopy' }];
+  const libraryFont = (folder: string) => ({ folder } as LibraryFont);
+
+  it('a needed font in a pack is ready to copy, credited, and joins "Copy all"; a font nowhere stays missing', () => {
+    const packs = [pack('TeensySF'), pack('SmthJedi'), pack('NoCopy', false), pack('Both')];
+    const needs = fontsForPresets(presets, [{ name: 'oncard' }], [libraryFont('Both')], packs);
+    expect(needs.copyable).toEqual(['TeensySF', 'SmthJedi', 'Both']);
+    expect(needs.missing).toEqual(['Nowhere', 'NoCopy']);
+    expect(needs.inPack('teensysf')?.id).toBe('font-teensysf');
+    expect(packCredit(needs.inPack('TeensySF')!)).toBe('TeensySF · by KRSABERS.COM, CC BY-SA 4.0');
+    expect(needs.onCard('OnCard')).toBe(true);
+  });
+
+  it('a font in both the library and a pack copies from the library; a hilt pack is never a font', () => {
+    const packs = [pack('Both'), pack('SmthJedi', true, 'hilt')];
+    const needs = fontsForPresets(presets, [], [libraryFont('Both')], packs);
+    expect(needs.copyFrom('Both')?.from).toBe('library');
+    expect(needs.copyFrom('TeensySF')).toBeNull();
+    expect(needs.copyFrom('SmthJedi')).toBeNull();
+    expect(fontsForPresets(presets, [], [], [pack('TeensySF')]).copyFrom('TeensySF')?.from).toBe('pack');
+  });
+
+  it('without packs it behaves as before', () => {
+    const needs = fontsForPresets(presets, [], [libraryFont('Both')]);
+    expect(needs.copyable).toEqual(['Both']);
+    expect(needs.missing).toEqual(['TeensySF', 'SmthJedi', 'Nowhere', 'OnCard', 'NoCopy']);
   });
 });

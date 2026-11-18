@@ -11,10 +11,11 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "dist": "electron-vite build && electron-builder --win --publish never",
+    "fontpacks": "node scripts/fontpacks.mjs",
+    "dist": "node scripts/fontpacks.mjs --check && electron-vite build && electron-builder --win --publish never",
     "test": "vitest run",
     "shots": "node scripts/shots.mjs",
-    "icons":"electron scripts/icons.mjs",
+    "icons": "electron scripts/icons.mjs",
     "notices": "node scripts/notices.mjs"
   },
   "dependencies": {
@@ -64,6 +65,13 @@
       {
         "from": "../../THIRD-PARTY-NOTICES.md",
         "to": "THIRD-PARTY-NOTICES.md"
+      },
+      {
+        "from": "resources/packs",
+        "to": "packs",
+        "filter": [
+          "*.hwpack"
+        ]
       }
     ],
     "win": {

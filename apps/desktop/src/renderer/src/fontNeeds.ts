@@ -1,29 +1,50 @@
 // The fonts a saber's presets name, and where each one is: on the card, in the library ready to copy, or nowhere.
 // Moved out of Fonts.tsx unchanged so it can be tested (sd-fonts-test-coverage).
 
-import type { FontEntry, LibraryFont } from '../../shared/api';
+import type { FontEntry, LibraryFont, PackInfo } from '../../shared/api';
+
+/** The part of a pack the page needs: enough to tell whether it is a font that may be copied, and to credit it. */
+export type FontPack = Pick<PackInfo, 'id' | 'kind' | 'name' | 'creator' | 'licence' | 'allow'>;
 
 export interface FontNeeds {
   /** Font folders the presets name (their first font path), without `common`, each once. */
   needed: string[];
-  /** Needed, not on the card, and in the library: "Copy all" copies these. */
+  /** Needed, not on the card, and in the library or in a pack that allows copying: "Copy all" copies these. */
   copyable: string[];
-  /** Needed, and neither on the card nor in the library. */
+  /** Needed, and not on the card, in the library or in a pack that allows copying. */
   missing: string[];
   onCard(font: string): boolean;
   inLibrary(font: string): LibraryFont | null;
+  /** A pack that allows copying this font to a card. A font in the library copies from there instead (see `copyFrom`). */
+  inPack(font: string): FontPack | null;
+  /** Where a copy comes from: the library when it has the font, else a pack. */
+  copyFrom(font: string): { from: 'library'; font: LibraryFont } | { from: 'pack'; pack: FontPack } | null;
 }
 
-export function fontsForPresets(presets: { font: string }[], cardFonts: Pick<FontEntry, 'name'>[], library: LibraryFont[]): FontNeeds {
+/** "TeensySF · by KRSABERS.COM, CC BY-SA 4.0": the credit the licence asks to be shown with a pack's font. */
+export function packCredit(pack: Pick<FontPack, 'name' | 'creator' | 'licence'>): string {
+  return `${pack.name} · by ${pack.creator}, ${pack.licence}`;
+}
+
+export function fontsForPresets(presets: { font: string }[], cardFonts: Pick<FontEntry, 'name'>[], library: LibraryFont[], packs: FontPack[] = []): FontNeeds {
   const needed = [...new Set(presets.map((p) => p.font.split(';')[0]?.trim() ?? '').filter((f) => f && f.toLowerCase() !== 'common'))];
   const onCard = (f: string) => cardFonts.some((x) => x.name.toLowerCase() === f.toLowerCase());
   const inLibrary = (f: string) => library.find((x) => x.folder.toLowerCase() === f.toLowerCase()) ?? null;
+  const inPack = (f: string) => packs.find((p) => p.kind === 'font' && p.allow.copyToCard && p.name.toLowerCase() === f.toLowerCase()) ?? null;
+  const copyFrom = (f: string): ReturnType<FontNeeds['copyFrom']> => {
+    const lib = inLibrary(f);
+    if (lib) return { from: 'library', font: lib };
+    const pack = inPack(f);
+    return pack ? { from: 'pack', pack } : null;
+  };
   return {
     needed,
-    copyable: needed.filter((f) => !onCard(f) && inLibrary(f)),
-    missing: needed.filter((f) => !onCard(f) && !inLibrary(f)),
+    copyable: needed.filter((f) => !onCard(f) && copyFrom(f)),
+    missing: needed.filter((f) => !onCard(f) && !copyFrom(f)),
     onCard,
     inLibrary,
+    inPack,
+    copyFrom,
   };
 }
 

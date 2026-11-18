@@ -354,6 +354,8 @@ export interface HiltwrightApi {
     dir(): Promise<string>;
     mesh(id: string): Promise<PackMesh>;
     font(id: string): Promise<FontSounds>;
+    /** Copy a font pack's folder to the card at `root`, all or nothing. Refused unless the pack allows copying to a card. */
+    copyFontToCard(packId: string, root: string, opts: { replace: boolean }): Promise<FontEntry>;
   };
   /** Bring fonts over from another board's SD card. The source is only read. */
   importer: {

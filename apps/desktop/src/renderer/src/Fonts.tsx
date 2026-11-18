@@ -3,11 +3,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { copyAnywayQuestion, saberCanReadFileSystem, shouldAskBeforeCopy, type VoicePackStatus } from '@hiltwright/core';
-import type { CardInfo, FontEntry, LibraryFont } from '../../shared/api';
+import type { CardInfo, FontEntry, LibraryFont, PackInfo } from '../../shared/api';
 import type { Workspace } from './workspace';
 import type { Board } from './board';
 import { XenoImport } from './XenoImport';
-import { fontsForPresets } from './fontNeeds';
+import { fontsForPresets, packCredit } from './fontNeeds';
 import { FEATURES } from './features';
 import { Icon } from './Icon';
 import { cardKind, chooseCard, rememberCardChoice, rememberedCardChoice } from './cardChoice';
@@ -34,6 +34,9 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   const [library, setLibrary] = useState<LibraryFont[]>([]);
   const [copyingNeeded, setCopyingNeeded] = useState<string | null>(null);
   useEffect(() => { void api().fontLibrary.list().then(setLibrary).catch(() => setLibrary([])); }, []);
+  // Fonts that ship with Hiltwright as packs, and may be copied to a card.
+  const [packs, setPacks] = useState<PackInfo[]>([]);
+  useEffect(() => { void api().packs.list().then(setPacks).catch(() => setPacks([])); }, []);
   // The saber's own card over USB. Hiltwright firmware carries a mass-storage interface, but ProffieOS only hands
   // the card over when asked ('sd 1'): the blade goes off, idle sounds stop, the card is released and Windows
   // mounts it as a drive. 'sd 0' takes it back. While the host has it, the saber cannot play from it.
@@ -242,7 +245,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
   };
 
   // The fonts this saber's presets name, and where each one is: on the card, in the library ready to copy, or nowhere.
-  const { needed, onCard, inLibrary, copyable } = fontsForPresets(ws.model?.presets ?? [], fonts, library);
+  const { needed, onCard, inLibrary, inPack, copyFrom, copyable } = fontsForPresets(ws.model?.presets ?? [], fonts, library, packs);
   const copyNeeded = async (list: string[], sure = false) => {
     if (!card) return;
     if (shouldAskBeforeCopy(card.fileSystem) && !sure) { setAskFs({ what: list.length === 1 ? list[0] : `${list.length} fonts`, run: () => void copyNeeded(list, true) }); return; }
@@ -251,12 +254,12 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
     const done: string[] = []; const failed: string[] = [];
     try {
       for (const f of list) {
-        const lib = inLibrary(f); if (!lib) continue;
+        const src = copyFrom(f); if (!src) continue;
         setCopyingNeeded(f);
         setProgress(null);
-        try { await api().fontLibrary.copyToCard(lib.folder, card.root, false); done.push(f); } catch (err) { failed.push(`${f}: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}`); }
+        try { if (src.from === 'library') await api().fontLibrary.copyToCard(src.font.folder, card.root, false); else await api().packs.copyFontToCard(src.pack.id, card.root, { replace: false }); done.push(f); } catch (err) { failed.push(`${f}: ${String(err).replace(/^Error: (Error invoking remote method '[^']+': Error: )?/, '')}`); }
       }
-      setMessage(failed.length ? { tone: done.length ? 'amber' : 'red', text: `${done.length ? `Copied ${done.join(', ')}. ` : ''}Not copied: ${failed.join('; ')}` } : { tone: 'green', text: `Copied ${done.join(', ')} from the font library to the card.` });
+      setMessage(failed.length ? { tone: done.length ? 'amber' : 'red', text: `${done.length ? `Copied ${done.join(', ')}. ` : ''}Not copied: ${failed.join('; ')}` } : { tone: 'green', text: `Copied ${done.join(', ')} to the card.` });
       await scan();
     } finally { setCopyingNeeded(null); setBusy(false); setProgress(null); }
   };
@@ -357,18 +360,20 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
               <div className="list">
                 {needed.map((f) => {
                   const lib = inLibrary(f);
+                  const pack = lib ? null : inPack(f);
                   return (
                     <div key={f} className="li" style={{ minHeight: 38 }}>
-                      <span className="col grow" style={{ gap: 0 }}><span className="small ellip" style={{ fontWeight: 600 }}>{f}</span>{lib && lib.meta.name !== lib.folder && <span className="hint ellip" style={{ fontSize: 11.5 }}>{lib.meta.name}{lib.meta.maker ? `, ${lib.meta.maker}` : ''}</span>}</span>
-                      {!card ? (lib ? <span className="chip ok"><Icon name="check" />In library</span> : <span className="chip" title="Put the card in to see whether it is there">Card not checked</span>)
+                      <span className="col grow" style={{ gap: 0 }}><span className="small ellip" style={{ fontWeight: 600 }}>{f}</span>{lib && lib.meta.name !== lib.folder && <span className="hint ellip" style={{ fontSize: 11.5 }}>{lib.meta.name}{lib.meta.maker ? `, ${lib.meta.maker}` : ''}</span>}{pack && <span className="hint ellip" style={{ fontSize: 11.5 }}>{packCredit(pack)}</span>}</span>
+                      {!card ? (lib ? <span className="chip ok"><Icon name="check" />In library</span> : pack ? <span className="chip ok"><Icon name="check" />Ready to copy</span> : <span className="chip" title="Put the card in to see whether it is there">Card not checked</span>)
                         : onCard(f) ? <span className="chip ok"><Icon name="check" />On the card</span>
                         : lib ? <button type="button" className="btn sm" disabled={working} onClick={() => void copyNeeded([f])}><span className="b"><span className="i">{copyingNeeded === f ? 'Copying…' : 'Copy from library'}</span></span></button>
-                        : <span className="chip err" title="Not on the card and not in the font library"><Icon name="x" />Missing</span>}
+                        : pack ? <button type="button" className="btn sm" disabled={working} onClick={() => void copyNeeded([f])}><span className="b"><span className="i">{copyingNeeded === f ? 'Copying…' : 'Copy to card'}</span></span></button>
+                        : <span className="chip err" title="Not on the card, not in the font library and not in a font pack"><Icon name="x" />Missing</span>}
                     </div>
                   );
                 })}
               </div>
-              {card && needed.some((f) => !inLibrary(f) && !onCard(f)) && <div className="pb hint" style={{ paddingTop: 10 }}>A font marked missing has to reach the card before the saber can play that preset. <button type="button" className="holo" onClick={() => go('library')}>Add it to the Font library</button>, then copy it from here.</div>}
+              {card && needed.some((f) => !copyFrom(f) && !onCard(f)) && <div className="pb hint" style={{ paddingTop: 10 }}>A font marked missing has to reach the card before the saber can play that preset. <button type="button" className="holo" onClick={() => go('library')}>Add it to the Font library</button> and copy it from here, or choose another font for that preset on the Presets page.</div>}
             </section>
           )}
           {tab === 'add' && <>

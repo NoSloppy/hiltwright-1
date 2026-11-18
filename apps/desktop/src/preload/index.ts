@@ -99,6 +99,7 @@ const api: HiltwrightApi = {
     dir: () => ipcRenderer.invoke('packs:dir'),
     mesh: (id) => ipcRenderer.invoke('packs:mesh', id),
     font: (id) => ipcRenderer.invoke('packs:font', id),
+    copyFontToCard: (id, root, opts) => ipcRenderer.invoke('packs:copyFontToCard', id, root, opts),
   },
   importer: {
     pickXeno: () => ipcRenderer.invoke('import:pickXeno'),

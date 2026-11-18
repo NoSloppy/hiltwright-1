@@ -51,7 +51,14 @@ Hiltwright does not ship these. The first-run toolchain install and the driver s
 
 No sound font is bundled in this repository. Font packs are made with `apps/desktop/scripts/hwpack.ts`, which records each pack's creator and licence in its manifest and shows them in the app. The free ProffieOS font packs are CC BY-SA 4.0 (the packer's documented example). Commercial sound fonts are never redistributed (`docs/01-proffieos-recon.md`).
 
-Beta 1 ships no sound fonts.
+Beta 1 ships the six free sound fonts from the ProffieOS default SD card, each as a Hiltwright pack. All six are licensed under Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0), https://creativecommons.org/licenses/by-sa/4.0/. Each font's own licence file is inside its pack, and it is copied to the card with the font.
+
+- TeensySF: by KRSABERS.COM. CC BY-SA 4.0.
+- TthCrstl (Tythonian Crystal): by Dayad Jocen. CC BY-SA 4.0.
+- SmthJedi: no author is named in its files. CC BY-SA 4.0.
+- SmthGrey: no author is named in its files. CC BY-SA 4.0.
+- SmthFuzz: no author is named in its files. CC BY-SA 4.0.
+- RgueCmdr: no author is named in its files. CC BY-SA 4.0.
 
 ## Built-in PunkSaber hilt
 

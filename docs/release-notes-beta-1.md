@@ -23,6 +23,10 @@ Blade ID and the Xenopixel import are hidden behind one switch. The code stays i
 - macOS and Linux.
 - Building fonts from sounds.
 
+## Free sound fonts
+
+The six free ProffieOS fonts are included and can be copied to a card from Fonts & SD.
+
 ## Install
 
 The installer is unsigned, so Windows will warn you before it runs. The install guide covers each Windows barrier to unsigned software.
