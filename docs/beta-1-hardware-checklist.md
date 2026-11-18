@@ -20,8 +20,8 @@ Run by the owner on 2026-11-18 on a bare V3.9 (serial 207A349A5430), USB power o
 - [x] Build and install. Built in 19.8 s at 43% of the V3's flash; written in 58 s.
 - [x] It reconnects by itself after the install.
 - [x] Restore the backup. Written in 140 s; the saber came back on its old firmware and matched its record.
-- [ ] Change one preset's font and one colour live. Not run.
-- [ ] Share the card over USB, then give it back. `sd 1` was sent on the old firmware; the result was not recorded. Not run on the Hiltwright build.
+- [ ] Change one preset's font and one colour live. Not run. Preset switching works; the owner confirmed it on the V2.2 with sound. The V3 has no speaker, so nothing can be heard on it.
+- [x] Share the card over USB, then give it back. With the new wait (2026-11-18): the drive was found after 9 s by its USB serial, the six free fonts were copied from their packs (7 fonts on the card became 13), and the card was given back. With the card open in File Explorer the first give-back was refused and the second worked. After that the saber no longer said "font directory not found".
 - [ ] Ten preset selections, each after 30 s idle. Only four were made, close together: one stalled and recovered by itself ("ok after a pause").
 - [ ] With a battery. Waits until the board is in a hilt.
 

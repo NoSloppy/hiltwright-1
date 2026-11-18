@@ -316,7 +316,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
         {shared && !sharing && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The saber has handed its card to this computer{usbRoot ? ` (${usbRoot})` : ''}. It cannot play until you give the card back; do that here rather than unplugging, so nothing is left half written. Copying is slow this way, a big font can take minutes.</span></div></div>}
         {!live && board.cardLostWhileShared && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>The connection went while the saber was sharing its card. The saber may still be holding its card. Reconnect it to give the card back.</span></div></div>}
         {progress && busy && <div style={{ padding: '0 18px 12px' }}><div className="note"><Icon name="sd" /><span>Copying {progress.name}: {progress.done} of {progress.total} files</span></div></div>}
-        {usbNote && <div style={{ padding: '0 18px 12px' }}><div className="note"><Icon name="info" /><span>{usbNote}</span></div></div>}
+        {usbNote && <div style={{ padding: '0 18px 12px' }}><div className="note amber"><Icon name="warn" /><span>{usbNote}</span></div></div>}
         {message && <div style={{ padding: '0 18px 16px' }}><div className={`note ${message.tone}`}><Icon name={message.tone === 'green' ? 'check' : message.tone === 'red' ? 'x' : 'warn'} /><span>{message.text}</span></div></div>}
       </section>
 

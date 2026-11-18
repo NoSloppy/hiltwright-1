@@ -153,7 +153,7 @@ export async function ejectVolume(root: string): Promise<{ ok: boolean; detail: 
       if (out === 'ejected' || out === 'gone') return { ok: true, detail: attempt > 1 ? `${out} (try ${attempt})` : out };
       if (out !== 'still-there') break;
     }
-    return { ok: false, detail: out === 'still-there' ? 'Windows did not release the drive. Close any window or program that has files on it open, then try again.' : out };
+    return { ok: false, detail: out === 'still-there' ? 'Windows would not let go of the card because something still has it open. Close any File Explorer window showing the card, and any program with a file from it open, then press Give the card back again. The saber keeps sharing its card until then.' : out };
   }
   const cmd = process.platform === 'darwin' ? ['diskutil', ['eject', root]] as const : ['udisksctl', ['unmount', '-b', root]] as const;
   const out = await new Promise<string>((resolve) => execFile(cmd[0], [...cmd[1]], { timeout: 15000 }, (err, stdout, stderr) => resolve(err ? `error ${String(stderr || err)}` : 'ejected')));
