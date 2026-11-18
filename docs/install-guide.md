@@ -42,7 +42,7 @@ If there is no **Run anyway** button, read the next section.
 
 ## 3 Smart App Control
 
-Check this before you download. Smart App Control is on some Windows 11 PCs. When it is **On**, it blocks the Hiltwright installer, because this beta is not signed. There is no **Run anyway** choice, and Microsoft says there is no way to allow one app.
+Check this before you download. Smart App Control is on some Windows 11 PCs. When it is **On**, it blocks the Hiltwright installer and the installed app, because this beta is not signed. There is no **Run anyway** choice, and Microsoft says there is no way to allow one app.
 
 To check:
 
@@ -53,7 +53,7 @@ To check:
 
 - **Off:** nothing to do. Carry on.
 - **Evaluation:** it is only watching. It may switch itself to **On** or **Off** later.
-- **On:** the installer is blocked. Windows says: "We blocked … because we could not verify its publisher to confirm it was safe to run. This app has been blocked to help protect your device and data."
+- **On:** the installer is blocked, and so is the app itself. Windows says: "We blocked … because we could not verify its publisher to confirm it was safe to run. This app has been blocked to help protect your device and data."
 
 If yours is **On**, you have two choices:
 
@@ -62,7 +62,7 @@ If yours is **On**, you have two choices:
 
 ![Smart App Control settings in Windows Security, with On, Evaluation and Off](images/smart-app-control.png)
 
-Turning it off only for the install is probably not enough. The installed app is unsigned too, and so are the compiler and flashing tool it downloads, so expect to leave Smart App Control off while you use this beta. This has not been confirmed yet.
+Turning it off only for the install is not enough. The installed app is unsigned too, and with Smart App Control turned back on, Windows blocks Hiltwright when you open it (tested on the developer's PC). Smart App Control has to stay off for as long as you use this beta.
 
 A signed build, which Smart App Control accepts, is planned for the next beta.
 

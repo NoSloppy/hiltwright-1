@@ -185,3 +185,4 @@ Work deferred past Beta 1, one line per item. Copied from the open OpenSpec prop
 - Style catalogue: some number slots are typed wrongly, and `BatteryLevelStyle`, `FanShade` and `VUMeterStyle1` are missing, so the save check flags them. (Beta 2)
 - Font engine: accent swings inside SmoothSwing, SmoothSwing V1, and monophonic lockups replacing the hum are not played as the firmware plays them. (Beta 2)
 - Layout: the Presets middle column has its own scroll bar at 700 px high, and the Styles filter chips take three rows at 1180 px wide. (Beta 2)
+- Signing: with Smart App Control on, Windows blocks the unsigned installer and the installed app, with no way to allow them (owner's PC, 2026-11-18). Not yet known: whether the downloaded compiler and flashing tool are blocked too, which a signed app alone would not fix. (Beta 2)
