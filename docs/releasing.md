@@ -6,6 +6,8 @@ How to cut a Hiltwright beta from now on, and how an installed copy then finds i
 
 ## Steps
 
+0. **Write the release notes** as `docs/release-notes-beta-N.md`, point `site/build.mjs` at that file, and update the version in `docs/install-guide.md` (its title, the download link and file name, and the source link).
+
 1. **Bump the version** in all three package files and the lockfile, on a branch:
 
    ```

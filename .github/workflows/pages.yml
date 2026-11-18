@@ -8,7 +8,7 @@ on:
     paths:
       - 'site/**'
       - 'docs/install-guide.md'
-      - 'docs/release-notes-beta-1.md'
+      - 'docs/release-notes-beta-*.md'
       - 'docs/images/**'
       - 'packages/core/src/sim.ts'
       - 'packages/core/src/lookLibrary.ts'

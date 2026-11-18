@@ -87,7 +87,7 @@ The **About** page, under Tools, shows the version you are running and the licen
 
 ### Updates
 
-Versions after 0.2.0-beta.1 have an **Updates** panel on the About page. 0.2.0-beta.1 itself has none: install the next beta by hand once, over it.
+Versions after 0.2.0-beta.1 have an **Updates** panel on the About page. 0.2.0-beta.1 itself has none: install a newer beta by hand once, over it.
 
 - **Check for updates when Hiltwright starts** is on unless you turn it off. Hiltwright then asks GitHub for its list of releases a little after it starts, and every few hours while it is open. The check sends nothing about your sabers or you; GitHub sees your internet address, as with any web page. A check that fails by itself says nothing, and being offline is not an error.
 - **Check now** checks at once, whether the setting is on or off, and says what it found: "You have the latest version", or "Could not check:" and why.
