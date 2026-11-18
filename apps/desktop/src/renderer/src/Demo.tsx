@@ -73,8 +73,9 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
   useEffect(() => { try { localStorage.setItem('hiltwright.demo.lightOpen', lightOpen ? '1' : '0'); } catch { /* private mode */ } }, [lightOpen]);
   const [failed, setFailed] = useState<string | null>(null);
 
-  // ---- sound: a font from the font library, a card, the saber's card, or a pack, played as the saber would ----
-  type Source = { kind: 'card' | 'library' | 'pack'; root: string; label: string };
+  // ---- sound: a font from the font library or a pack, played as the saber would ----
+  // Cards are not a source here: reading one over the saber's USB link takes tens of seconds and froze the room.
+  type Source = { kind: 'library' | 'pack'; root: string; label: string };
   const [sources, setSources] = useState<Source[]>([]);
   // Library fonts go by their folder (what a preset names); the name the owner gave them is shown.
   const [libNames, setLibNames] = useState<Record<string, string>>({});
@@ -92,10 +93,8 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
   const [soundNote, setSoundNote] = useState<string | null>(null);
   const [volume, setVolume] = useState(() => { try { return Number(localStorage.getItem('hiltwright.demo.volume') ?? 0.8); } catch { return 0.8; } });
   const refreshSources = async () => {
-    const [cards, lib, found] = await Promise.all([api().sd.locate(), api().fontLibrary.list().catch(() => []), api().packs.list().catch(() => [] as PackInfo[])]);
-    // The library first: it is on this computer, so it loads in a moment where a card over USB takes a while.
+    const [lib, found] = await Promise.all([api().fontLibrary.list().catch(() => []), api().packs.list().catch(() => [] as PackInfo[])]);
     const next: Source[] = lib.length ? [{ kind: 'library', root: LIBRARY, label: `Font library (${lib.length})` }] : [];
-    next.push(...cards.filter((c) => c.proffie).map((c) => ({ kind: 'card' as const, root: c.root, label: `Card at ${c.root}` })));
     if (found.some((p) => p.kind === 'font' && p.allow.demoPlayback)) next.push({ kind: 'pack', root: 'packs', label: 'Hiltwright fonts' });
     setSources(next);
     setSource((cur) => next.find((n) => n.root === cur?.root) ?? next[0] ?? null);
@@ -106,7 +105,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
   useEffect(() => {
     if (!source) { setFonts([]); return; }
     let live = true;
-    void (source.kind === 'pack' ? api().packs.list().then((ps) => ps.filter((p) => p.kind === 'font' && p.allow.demoPlayback).map((p) => ({ name: p.name, path: p.id, report: { files: p.sounds, bytes: 0, type: 'unknown' as const, effects: {}, issues: [] } }))) : source.kind === 'library' ? libraryEntries() : api().sd.listFonts(source.root)).then((f) => { if (live) setFonts(f); }).catch(() => { if (live) setFonts([]); });
+    void (source.kind === 'pack' ? api().packs.list().then((ps) => ps.filter((p) => p.kind === 'font' && p.allow.demoPlayback).map((p) => ({ name: p.name, path: p.id, report: { files: p.sounds, bytes: 0, type: 'unknown' as const, effects: {}, issues: [] } }))) : libraryEntries()).then((f) => { if (live) setFonts(f); }).catch(() => { if (live) setFonts([]); });
     return () => { live = false; };
   }, [source?.root]); // eslint-disable-line react-hooks/exhaustive-deps
   const addToLibrary = async () => { const r = await api().fontLibrary.addFolder(); if (r?.added.length) await refreshSources(); };
@@ -116,7 +115,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
     setLoading({ done: 0, total: 0, what: 'reading' });
     const off = api().sd.onReadFontProgress((p) => setLoading({ done: p.done, total: p.total, what: 'reading' }));
     try {
-      const sounds = from.kind === 'pack' ? await api().packs.font(fonts.find((f) => f.name === name)?.path ?? name) : from.kind === 'library' ? await api().fontLibrary.readFont(name) : await api().sd.readFont(from.root, name);
+      const sounds = from.kind === 'pack' ? await api().packs.font(fonts.find((f) => f.name === name)?.path ?? name) : await api().fontLibrary.readFont(name);
       off();
       const wasOn = engineRef.current?.isOn ?? false;
       engineRef.current?.dispose();
@@ -158,10 +157,10 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
     const from = sources.find((sr) => fonts.some((f) => f.name === folder) && sr.root === source?.root) ?? source;
     // The font may live on a different source than the one selected: try each until one has it.
     for (const sr of [from, ...sources].filter((x): x is Source => !!x)) {
-      const list = sr.root === source?.root ? fonts : sr.kind === 'pack' ? (await api().packs.list().catch(() => [] as PackInfo[])).filter((p) => p.kind === 'font').map((p) => ({ name: p.name, path: p.id })) : await (sr.kind === 'library' ? libraryEntries() : api().sd.listFonts(sr.root)).catch(() => []);
+      const list = sr.root === source?.root ? fonts : sr.kind === 'pack' ? (await api().packs.list().catch(() => [] as PackInfo[])).filter((p) => p.kind === 'font').map((p) => ({ name: p.name, path: p.id })) : await libraryEntries().catch(() => []);
       if (list.some((f) => f.name === folder)) { setSource(sr); await loadFont(folder, sr); return; }
     }
-    setSoundNote(`The font "${folder}" is not in the font library or on any card here. Add it to the Font library, or share the saber's card on Fonts & SD.`);
+    setSoundNote(`The font "${folder}" is not in the Font library. Add it there to hear it here.`);
   };
   const [control, setControl] = useState<ControlMode>(() => { try { return localStorage.getItem('hiltwright.demo.control') === 'steer' ? 'steer' : 'hold'; } catch { return 'hold'; } });
   const [look3d, setLook3d] = useState<SceneSettings>({ ...DEFAULT_SCENE });
@@ -502,13 +501,13 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
               <div className="col" style={{ gap: 6 }}>
                 <span className="label">Fonts from</span>
                 {sources.length === 0
-                  ? <span className="hint">No fonts to hand. Put a card in a reader, share the saber's card on Fonts &amp; SD, or <button type="button" className="holo" onClick={() => void addToLibrary()}>add a font folder</button> to the Font library.</span>
+                  ? <span className="hint">No fonts to hand. <button type="button" className="holo" onClick={() => void addToLibrary()}>Add a font folder</button> to the Font library to hear it here.</span>
                   : (
                     <div className="row" style={{ gap: 6 }}>
                       <span className="input sans grow" style={{ height: 28, fontSize: 12 }}><span className="ellip">{source?.label ?? 'Source'}</span><span className="caret"><Icon name="down" /></span>
                         <Select value={source?.root ?? ''} aria-label="Where the fonts are" onChange={(e) => setSource(sources.find((x) => x.root === e.target.value) ?? null)}>{sources.map((x) => <option key={x.root} value={x.root}>{x.label}</option>)}</Select></span>
                       <button type="button" className="chip" title="Add a font folder to the Font library" onClick={() => void addToLibrary()}><Icon name="import" /></button>
-                      <button type="button" className="chip" title="Look again for cards" onClick={() => void refreshSources()}><Icon name="undo" /></button>
+                      <button type="button" className="chip" title="Look again" onClick={() => void refreshSources()}><Icon name="undo" /></button>
                     </div>
                   )}
               </div>
@@ -523,7 +522,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
                 <div className="row between"><span className="label">Volume</span><span className="mono mute" style={{ fontSize: 11 }}>{Math.round(volume * 100)}%</span></div>
                 <input type="range" min={0} max={1} step={0.05} value={volume} aria-label="Volume" onChange={(e) => setVolume(Number(e.target.value))} />
               </label>
-              {loading && <span className="hint">{loading.what === 'reading' ? 'Reading' : 'Decoding'} {loading.done}{loading.total ? ` of ${loading.total}` : ''}{source?.kind === 'card' ? ' (slow over the saber’s USB link)' : ''}…</span>}
+              {loading && <span className="hint">{loading.what === 'reading' ? 'Reading' : 'Decoding'} {loading.done}{loading.total ? ` of ${loading.total}` : ''}…</span>}
               {soundNote && <span className="hint">{soundNote}</span>}
               {!engine && !loading && source && <span className="hint" style={{ fontSize: 11.5 }}>Pick a font and the saber hums, swings, clashes and answers every effect with its sounds.</span>}
             </>

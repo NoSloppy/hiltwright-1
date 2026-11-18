@@ -66,15 +66,17 @@ Two built-in styles, two pasted, two built in the editor. For each: idle, igniti
 
 ## 9. Listening (demo room, no saber needed)
 
-- [ ] A font with melt sounds: melt starts with its begin sound, holds, and ends with its end sound.
-- [ ] A font with drag but no melt: melt plays drag.
-- [ ] A font with a lockup but no end sound, and with `clash` files: ending the lockup plays a clash.
-- [ ] A font with swing sounds and no SmoothSwing: a fast swing gives one swing sound, and a second needs a pause. A slow wave makes the hum swell.
-- [ ] An old single-sound font (`poweron`, `swing1`): the swing takes the hum's place, then the hum returns.
-- [ ] A SmoothSwing font sounds as it did before.
-- [ ] Ignition with pre-on, and retraction with post-off, sound as on the saber. Listen for the hum starting too early or too late.
-- [ ] The hum does not crackle or distort on a hard swing.
-- [ ] "From hote2" brings the preset's colours as well as its style and font.
+Passed by the owner on 2026-11-18, with fonts from the library and two test fonts made from TeensySF. Found: choosing a card as the font source froze the room for 20 to 30 seconds, so cards are no longer a source there.
+
+- [x] A font with melt sounds: melt starts with its begin sound, holds, and ends with its end sound.
+- [x] A font with drag but no melt: melt plays drag.
+- [x] A font with a lockup but no end sound, and with `clash` files: ending the lockup plays a clash.
+- [x] A font with swing sounds and no SmoothSwing: a fast swing gives one swing sound, and a second needs a pause. A slow wave makes the hum swell.
+- [x] An old single-sound font (`poweron`, `swing1`): the swing takes the hum's place, then the hum returns.
+- [x] A SmoothSwing font sounds as it did before.
+- [x] Ignition with pre-on, and retraction with post-off, sound as on the saber. Listen for the hum starting too early or too late.
+- [x] The hum does not crackle or distort on a hard swing.
+- [x] "From hote2" brings the preset's colours as well as its style and font.
 
 ## 10. Diagnostics
 
