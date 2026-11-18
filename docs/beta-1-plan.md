@@ -102,9 +102,9 @@ Failures are fixed in the lane that owns them, then only the failed line is re-r
 
 ### Step 3: dry run and ship
 
-- [ ] Someone other than the owner installs from the packaged installer with only the guide
-- [ ] Their notes: fix what breaks the promise, the rest goes to Later
-- [ ] Tag, GitHub release with installer, guide and notes
+- [x] Someone other than the owner installs from the packaged installer with only the guide Not done as written: the owner installed from the published installer and ran the whole tour, 2026-11-18.
+- [x] Their notes: fix what breaks the promise, the rest goes to Later Nothing broke the promise. Two notes, both taken up after the release: removing a saber from the Armory, and update checks.
+- [x] Tag, GitHub release with installer, guide and notes `v0.2.0-beta.1`, a pre-release, 2026-11-18. The guide and the docs are on the website, hiltwright.com.
 - [x] Feedback channel and triage rule in the release notes GitHub Issues.
 - [ ] Invite testers
 

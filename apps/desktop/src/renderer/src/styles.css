@@ -108,6 +108,7 @@ td .chip,td .chip.err{white-space:nowrap;flex:none}
 .chip.err{white-space:normal;height:auto;min-height:24px;padding:4px 10px;line-height:1.45;flex:0 1 auto;min-width:0;max-width:100%;overflow-wrap:break-word}.chip.err svg{flex:none}
 .chip svg{width:13px;height:13px}
 button.chip{cursor:pointer}
+button.chip:disabled{opacity:.35;cursor:default}
 button.chip.sel{background:rgba(95,211,255,.12);border-color:var(--holo);color:#fff}
 
 /* Fields */
