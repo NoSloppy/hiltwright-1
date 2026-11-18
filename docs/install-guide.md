@@ -10,7 +10,7 @@ You need:
 - A Proffieboard V2.2 or V3.
 - A USB data cable. Some cables only charge.
 - About 2.5 GB of free disk space. The first-run setup downloads about 360 MB and uses about 1.9 GB.
-- The installer is about 105 MB.
+- The installer is about 205 MB.
 
 ## 1 Download
 
