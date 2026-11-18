@@ -64,7 +64,7 @@ If yours is **On**, you have two choices:
 
 Turning it off only for the install is not enough. The installed app is unsigned too, and with Smart App Control turned back on, Windows blocks Hiltwright when you open it (tested on the developer's PC). Smart App Control has to stay off for as long as you use this beta.
 
-A signed build, which Smart App Control accepts, is planned for the next beta.
+This is because the beta is not signed. A signed build would not be blocked; there is none yet.
 
 ## 4 First run: the one-time setup download
 

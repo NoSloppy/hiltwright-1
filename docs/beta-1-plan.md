@@ -57,7 +57,7 @@ Reasons for the three largest cuts:
 The roadmap left these to the end. They are the only items that can still move the date.
 
 - [ ] **V3 smoke:** backup, install, reconnect, one live preset edit, restore.
-- [ ] **Smart App Control spike:** on a clean Windows 11 PC with it on, run the installer, toolchain setup, a build and a flash. Record what is blocked.
+- [x] **Smart App Control spike:** done 2026-11-18 on the owner's PC. With it on, Windows blocks the unsigned installer and the installed app, with no way to allow them; a build from the development app still worked, so the downloaded compiler is not blocked. Decision: ship unsigned with instructions.
 - [ ] Decide the scope table above.
 
 ### Step 1: four lanes in parallel
@@ -86,7 +86,7 @@ Lanes share few files. Each runs in its own worktree and I merge.
 - [x] D2 `LICENSE`, third-party notices generated from dependencies, pack font credits (Haiku)
 - [x] D3 About screen with licence and tagged-source link (Sonnet)
 - [x] D4 diagnostics-feedback (trimmed, Sonnet)
-- [ ] D5 (waits on the Smart App Control spike) install guide and blocked-tool message, from the spike's notes (Sonnet)
+- [x] D5 install guide and blocked-tool message, from the spike's notes (Sonnet)
 - [x] D6 version `0.2.0-beta.1`, release notes, what is hidden (Haiku)
 - [x] D7 Later list: one line per deferred finding, from the open proposals (Haiku)
 
