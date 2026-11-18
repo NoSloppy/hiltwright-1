@@ -57,7 +57,7 @@ On the developer's PC, with Smart App Control set to **On**, the downloaded inst
 
 If Smart App Control does block Hiltwright, do not turn it off just for this. Tell us what it said and at which step (section 7): the installer, the one-time setup download, or the first build.
 
-TODO(owner): whether the one-time setup download and a first build were also run with Smart App Control on
+The one-time setup download and the first build have not been tried with Smart App Control on yet. They run a compiler and a flashing tool that Hiltwright downloads, so those are the steps to watch.
 
 ## 4 First run: the one-time setup download
 
