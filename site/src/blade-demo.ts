@@ -17,6 +17,9 @@ const COLOURS: { name: string; rgb: [number, number, number] | null }[] = [
   { name: 'Cyan', rgb: [0, 230, 255] },
   { name: 'White', rgb: [255, 255, 255] },
 ];
+// What each style reads from the saber's motion sensors. Most styles read none of it.
+const MOTION: Record<string, 'swing' | 'tilt' | 'twist'> = { hw_swing: 'swing', hw_current: 'swing', hw_split: 'swing', hw_comet: 'swing', hw_horizon: 'tilt', hw_liquid: 'tilt', hw_gravity: 'tilt', hw_twist: 'twist' };
+const RANGE = { swing: { min: 0, max: 600, step: 10, start: 0, label: 'Swing speed' }, tilt: { min: -90, max: 90, step: 1, start: 10, label: 'Tilt' }, twist: { min: -90, max: 90, step: 1, start: 0, label: 'Twist' } };
 const word = (rgb: [number, number, number]) => rgb.map((v) => v * 257).join(',');
 const tone = (v: number) => Math.round(255 * Math.pow(1 - Math.exp(-v * 1.6 * 2.4), 1 / 2.2));
 
@@ -30,6 +33,10 @@ function mount(root: HTMLElement): void {
   const power = q<HTMLButtonElement>('.bd-power');
   const swing = q<HTMLInputElement>('.bd-swing');
   const swatches = q<HTMLElement>('.bd-colours');
+  const motionLabel = q<HTMLElement>('.bd-motion');
+  const motionNote = q<HTMLElement>('.bd-motion-note');
+  let motion: 'swing' | 'tilt' | 'twist' | null = null;
+  const applyMotion = () => { const v = Number(swing.value); sim.setSwing(motion === 'swing' ? v : 0); sim.setAngle(motion === 'tilt' ? v : 10); sim.setTwist(motion === 'twist' ? v : 0); };
 
   const strip = document.createElement('canvas');
   strip.width = LEDS; strip.height = 1;
@@ -45,8 +52,13 @@ function mount(root: HTMLElement): void {
     const look = STYLES.find((l) => l.id === id) ?? STYLES[0];
     sim = new BladeSim(look.id, LEDS, 1 + Math.floor(Math.random() * 1e6));
     sim.setArgs(new Map(colour ? [[1, word(colour)]] : []));
-    sim.setSwing(Number(swing.value));
-    sim.setAngle(10);
+    motion = MOTION[look.id] ?? null;
+    const r = RANGE[motion ?? 'swing'];
+    swing.min = String(r.min); swing.max = String(r.max); swing.step = String(r.step); swing.value = String(r.start);
+    swing.disabled = !motion;
+    motionLabel.textContent = r.label;
+    motionNote.textContent = motion ? (motion === 'swing' ? 'This style reacts to how fast the saber swings. Move the slider.' : motion === 'tilt' ? 'This style reacts to where the blade points, from straight down to straight up. Move the slider.' : 'This style reacts to twisting the hilt. Move the slider.') : 'This style does not read the motion sensors. Try Swing flare, Current, Horizon, Downhill or Twist dial.';
+    applyMotion();
     about.textContent = look.description;
     on = false;
     if (ignite) setOn(true);
@@ -76,7 +88,7 @@ function mount(root: HTMLElement): void {
   });
 
   power.addEventListener('click', () => setOn(!on));
-  swing.addEventListener('input', () => sim.setSwing(Number(swing.value)));
+  swing.addEventListener('input', applyMotion);
   root.querySelectorAll<HTMLButtonElement>('[data-hit]').forEach((b) => b.addEventListener('click', () => {
     if (!on) setOn(true);
     const kind = b.dataset.hit!;
@@ -147,7 +159,7 @@ function mount(root: HTMLElement): void {
     if (visible && !raf) raf = requestAnimationFrame(loop);
     // The first time it comes into view, light it (unless the visitor asked for less motion).
     if (visible && !started) { started = true; if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(() => setOn(true), 500); }
-  }, { threshold: 0.3 }).observe(root);
+  }, { threshold: 0 }).observe(stage); // any of the blade on screen keeps it moving
   draw(performance.now());
 }
 
