@@ -34,10 +34,12 @@ Found: the installed presets named the default fonts (TeensySF, SmthJedi and oth
 
 ## 4. hote2: "Use it in" from Styles
 
-- [ ] Live list, a style already installed, preset 2, with a blast colour you tried on Styles: the saber confirms, the blade keeps its base colour, and after a reconnect the button reads "Already in" preset 2.
-- [ ] The same style on a preset that already has it: the button is disabled and says so.
+First, second and fourth lines passed by the owner on hote2, 2026-11-18.
+
+- [x] Live list, a style already installed, preset 2, with a blast colour you tried on Styles: the saber confirms, the blade keeps its base colour, and after a reconnect the button reads "Already in" preset 2.
+- [x] The same style on a preset that already has it: the button is disabled and says so.
 - [ ] Load a preset set so presets are staged, then "Use it in" the first staged preset: the saber does not change, and Presets shows the style in the staged preset.
-- [ ] Share the card, then try "Use it in": nothing is sent, and the page says the card is shared.
+- [x] Share the card, then try "Use it in": nothing is sent, and the page says the card is shared.
 - [ ] Rebuild after the first step: preset 2 keeps the style.
 
 ## 5. hote2: History, move, copy, delete
