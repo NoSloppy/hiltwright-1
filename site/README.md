@@ -22,4 +22,4 @@ npm run capture   # retake the screenshots and the tour's words (needs `npm inst
 
 In the docs, a blockquote starting with `**Note:**`, `**Tip:**` or `**Warning:**` becomes a callout, and `![alt](shots/clean-14.png)` shows a screenshot with its alt text as the caption.
 
-One-time setup on GitHub: Settings, Pages, Source: "GitHub Actions". The site is then at https://safwyls.github.io/hiltwright/.
+One-time setup on GitHub: Settings, Pages, Source: "GitHub Actions". The site is published at hiltwright.com (the custom domain set in the same Pages settings).

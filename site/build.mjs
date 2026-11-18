@@ -4,7 +4,7 @@
 //
 //   npm run build     (in site/)
 //
-// Every link is relative, so the site works at any path (GitHub Pages serves it under /hiltwright/).
+// Every link is relative, so the site works at any path. It is published at hiltwright.com.
 
 import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -57,7 +57,7 @@ function layout({ title, description, nav, root, body, cls = '', scripts = [] })
 <meta property="og:title" content="${esc(full)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://safwyls.github.io/hiltwright/assets/shots/clean-41.png">
+<meta property="og:image" content="https://hiltwright.com/assets/shots/clean-41.png">
 <link rel="icon" type="image/svg+xml" href="${root}assets/brand/hiltwright-icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -201,7 +201,7 @@ for (const page of [...built].filter((p) => p.endsWith('.html'))) {
   const ids = new Set([...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
   for (const m of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     const url = m[1];
-    if (/^(https?:|mailto:|data:)/.test(url) || url.startsWith('/')) continue; // /hiltwright/... on the 404 page: GitHub Pages serves it from any path
+    if (/^(https?:|mailto:|data:)/.test(url) || url.startsWith('/')) continue; // the 404 page is served from any path, so its links start at the root
     const [path, hash] = url.split('#');
     if (!path) { if (hash && !ids.has(hash)) { console.error(`${page}: no #${hash} on the page`); broken++; } continue; }
     const target = join(dirname(page), path).replace(/\\/g, '/').replace(/^\.\//, '');
