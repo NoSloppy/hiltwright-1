@@ -132,6 +132,22 @@ function createWindow(): void {
     }, 6000);
     // Dev aid: HILTWRIGHT_SHOT=<file.png> captures the window a few seconds after load; HILTWRIGHT_SHOT_JS runs first.
     const shot = process.env.HILTWRIGHT_SHOT;
+    // HILTWRIGHT_SHOTS=<json [{file, js}]> takes several in one run: each script runs (its promise awaited), then the
+    // window is captured. Used for the guided tour's steps, one after another.
+    const series = process.env.HILTWRIGHT_SHOTS;
+    if (series) setTimeout(() => {
+      void (async () => {
+        await win.webContents.executeJavaScript(`window.hiltwrightGoto && window.hiltwrightGoto(${JSON.stringify(process.env.HILTWRIGHT_PAGE ?? 'armory')})`, true);
+        await new Promise((r) => setTimeout(r, 800));
+        for (const s of JSON.parse(series) as { file: string; js: string }[]) {
+          try { await win.webContents.executeJavaScript(s.js, true); } catch (err) { console.log('[main] screenshot script failed', String(err)); }
+          await new Promise((r) => setTimeout(r, 450));
+          await writeFile(s.file, (await win.webContents.capturePage()).toPNG());
+          console.log('[main] screenshot', s.file);
+        }
+        console.log('[main] screenshots done');
+      })();
+    }, 6000);
     if (shot) setTimeout(() => { void win.webContents.executeJavaScript(`window.hiltwrightGoto && window.hiltwrightGoto(${JSON.stringify(process.env.HILTWRIGHT_PAGE ?? 'armory')})`, true).then(() => new Promise((r) => setTimeout(r, 800))).then(() => (process.env.HILTWRIGHT_SHOT_JS ? win.webContents.executeJavaScript(process.env.HILTWRIGHT_SHOT_JS, true).then(() => new Promise((r) => setTimeout(r, 600))) : null)).then(() => win.webContents.capturePage()).then((img) => writeFile(shot, img.toPNG())).then(() => console.log('[main] screenshot', shot)); }, process.env.HILTWRIGHT_BUILD_E2E ? 75000 : process.env.HILTWRIGHT_E2E ? 30000 : 6000);
   });
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);

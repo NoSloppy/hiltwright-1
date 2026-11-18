@@ -10,6 +10,7 @@ import {
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
 import { PROFFIE_FILTER, WebSerialTransport, describePort, grantedProffiePorts } from './serial';
 import { setConnectionSnapshot } from './support';
+import { assertMaySend, holdConnect, operationRefusal, tourLocked } from './tourLock';
 import { connectGate, createRecovery, deleteShown, duplicateShown, moveShown, parseSdAccess, readBattery, runOperation, sdFailureIn, sendOptionsFor, serialQueue, storedLayout, type SaveState } from './boardOps';
 
 export interface BoardInfo {
@@ -157,7 +158,8 @@ export function useBoard() {
    */
   const rebootToBootloader = useCallback(async (): Promise<boolean> => {
     const t = transport.current;
-    if (!t) return false;
+    // Never during the guided tour: nothing reaches a real saber while it runs (tourLock.ts).
+    if (!t || tourLocked()) return false;
     const port = t.port;
     try { log('in', 'RebootDFU'); await client.current?.send('RebootDFU', { idleMs: 400, expectSilence: true }); } catch { /* the port may vanish mid-reply; that is success */ }
     client.current?.close();
@@ -185,7 +187,7 @@ export function useBoard() {
    */
   const restartSaber = useCallback(async (): Promise<boolean> => {
     const t = transport.current;
-    if (!t) return false;
+    if (!t || tourLocked()) return false;
     try { log('in', 'reset'); await client.current?.send('reset', { idleMs: 400, expectSilence: true }); } catch { /* the port vanishes as it restarts; that is success */ }
     client.current?.close();
     client.current = null;
@@ -201,6 +203,7 @@ export function useBoard() {
   /** Send now, outside the queue: only while the saber is first read, before anything else can be queued. */
   const sendNow = useCallback(async (command: string, opts?: Parameters<BoardClient['send']>[1]): Promise<Response> => {
     if (!client.current) throw new Error('Not connected');
+    assertMaySend(command);
     log('in', command);
     const stalls = recovery.count;
     // `sd 1` and `sd 0` are allowed a long quiet while the saber lets go of its card or takes it back; nothing else is.
@@ -432,6 +435,8 @@ export function useBoard() {
 
   /** Connect. `serial`: the saber an install is bringing back; only that board is opened, when main can tell which it is. */
   const connect = useCallback(async (interactive = false, opts: { serial?: string | null } = {}) => {
+    // During the guided tour no port is opened; a saber plugged in meanwhile is connected when it ends (App.tsx).
+    if (holdConnect()) return;
     if (!('serial' in navigator)) { setStatus('error'); setError('Web Serial is not available in this window.'); return; }
     if (!(await api().app.boardAccess())) { setStatus('error'); setError('Board access is off for this run (HILTWRIGHT_NO_BOARD).'); return; }
     // The owner's own Connect reaches whichever board is there.
@@ -510,7 +515,8 @@ export function useBoard() {
    */
   const run = useCallback((label: string, op: (c: BoardClient) => Promise<{ ok: boolean; error?: string; ms?: number; note?: string }>, withSnapshot = true, remember = false, confirm?: () => boolean): Promise<boolean> => {
     // `confirm`: whether the saber, read again after a stall, shows this change (usb-power-connect D5).
-    const refuse = () => (cardRef.current.shared ? `Not sent: ${saberRef.current?.name ?? 'the saber'}'s card is shared with this computer. Give it back on Fonts & SD first.` : null);
+    // The guided tour, or the saber's card shared with this computer: nothing is sent (tourLock.ts).
+    const refuse = () => operationRefusal(cardRef.current.shared, saberRef.current?.name ?? null);
     return enqueue(() => runOperation({ client: () => client.current, setBusy, setSave, log, snapshot, recovery, refuse }, label, op, withSnapshot, confirm)).then((ok) => {
       if (ok && remember) void rememberPresets();
       return ok;
@@ -532,7 +538,7 @@ export function useBoard() {
   useEffect(() => {
     if (pendingApply == null || status !== 'connected') return;
     const t = setInterval(() => {
-      if (!client.current || busyRef.current) return;
+      if (!client.current || busyRef.current || tourLocked()) return;
       void send('get_on', { idleMs: 400, timeoutMs: 6000 }).then((r) => {
         if (!r.lines.some((l) => l.trim() === '0')) return;
         const index = pendingApply;

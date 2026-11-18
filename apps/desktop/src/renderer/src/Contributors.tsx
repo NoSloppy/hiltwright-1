@@ -49,7 +49,7 @@ export function Contributors({ onFonts, onLooks, onDemo }: { onFonts: () => void
 
   return (
     <div className="work" style={{ gridTemplateColumns: 'minmax(260px,360px) minmax(0,1fr)' }}>
-      <section className="panel fill" aria-label="Contributors">
+      <section className="panel fill" aria-label="Contributors" data-tour="contributors-list">
         <div className="ph"><h2>Contributors · {everyone.length}</h2>
           <label className="input sans" style={{ width: 150, height: 30 }}><Icon name="search" /><input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find" aria-label="Find a contributor" style={{ position: 'static', color: 'var(--text)' }} /></label>
         </div>

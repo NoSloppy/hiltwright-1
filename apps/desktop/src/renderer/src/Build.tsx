@@ -306,7 +306,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
   const blockers = tool ? toolchainBlockers(tool) : { pathTooLong: null, lowSpace: null };
 
   const toolStep = (now: boolean) => (
-    <div className={`stepc ${tool?.ready ? 'done' : now ? 'now' : ''}`}>
+    <div className={`stepc ${tool?.ready ? 'done' : now ? 'now' : ''}`} data-tour="build-compiler">
       <div className="head"><span className="nbox">{tool?.ready ? <Icon name="check" /> : 2}</span><b>Compiler</b><span className="what">{tool?.ready ? `ProffieOS ${tool.proffieOSVersion ?? ''} ready` : installing ? `installing, ${installStarted ? Math.round((Date.now() - installStarted) / 1000) : 0} s` : 'one-time download'}</span></div>
       {tool?.ready && <span className="hint">arduino-cli {tool.versions.cli} · board support {tool.versions.core} · ProffieOS {tool.versions.proffieOS}</span>}
       {tool?.open && (
@@ -361,10 +361,10 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
 
   return (
     <div className="work" style={{ gridTemplateColumns: 'minmax(0,1fr) 360px' }}>
-      <section className="panel fill" aria-label="Build workspace">
+      <section className="panel fill" aria-label="Build workspace" data-tour="build-workspace">
         <div className="tabs" role="tablist">
           {([['config', 'Config', 'build'], ['log', 'Log', 'diag'], ['backups', 'Backups', 'shield']] as [Tab, string, Parameters<typeof Icon>[0]['name']][]).map(([id, label, icon]) => (
-            <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}><Icon name={icon} />{label}{id === 'backups' && <span className="count">{backups.length}</span>}</button>
+            <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} data-tour={`build-tab-${id}`} onClick={() => setTab(id)}><Icon name={icon} />{label}{id === 'backups' && <span className="count">{backups.length}</span>}</button>
           ))}
         </div>
 
@@ -392,7 +392,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
         )}
       </section>
 
-      <aside className="rail" aria-label="Steps">
+      <aside className="rail" aria-label="Steps" data-tour="build-steps">
         <div className="row between" style={{ minHeight: 24 }}>
           <b style={{ fontWeight: 600 }} className="ellip">{saber.firmware ? `Rebuild ${saber.name}` : `Adopt ${saber.name}`}</b>
           <span className={`chip ${step === 'done' ? 'ok' : step === 'failed' ? 'err' : busy ? 'warn' : ''}`}><span className="dot" />{stepLabel[step]}{busy ? ` ${elapsed}s` : ''}</span>
@@ -420,7 +420,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
 
         {toolStep(nowStep === 2)}
 
-        <div className={`stepc ${built ? 'done' : nowStep === 3 ? 'now' : ''} ${result && !result.ok ? 'bad' : ''}`}>
+        <div className={`stepc ${built ? 'done' : nowStep === 3 ? 'now' : ''} ${result && !result.ok ? 'bad' : ''}`} data-tour="build-build">
           <div className="head"><span className="nbox">{built ? <Icon name="check" /> : 3}</span><b>Build</b><span className="what">{step === 'building' ? `compiling, ${elapsed} s` : stale ? 'out of date' : result?.ok ? (result.cached ? 'unchanged, reused' : `built in ${(result.ms / 1000).toFixed(0)} s`) : 'about a minute'}</span></div>
           {stale && step !== 'building' && <div className="note amber" style={{ padding: '8px 10px' }}><Icon name="warn" /><span>The setup changed after this build. Build again to install it.</span></div>}
           {result?.ok && (
@@ -433,7 +433,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
           <button type="button" className={`btn full ${nowStep === 3 ? 'pri' : ''}`} disabled={!canBuild} onClick={() => void build(true)}><span className="b"><span className="i"><Icon name="build" />{step === 'building' ? 'Building…' : built ? 'Build again' : 'Build firmware'}</span></span></button>
         </div>
 
-        <div className={`stepc ${step === 'done' ? 'done' : nowStep === 4 ? 'now' : ''}`}>
+        <div className={`stepc ${step === 'done' ? 'done' : nowStep === 4 ? 'now' : ''}`} data-tour="build-install">
           <div className="head"><span className="nbox">{step === 'done' ? <Icon name="check" /> : 4}</span><b>Install</b><span className="what">{step === 'backup' ? `backing up, ${elapsed} s` : step === 'writing' ? `writing, ${elapsed} s` : 'backup first, about two minutes'}</span></div>
           {(step === 'bootloader' || step === 'backup' || step === 'writing' || step === 'verifying') && (
             <div className="col" style={{ gap: 5 }} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(overall)} aria-label="Install progress">

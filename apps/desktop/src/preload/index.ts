@@ -144,6 +144,9 @@ const api: HiltwrightApi = {
     legal: () => ipcRenderer.invoke('app:legal'),
     openSource: () => ipcRenderer.invoke('app:openSource'),
   },
+  tour: {
+    setActive: (on) => ipcRenderer.invoke('tour:set', on),
+  },
 };
 
 contextBridge.exposeInMainWorld('hiltwright', api);

@@ -19,7 +19,7 @@ export function About() {
 
   return (
     <div className="col" style={{ gap: 16, maxWidth: 900, minHeight: 0 }}>
-      <section className="panel" aria-label="About Hiltwright">
+      <section className="panel" aria-label="About Hiltwright" data-tour="about-panel">
         <div className="ph"><h2>Hiltwright {version}</h2></div>
         <div className="pb col" style={{ gap: 14 }}>
           <div className="col" style={{ gap: 6 }}>

@@ -137,13 +137,13 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
 
   return (
     <div className="work editorwork">
-      <section className="panel fill" aria-label="Layers">
+      <section className="panel fill" aria-label="Layers" data-tour="editor-layers">
         <div className="ph edhead">
           <div className="row" style={{ gap: 10, minWidth: 0 }}>
             <span className="input sans" style={{ height: 32, width: 220, minWidth: 120, flexShrink: 1 }}><input type="text" value={name} aria-label="Style name" onChange={(e) => setName(e.target.value)} /></span>
-            <div className="seg" role="tablist" aria-label="Editor mode" style={{ height: 32, flex: 'none', flexWrap: 'nowrap' }}>
-              <button type="button" role="tab" aria-selected={mode === 'simple'} className={mode === 'simple' ? 'on' : ''} style={{ height: 30, padding: '0 12px', fontSize: 12 }} onClick={() => setMode('simple')}>Simple</button>
-              <button type="button" role="tab" aria-selected={mode === 'tree'} className={mode === 'tree' ? 'on' : ''} style={{ height: 30, padding: '0 12px', fontSize: 12 }} onClick={() => setMode('tree')}>Full</button>
+            <div className="seg" role="tablist" aria-label="Editor mode" style={{ height: 32, flex: 'none', flexWrap: 'nowrap' }} data-tour="editor-mode">
+              <button type="button" role="tab" aria-selected={mode === 'simple'} className={mode === 'simple' ? 'on' : ''} style={{ height: 30, padding: '0 12px', fontSize: 12 }} data-tour="editor-simple" onClick={() => setMode('simple')}>Simple</button>
+              <button type="button" role="tab" aria-selected={mode === 'tree'} className={mode === 'tree' ? 'on' : ''} style={{ height: 30, padding: '0 12px', fontSize: 12 }} data-tour="editor-full" onClick={() => setMode('tree')}>Full</button>
             </div>
             <span className={`hint nowrap edstatus ${dirty ? 'dirty' : ''}`} title={dirty ? 'Changes not saved yet' : 'Everything is saved'}><i /><span className="edhint">{dirty ? (editingId ? 'Unsaved changes' : 'Not saved yet') : 'Saved'}</span></span>
           </div>
@@ -225,7 +225,7 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
         </div>
       </section>
 
-      <section className="panel fill" aria-label="Preview">
+      <section className="panel fill" aria-label="Preview" data-tour="editor-preview">
         <div className="ph"><h2>On the blade</h2><span className="hint">Simulated from the same maths the saber runs</span></div>
         <div className="pb col scroll" style={{ gap: 12 }}>
           <BladePreview version={previewKey} lookId={PREVIEW_ID} hilt controls cue={cue} />

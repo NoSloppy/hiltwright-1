@@ -94,7 +94,7 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
           {!saber.planned && detected.length > 0 && !confirmed && (
             <div className="note"><Icon name="info" /><span>The saber reported {detected.length} pixel blade{detected.length === 1 ? '' : 's'} ({detected.join(', ')} px). That is a starting point, not the wiring: check each blade's data pin and power pins against what the installer wrote down.</span></div>
           )}
-          <div className="row wrap" style={{ gap: 14 }}>
+          <div className="row wrap" style={{ gap: 14 }} data-tour="wiring-basics">
             <label className="field"><span className="label">Board</span>
               <div className="seg" role="radiogroup" aria-label="Proffieboard model" style={{ height: 32 }}>
                 {(['V2', 'V3'] as BoardModel[]).map((b) => <button key={b} type="button" role="radio" aria-checked={boardChosen && draft.board === b} className={boardChosen && draft.board === b ? 'on' : ''} style={{ height: 30 }} disabled={fromBootloader && draft.board !== b} title={fromBootloader && draft.board !== b ? `The saber's bootloader showed a Proffieboard ${draft.board}` : undefined} onClick={() => { if (!fromBootloader) change({ board: b, boardFrom: 'owner' }); }}>Proffieboard {b}</button>)}
@@ -134,7 +134,7 @@ export function Wiring({ ws, board, go }: { ws: Workspace; board: Board; go: (pa
       </section>
 
       <aside className="rail" aria-label="Confirm">
-        <div className={`stepc ${confirmed ? 'done' : 'now'}`}>
+        <div className={`stepc ${confirmed ? 'done' : 'now'}`} data-tour="wiring-confirm">
           <div className="head"><span className="nbox">{confirmed ? <Icon name="check" /> : 1}</span><b>Check it</b><span className="what">{draft.blades.length} blade{draft.blades.length === 1 ? '' : 's'}</span></div>
           <label className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
             <button type="button" className={`tog ${confirmed ? 'on' : ''}`} role="switch" aria-checked={confirmed} aria-label="I checked the wiring" onClick={() => update((d) => withWiringConfirmation(d, !confirmed))}><i /></button>

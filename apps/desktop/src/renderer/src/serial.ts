@@ -1,6 +1,7 @@
 // Web Serial transport for @hiltwright/core's BoardClient. Runs in the renderer; main grants the port.
 
 import type { Transport } from '@hiltwright/core';
+import { assertMaySend, tourLocked } from './tourLock';
 
 export const PROFFIE_FILTER = { usbVendorId: 0x1209, usbProductId: 0x6668 };
 
@@ -28,6 +29,8 @@ export class WebSerialTransport implements Transport {
   lost(reason: string): void { this.onClose(reason); }
 
   async open(baudRate = 115200): Promise<void> {
+    // No port is opened while the guided tour runs (tourLock.ts).
+    if (tourLocked()) throw new Error('Not opened: the tour is running.');
     const attempts: SerialOptions[] = [
       { baudRate },
       { baudRate, flowControl: 'none', dataBits: 8, stopBits: 1, parity: 'none', bufferSize: 4096 },
@@ -86,6 +89,8 @@ export class WebSerialTransport implements Transport {
 
   async write(text: string): Promise<void> {
     if (!this.writer || this.closed) throw new Error('Port closed');
+    // The last check before anything reaches a saber: nothing is written while the guided tour runs (tourLock.ts).
+    assertMaySend(text.trim());
     await this.writer.write(this.encoder.encode(text));
   }
 

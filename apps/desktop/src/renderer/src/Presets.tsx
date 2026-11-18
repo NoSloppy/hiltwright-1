@@ -228,7 +228,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
       {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : 'info'} /><span>{note.text}</span></div>}
 
       <div className="work" style={{ gridTemplateColumns: 'minmax(220px,280px) minmax(0,1fr) minmax(260px,320px)' }}>
-        <section className="panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }} aria-label="Preset list">
+        <section className="panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }} aria-label="Preset list" data-tour="presets-list">
           <div className="ph"><h2>Presets · {presets.length}</h2>
             <div className="row" style={{ gap: 4 }}>
               <button type="button" className="chip" disabled={busy || curIx <= 0} aria-label="Move preset up" title="Move up" onClick={() => void move(curIx - 1)}><Icon name="up" /></button>
@@ -255,11 +255,11 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
         <section className="panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }} aria-label="Preset editor">
           <div className="ph" style={{ flexWrap: 'wrap', rowGap: 8 }}><h2 className="ellip" style={{ minWidth: 0 }}>{cur ? clean(cur.name) || 'Unnamed' : 'No preset'}</h2>
             {/* A change that failed as the saber went away stays visible once the page shows the stored presets. */}
-            <div className="row" style={{ gap: 8, minWidth: 0, maxWidth: '100%', flex: '0 1 auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>{noCard ? <span className="chip err"><Icon name="x" />No SD card</span> : sharedCard ? <span className="chip warn"><Icon name="sd" />Card shared</span> : isLive ? <SaveChip save={board.save} /> : <>{board.save.kind === 'failed' && <SaveChip save={board.save} />}{staged ? <span className="chip warn"><span className="dot" />Staged for install</span> : <span className="chip"><span className="dot" />Not plugged in</span>}</>}</div>
+            <div className="row" style={{ gap: 8, minWidth: 0, maxWidth: '100%', flex: '0 1 auto', flexWrap: 'wrap', justifyContent: 'flex-end' }} data-tour="presets-state">{noCard ? <span className="chip err"><Icon name="x" />No SD card</span> : sharedCard ? <span className="chip warn"><Icon name="sd" />Card shared</span> : isLive ? <SaveChip save={board.save} /> : <>{board.save.kind === 'failed' && <SaveChip save={board.save} />}{staged ? <span className="chip warn"><span className="dot" />Staged for install</span> : <span className="chip"><span className="dot" />Not plugged in</span>}</>}</div>
           </div>
           {cur && (
             <div className="pb col" style={{ gap: 16, overflowY: 'auto', overflowX: 'hidden' }}>
-              <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+              <div className="grid2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }} data-tour="presets-fields">
                 <CommitField label="Name" value={cur.name} sync={board.save} disabled={busy} onCommit={(name) => void editPreset({ name }, 'Rename')} />
                 <div className="col" style={{ gap: 4, minWidth: 0 }}>
                   <CommitField label="Sound font" value={cf.folder} sync={board.save} list="hw-fonts" choices={fontFolders} placeholder="Folder name on the card" disabled={busy} onCommit={(folder) => void editPreset({ font: joinFont({ ...cf, folder }) }, `Font → ${folder}`)} />
@@ -280,7 +280,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
                 </label>
               </div>
 
-              <div className="col" style={{ gap: 8 }}>
+              <div className="col" style={{ gap: 8 }} data-tour="presets-styles">
                 <div className="row between"><span className="label">Styles, one per blade</span><button type="button" className="holo small" onClick={() => go('looks')}>Browse and try styles</button></div>
                 {model.blades.map((b, k) => {
                   const id = cur.looks?.[k] ?? null;
@@ -334,7 +334,7 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
           )}
         </section>
 
-        <section className="panel fill" aria-label="Sets, try it and history">
+        <section className="panel fill" aria-label="Sets, try it and history" data-tour="presets-sets">
           <div className="tabs" role="tablist">
             <button type="button" role="tab" aria-selected={side === 'sets'} className={side === 'sets' ? 'on' : ''} onClick={() => setSide('sets')}><Icon name="copy" />Sets<span className="count">{sets.length}</span></button>
             {isLive && <button type="button" role="tab" aria-selected={side === 'try'} className={side === 'try' ? 'on' : ''} onClick={() => setSide('try')}><Icon name="bolt" />Try it</button>}

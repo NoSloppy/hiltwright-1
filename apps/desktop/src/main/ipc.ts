@@ -29,6 +29,7 @@ import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { writeAllowed, type KeptBuild } from './writeGuard';
 import { backAfter, backupFlash, describeBootloader, flashTarget, leaveBootloader, listBackups, newBootloaders, restoreBackup, usbState, waitFor, writeFirmware, type UsbState } from './flash';
 import { logged } from './ipcLog';
+import { tourGuarded, tourState } from './tourGuard';
 import { JsonStore, storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
 import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
@@ -64,9 +65,11 @@ function identity(v: unknown): SaberIdentity {
   };
 }
 
-// Every handler goes through logged(): a request that fails is written to the run log before the page sees it.
-function handle(channel: string, fn: Parameters<typeof ipcMain.handle>[1]): void {
-  ipcMain.handle(channel, logged(channel, fn));
+// Every handler goes through logged(): a request that fails is written to the run log before the page sees it. And
+// through tourGuarded(): while the guided tour runs, only requests that read are let through (tourGuard.ts).
+type IpcHandler = Parameters<typeof ipcMain.handle>[1];
+function handle(channel: string, fn: IpcHandler, quietDuringTour?: IpcHandler): void {
+  ipcMain.handle(channel, logged(channel, tourGuarded(channel, fn, quietDuringTour)));
 }
 
 export function registerIpc(): void {
@@ -303,8 +306,10 @@ export function registerIpc(): void {
   handle('hilts:setPackFit', (_e, packId: unknown, fit: unknown) => hilts.setPackFit(str(packId, 200), fit));
   handle('hilts:resetPackFit', (_e, packId: unknown) => hilts.resetPackFit(str(packId, 200)));
   handle('hilts:room', () => hilts.room());
-  handle('hilts:setRoom', (_e, patch: unknown) => hilts.setRoom((patch && typeof patch === 'object' ? patch : {}) as { scene?: unknown; chosen?: unknown }));
-  handle('hilts:adopt', (_e, legacy: unknown) => hilts.adopt(legacy as LegacyHilts));
+  // The demo room remembers its scene by itself as it opens; during the tour that is answered without writing anything.
+  handle('hilts:setRoom', (_e, patch: unknown) => hilts.setRoom((patch && typeof patch === 'object' ? patch : {}) as { scene?: unknown; chosen?: unknown }), () => hilts.room());
+  // Bringing old hilts over also runs by itself as the demo room opens: during the tour it waits, adding nothing.
+  handle('hilts:adopt', (_e, legacy: unknown) => hilts.adopt(legacy as LegacyHilts), () => ({ added: 0, fits: 0, skipped: 0 }));
   handle('hilts:export', async () => {
     const d = new Date();
     const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -492,6 +497,8 @@ export function registerIpc(): void {
   // Stores set aside at start (jsonStore.ts). Reading them first makes sure the library and sets have been loaded.
   handle('app:storeProblems', async () => { await Promise.all([library.list(), banksStore.list(), looksStore.list(), contributorsReady.then(() => contributors.list()), hilts.list(), libReady.then(() => fontLib.list())]); return storeProblems(); });
   handle('app:userDataPath', () => userData);
+  // The guided tour starts and ends here. The page also says "off" as it loads, so a reload never leaves it on.
+  handle('tour:set', (_e, on: unknown) => { tourState.active = on === true; console.log(`[tour] ${tourState.active ? 'started: requests that change anything are refused' : 'ended'}`); return tourState.active; });
   // False in a development run started with HILTWRIGHT_NO_BOARD (packaged builds never have it).
   handle('app:boardAccess', () => !process.env.HILTWRIGHT_NO_BOARD);
   handle('app:openHelp', async (_e, url: unknown) => {

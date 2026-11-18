@@ -2,7 +2,9 @@
 //
 //   npm run shots -w @hiltwright/desktop -- <folder> [page ...]
 //
-// Writes <folder>/<page>-<width>x<height>.png. It uses the development aids of the main process (HILTWRIGHT_OFFSCREEN,
+// Writes <folder>/<page>-<width>x<height>.png. The guided tour: `tour` takes every step in one run per window size
+// (tour-01-<size>.png and on), `tour-<n>` one step, `tour-offer` the first-launch offer, and `tour-entry-side` and
+// `tour-entry-top` the two places it starts from. Each tour step's placement is printed from the run log. It uses the development aids of the main process (HILTWRIGHT_OFFSCREEN,
 // HILTWRIGHT_W, HILTWRIGHT_H, HILTWRIGHT_SHOT, HILTWRIGHT_PAGE=fake:<page>), so it runs the app in development mode.
 //
 // It never reaches a board or a real card: HILTWRIGHT_NO_BOARD is always set (and the script stops if it cannot be),
@@ -50,9 +52,35 @@ const STATES = {
   'fonts-selected': { page: 'fonts', js: run("click('tbody tr:not(.grp)'); await sleep(400); click('[role=tab]', 'selected font'); await sleep(500);") },
   'diag-reboot': { page: 'diag', js: run("const i = document.querySelector('input[placeholder=\"Type a command\"]'); i.focus(); typeInto(i, 'reboot'); await sleep(200); i.form.requestSubmit(); await sleep(600);") },
 };
-const allNames = [...allPages, ...Object.keys(STATES)];
-for (const p of wanted) if (!allNames.includes(p)) { console.error(`Unknown page or state "${p}". Pages: ${allPages.join(', ')}. States: ${Object.keys(STATES).join(', ')}`); process.exit(2); }
-const jobs = (wanted.length ? wanted : allNames).map((name) => (STATES[name] ? { name, ...STATES[name] } : { name, page: name }));
+// The guided tour: its steps are counted from its words (src/renderer/src/tourSteps.ts: one `title:` per step; a test
+// keeps that true). Each step is shown by the development aid hiltwrightTour(n), which waits until it is placed.
+const tourSource = readFileSync(join(desktop, 'src/renderer/src/tourSteps.ts'), 'utf8');
+const TOUR_COUNT = (tourSource.match(/^\s*title: '/gm) ?? []).length;
+const pad = (n) => String(n).padStart(2, '0');
+const tourJs = (n) => `window.hiltwrightTour(${n - 1})`;
+for (let n = 1; n <= TOUR_COUNT; n++) STATES[`tour-${n}`] = { page: 'armory', js: tourJs(n), file: `tour-${pad(n)}` };
+STATES['tour-offer'] = { page: 'armory', js: run("window.hiltwrightTourOffer(); await sleep(500);") };
+STATES['tour-entry-side'] = { page: 'armory', js: run("document.querySelector('[data-tour=\"side-tour\"]').focus(); await sleep(300);") };
+STATES['tour-entry-top'] = { page: 'presets', js: run("document.querySelector('[data-tour=\"top-tour\"]').focus(); await sleep(300);") };
+// Started from Presets: a write tried during the tour, the keys, then Escape. The shot is the page after it ended,
+// and the run log says what was refused, where the keys took the tour and what was back afterwards.
+STATES['tour-ended'] = { page: 'presets', js: run(`
+  await window.hiltwrightTour(14);
+  let r; try { await window.hiltwright.library.update('fixture0001', { presets: [] }); r = 'written'; } catch (e) { r = 'refused: ' + String(e.message).replace(/^.*Error: /, ''); }
+  console.log('[tour] step check: library.update during the tour -> ' + r);
+  const key = (k) => (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  key('ArrowRight'); await sleep(1200); key('ArrowRight'); await sleep(1200); key('ArrowLeft'); await sleep(1200);
+  console.log('[tour] step check: Right, Right, Left -> ' + document.querySelector('.tourcard .mono').textContent + ', focus on "' + document.activeElement.textContent + '"');
+  key('Escape'); await sleep(2500);
+  const lib = await window.hiltwright.library.list();
+  console.log('[tour] step check: after Escape, tour ' + (document.querySelector('.tour') ? 'still open' : 'gone') + ', page ' + document.querySelector('h1').textContent + ', top bar ' + document.querySelector('.ident b').textContent + ', library ' + lib.map((s) => s.id + ' ' + s.presets.length + ' presets').join(', ') + ', focus on "' + (document.activeElement && document.activeElement.textContent) + '"');
+`) };
+// Every step in one run: a series (HILTWRIGHT_SHOTS) rather than a start of the app per step.
+const SERIES = { tour: { page: 'armory', shots: Array.from({ length: TOUR_COUNT }, (_v, k) => ({ name: `tour-${pad(k + 1)}`, js: tourJs(k + 1) })) } };
+const isSingleTour = (name) => /^tour-\d+$/.test(name);
+const allNames = [...allPages, ...Object.keys(STATES), ...Object.keys(SERIES)];
+for (const p of wanted) if (!allNames.includes(p)) { console.error(`Unknown page or state "${p}". Pages: ${allPages.join(', ')}. States: ${Object.keys(STATES).filter((n) => !isSingleTour(n)).join(', ')}, tour, tour-1 to tour-${TOUR_COUNT}`); process.exit(2); }
+const jobs = (wanted.length ? wanted : allNames.filter((n) => !isSingleTour(n))).map((name) => (SERIES[name] ? { name, ...SERIES[name] } : STATES[name] ? { name, ...STATES[name] } : { name, page: name }));
 
 // Fixtures: a saber remembered in the app's data folder, a font library, and a card, all made up.
 function wav(seconds = 0.1) {
@@ -125,11 +153,15 @@ const PICK_FIRST_ROW = "document.querySelector('tbody tr:not(.grp)')?.click()";
 const OPEN = { fonts: PICK_FIRST_ROW, library: PICK_FIRST_ROW };
 const viteBin = join(desktop, '../../node_modules/electron-vite/bin/electron-vite.js');
 
-function shoot({ name, page, js }, { w, h }) {
-  const file = resolve(outDir, `${name}-${w}x${h}.png`);
+function shoot({ name, page, js, file: fileName, shots }, { w, h }) {
+  const file = resolve(outDir, `${fileName ?? name}-${w}x${h}.png`);
+  // The tour brings its own example saber, so its shots start from a plain page rather than the fixture's fake connection.
+  const tour = name.startsWith('tour');
   return new Promise((done) => {
-    const shotEnv = { ...env, HILTWRIGHT_W: String(w), HILTWRIGHT_H: String(h), HILTWRIGHT_PAGE: `fake:${page}`, HILTWRIGHT_SHOT: file };
-    if (js ?? OPEN[page]) shotEnv.HILTWRIGHT_SHOT_JS = js ?? OPEN[page];
+    const shotEnv = { ...env, HILTWRIGHT_W: String(w), HILTWRIGHT_H: String(h), HILTWRIGHT_PAGE: tour ? page : `fake:${page}` };
+    if (shots) shotEnv.HILTWRIGHT_SHOTS = JSON.stringify(shots.map((s) => ({ file: resolve(outDir, `${s.name}-${w}x${h}.png`), js: s.js })));
+    else shotEnv.HILTWRIGHT_SHOT = file;
+    if (!shots && (js ?? OPEN[page])) shotEnv.HILTWRIGHT_SHOT_JS = js ?? OPEN[page];
     const child = spawn(process.execPath, [viteBin, 'dev'], { cwd: desktop, env: shotEnv });
     let log = '';
     let finished = false;
@@ -140,14 +172,17 @@ function shoot({ name, page, js }, { w, h }) {
       if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
       else child.kill('SIGKILL');
       if (!ok) console.error(`${name} ${w}x${h}: failed\n${log.split('\n').slice(-15).join('\n')}`);
-      else console.log(`${name} ${w}x${h}: ${file}`);
+      else console.log(`${name} ${w}x${h}: ${shots ? `${shots.length} shots in ${outDir}` : file}`);
+      // Where each tour card went, and anything wrong with it (Tour.tsx logs one line per step it places).
+      if (tour) for (const l of log.split('\n')) if (/\[tour\] (step|refused|not )/.test(l)) console.log(`  ${l.replace(/^.*?\[tour\]/, '[tour]').trim()}`);
       setTimeout(() => done(ok), 1500);
     };
-    const timer = setTimeout(() => finish(false), 120000);
-    const onData = (d) => { log += d; if (log.includes('[main] screenshot')) finish(true); };
+    const timer = setTimeout(() => finish(false), shots ? 600000 : 120000);
+    const doneLine = shots ? '[main] screenshots done' : '[main] screenshot';
+    const onData = (d) => { log += d; if (log.includes(doneLine)) finish(true); };
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);
-    child.on('exit', () => finish(log.includes('[main] screenshot')));
+    child.on('exit', () => finish(log.includes(doneLine)));
   });
 }
 

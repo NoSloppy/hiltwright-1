@@ -272,7 +272,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
 
   return (
     <>
-      <section className="panel" aria-label="SD card status">
+      <section className="panel" aria-label="SD card status" data-tour="fonts-card">
         <div className="row" style={{ padding: '12px 18px', gap: 16 }}>
           <span style={{ color: card ? 'var(--holo)' : 'var(--mute)', display: 'flex', width: 26, height: 26 }}><Icon name="sd" /></span>
           <div className="col grow" style={{ gap: 2 }}>
@@ -321,7 +321,7 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
       </section>
 
       <div className="work" style={{ gridTemplateColumns: 'minmax(0,1fr) 400px' }}>
-        <section className="panel fill" aria-label="Fonts on the card">
+        <section className="panel fill" aria-label="Fonts on the card" data-tour="fonts-table">
           <div className="scroll">
           <table>
             <thead><tr><th>Font</th><th>Size</th><th>Status</th></tr></thead>
@@ -347,10 +347,10 @@ export function Fonts({ board, ws, go }: { board: Board; ws: Workspace; go: (pag
           </div>
         </section>
 
-        <aside className="panel fill" aria-label="Fonts: presets, adding, detail">
+        <aside className="panel fill" aria-label="Fonts: presets, adding, detail" data-tour="fonts-side">
           <div className="tabs" role="tablist">
-            {needed.length > 0 && <button type="button" role="tab" aria-selected={tab === 'presets'} className={tab === 'presets' ? 'on' : ''} onClick={() => setSide('presets')}>Preset fonts</button>}
-            <button type="button" role="tab" aria-selected={tab === 'add'} className={tab === 'add' ? 'on' : ''} onClick={() => setSide('add')}>Add a font</button>
+            {needed.length > 0 && <button type="button" role="tab" aria-selected={tab === 'presets'} className={tab === 'presets' ? 'on' : ''} data-tour="fonts-tab-presets" onClick={() => setSide('presets')}>Preset fonts</button>}
+            <button type="button" role="tab" aria-selected={tab === 'add'} className={tab === 'add' ? 'on' : ''} data-tour="fonts-tab-add" onClick={() => setSide('add')}>Add a font</button>
             <button type="button" role="tab" aria-selected={tab === 'detail'} className={tab === 'detail' ? 'on' : ''} onClick={() => setSide('detail')}>{sel ? 'Selected font' : 'Tracks'}</button>
           </div>
           <div className="scroll">

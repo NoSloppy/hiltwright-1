@@ -37,7 +37,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 16 }}>
-      <div className="col" style={{ gap: 10, flex: '1 1 340px', minWidth: 0 }}>
+      <div className="col" style={{ gap: 10, flex: '1 1 340px', minWidth: 0 }} data-tour="wiring-blades">
         <div className="row" style={{ gap: 18 }}>
           <div className="row" style={{ gap: 0 }} role="group" aria-label="Number of blades">
             <button type="button" className="input" style={{ width: 38, justifyContent: 'center', padding: 0 }} aria-label="Fewer blades" disabled={locked || blades.length <= 1} onClick={() => setCount(blades.length - 1)}><Icon name="minus" /></button>
@@ -209,7 +209,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
             })}
           </div>
         </div>
-        <div style={{ border: '1px solid var(--line)', background: '#0b1016', padding: 12, gap: 0 }} className="col">
+        <div style={{ border: '1px solid var(--line)', background: '#0b1016', padding: 12, gap: 0 }} className="col" data-tour="wiring-pins">
           <div className="row between" style={{ paddingBottom: 6 }}><b style={{ fontWeight: 600, fontSize: 13 }}>Pins · Proffieboard {board}</b>{pins.problems.length ? <span className="chip err"><Icon name="x" />{pins.problems.length} problem{pins.problems.length > 1 ? 's' : ''}</span> : pins.shared.length ? <span className="chip warn"><Icon name="info" />Shared power</span> : <span className="chip ok"><Icon name="check" />No conflicts</span>}</div>
           {pins.data.map((r) => <div key={r.pin} className={`pin ${r.conflict ? 'bad' : ''}`}><span className="k">{r.pin}</span>{r.users.length ? <span className="v">{r.users.map((id) => `Blade ${blades.findIndex((b) => b.id === id) + 1}`).join(', then ')}</span> : <span className="free">free</span>}</div>)}
           <div style={{ height: 1, background: 'var(--line)', margin: '6px 0' }} />

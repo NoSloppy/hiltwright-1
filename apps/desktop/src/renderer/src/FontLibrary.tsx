@@ -159,7 +159,7 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
     setFonts((all) => all.map((x) => out.find((o) => o.folder === x.folder) ?? x));
   };
   const row = (f: LibraryFont) => (
-    <tr key={f.folder} className={f.folder === selected ? 'on' : ''} onClick={() => setSelected(f.folder)} style={{ cursor: 'pointer' }}>
+    <tr key={f.folder} className={f.folder === selected ? 'on' : ''} data-tour="library-row" onClick={() => setSelected(f.folder)} style={{ cursor: 'pointer' }}>
       <td className="fit"><span className="col" style={{ gap: 0, minWidth: 0 }}><span className="ellip" style={{ fontWeight: 600 }} title={f.meta.name}>{f.meta.name}</span>{(f.meta.name !== f.folder || (groupBy !== 'bundle' && f.meta.bundle) || f.meta.maker) && <span className="hint ellip" style={{ fontSize: 11 }} title={f.meta.bundle}>{f.meta.maker && <span className="maker-sub">{f.meta.maker}{f.meta.name !== f.folder || (groupBy !== 'bundle' && f.meta.bundle) ? ' · ' : ''}</span>}{f.meta.name !== f.folder && <span className="mono">{f.folder}</span>}{f.meta.name !== f.folder && groupBy !== 'bundle' && f.meta.bundle ? ' · ' : ''}{groupBy !== 'bundle' && f.meta.bundle}</span>}</span></td>
       <td className="dim col-maker">{f.meta.maker ? <span className="row" style={{ gap: 8 }}><ContributorLogo name={f.meta.maker} logo={people.logoFor(f.meta.maker)} size={20} /><span>{f.meta.maker}</span></span> : <span className="mute">—</span>}</td>
       <td className="dim small"><span style={{ display: 'block' }}>{TYPE[f.support.type]}{f.support.smoothSwing ? ' · SmoothSwing' : ''}</span><span className="hint" style={{ display: 'block', fontSize: 11 }}>{[f.support.special.length ? `${f.support.special.length} special` : null, f.support.tracks ? `${f.support.tracks} track${f.support.tracks === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ') || 'no extras'}</span></td>
@@ -241,7 +241,7 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
         {(busy || progress) && <div className="note"><span className="spinner on" style={{ width: 16, height: 16 }}><Icon name="spin" /></span><span>{progress ?? 'Working…'}</span></div>}
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}</span></div>}
 
-        <section className="panel fill" aria-label="Fonts in the library">
+        <section className="panel fill" aria-label="Fonts in the library" data-tour="library-table">
           <div className="scroll grow ft">
             <table>
               <thead><tr><th>Font</th><th className="col-maker">Maker</th><th>Supports</th><th>Size</th><th>Status</th></tr></thead>
@@ -267,7 +267,7 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
       </div>
 
       {sel ? <FontDetail key={sel.folder} font={sel} detail={detail} card={card} askCard={pick.ask} looking={looking} player={player} onSetLogo={(m) => void setLogo(m)} onClearLogo={(m) => void clearLogo(m)} onDemo={onDemo} onChanged={onChanged} onRemoved={() => { player.stop(); void refresh(); }} />
-        : <section className="panel"><div className="pb hint">Pick a font to see and hear what is in it.</div></section>}
+        : <section className="panel" data-tour="library-detail"><div className="pb hint">Pick a font to see and hear what is in it.</div></section>}
     </div>
   );
 }
@@ -331,7 +331,7 @@ function FontDetail({ font, detail, card, askCard, looking, player, onSetLogo, o
   const sp = font.support;
 
   return (
-    <section className="panel fill" aria-label="Selected font">
+    <section className="panel fill" aria-label="Selected font" data-tour="library-detail">
       <div className="ph">
         <div className="row" style={{ gap: 12, minWidth: 0 }}>
           {font.meta.maker && <ContributorLogo name={font.meta.maker} logo={people.logoFor(font.meta.maker)} size={36} />}

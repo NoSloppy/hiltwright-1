@@ -206,12 +206,12 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
                 {creators.map(([k, c]) => <option key={k || '-'} value={k}>{c.name} ({c.count})</option>)}
               </Select>
             </label>
-            <button type="button" className="btn sm pri" style={{ marginLeft: 'auto' }} onClick={onNew}><span className="b"><span className="i"><Icon name="plus" />Build a style</span></span></button>
+            <button type="button" className="btn sm pri" style={{ marginLeft: 'auto' }} data-tour="looks-new" onClick={onNew}><span className="b"><span className="i"><Icon name="plus" />Build a style</span></span></button>
             <button type="button" className="btn sm" onClick={() => setPasting(true)}><span className="b"><span className="i"><Icon name="import" />Paste style code</span></span></button>
           </div>
-          <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(176px, 1fr))', gap: 10, alignContent: 'start', paddingRight: 4 }}>
+          <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(176px, 1fr))', gap: 10, alignContent: 'start', paddingRight: 4 }} data-tour="looks-grid">
             {visible.map((l) => (
-              <button key={l.id} type="button" className={`lookcard ${l.id === sel.id ? 'on' : ''}`} aria-pressed={l.id === sel.id} onClick={() => { setSelectedId(l.id); setNote(null); }}>
+              <button key={l.id} type="button" className={`lookcard ${l.id === sel.id ? 'on' : ''}`} aria-pressed={l.id === sel.id} data-tour={stateOf(l.id) === 'queued' ? 'look-card-queued' : 'look-card'} onClick={() => { setSelectedId(l.id); setNote(null); }}>
                 <div style={{ padding: '8px 14px 0', width: '100%', boxSizing: 'border-box' }}>
                   <BladePreview lookId={l.id} fallbackColor={l.preview} dot={isDot(l)} size="sm" />
                 </div>
@@ -231,9 +231,9 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
               {!NOT_A_CONTRIBUTOR.test(sel.by.trim()) && <ContributorLogo name={sel.by} logo={people.logoFor(sel.by)} size={34} />}
               <div className="col" style={{ gap: 2, minWidth: 0 }}><h2 className="ellip">{sel.name}</h2><span className="hint ellip">{creditOf(sel.by).kind === 'named' ? `by ${creditWords(sel)}` : creditWords(sel)}, for {sel.roles.map((r) => ROLE_LABEL[r]).join(' or ')}</span></div>
             </div>
-            <div className="row" style={{ gap: 8 }}>{canSimulate(sel.id) && !isDot(sel) && <button type="button" className="chip" title="Swing it in the demo room" onClick={() => onDemo(sel.id)}><Icon name="play" />Demo room</button>}{stateChip(selState)}</div>
+            <div className="row" style={{ gap: 8 }} data-tour="looks-state">{canSimulate(sel.id) && !isDot(sel) && <button type="button" className="chip" title="Swing it in the demo room" onClick={() => onDemo(sel.id)}><Icon name="play" />Demo room</button>}{stateChip(selState)}</div>
           </div>
-          <div className="pb col scroll" style={{ gap: 14, overflowX: 'hidden' }}>
+          <div className="pb col scroll" style={{ gap: 14, overflowX: 'hidden' }} data-tour="looks-detail">
             <BladePreview key={sel.id} lookId={sel.id} args={triedArgs} fallbackColor={tried[1] ?? sel.preview} dot={isDot(sel)} hilt={!isDot(sel)} controls />
             <LookPreviewNote look={sel} />
 
@@ -293,7 +293,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
             })()}
             {(sel.source === 'pasted' || sel.source === 'built') && confirmRemove !== sel.id && <button type="button" className="btn sm ghost" onClick={() => setConfirmRemove(sel.id)}><span className="b"><span className="i"><Icon name="trash" />Remove from library</span></span></button>}
           </div>
-          <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }}>
+          <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }} data-tour="looks-use">
               {!connected && <span className="hint">No saber yet: start one in the Armory, and styles can be put into its presets before it is ever plugged in.</span>}
               {connected && model && (
                 <div className="row" style={{ gap: 8, alignItems: 'end' }}>

@@ -422,4 +422,8 @@ export interface HiltwrightApi {
     /** Open a known help page in the system browser. Only pod.hubbe.net and fredrik.hubbe.net are allowed. */
     openHelp(url: string): Promise<void>;
   };
+  tour: {
+    /** The guided tour started or ended. While it runs, main refuses every request that would change anything. */
+    setActive(on: boolean): Promise<boolean>;
+  };
 }
