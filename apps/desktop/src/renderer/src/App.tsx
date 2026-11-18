@@ -30,6 +30,8 @@ import { Tour, waitForStep } from './Tour';
 import { TOUR } from './tourSteps';
 import { flattenTour, startForPage } from './tourEngine';
 import { tourBoard } from './tourBoard';
+import { EXAMPLE_ID } from './tourSaber';
+import { removeBlock, removeWords } from './armoryRemove';
 import { TOUR_OFFERED_KEY, restorePrefs, setTourLock, snapshotPrefs, takeHeldConnect } from './tourLock';
 // three.js is only needed in the demo room, so it loads when that page is first opened.
 const Demo = lazy(() => import('./Demo').then((m) => ({ default: m.Demo })));
@@ -293,6 +295,19 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
   };
   // Adoption asks first: which plan the owner said this saber is.
   const [adopting, setAdopting] = useState<SaberRecord | null>(null);
+  // Removal asks first: the saber, and the data folder its kept files are in.
+  const [removing, setRemoving] = useState<{ saber: SaberRecord; folder: string | null } | null>(null);
+  const askRemove = (s: SaberRecord) => {
+    setRemoving({ saber: s, folder: null });
+    void window.hiltwright.app.userDataPath().then((folder) => setRemoving((r) => (r && r.saber.id === s.id ? { ...r, folder } : r)), () => { /* the words name the data folder without its path */ });
+  };
+  const confirmRemove = async (s: SaberRecord) => {
+    setRemoving(null);
+    try { await window.hiltwright.library.remove(s.id); } catch (err) { console.log(`[library] remove failed: ${String(err)}`); }
+    // The working saber falls back to the most recently seen one that is left, or to none.
+    if (ws.saber?.id === s.id) ws.choose('');
+    await board.refreshLibrary();
+  };
   const steps = flowStatus(ws);
   const next = nextStep(ws);
   const stepPage: Record<string, Page> = { wiring: 'wiring', presets: 'presets', fonts: 'fonts', build: 'build' };
@@ -369,7 +384,7 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
                         </span>
                         {isCur ? <span className="chip live"><span className="dot" />Working on it</span> : <button type="button" className="btn sm" disabled={ws.live} title={ws.live ? 'Unplug the connected saber to work on another' : undefined} onClick={() => ws.choose(s.id)}><span className="b"><span className="i">Work on it</span></span></button>}
                         {isCur && plugged && <button type="button" className="chip" onClick={() => { setDraft(s.name); setEditing(true); }}>Rename</button>}
-                        {s.planned && !isCur && <button type="button" className="chip" title="Drop this plan" aria-label={`Drop the plan ${s.name}`} onClick={() => void window.hiltwright.library.remove(s.id).then(() => board.refreshLibrary())}><Icon name="trash" /></button>}
+                        {s.id !== EXAMPLE_ID && (() => { const why = removeBlock(s, plugged ? s.id : null); return <button type="button" className="chip" disabled={!!why} title={why ?? (s.planned ? 'Remove this plan' : 'Remove this saber from the Armory')} aria-label={`Remove ${s.name}`} onClick={() => askRemove(s)}><Icon name="trash" /></button>; })()}
                       </>}
                 </div>
               );
@@ -378,6 +393,27 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
         </section>
       </div>
 
+      {removing && (() => {
+        const w = removeWords(removing.saber, removing.folder);
+        return (
+          <div className="dialog-back" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setRemoving(null); }} onKeyDown={(e) => { if (e.key === 'Escape') setRemoving(null); }}>
+            <section className="panel dialog" role="alertdialog" aria-modal="true" aria-labelledby="remove-title" aria-describedby="remove-text" style={{ width: 'min(540px, 92vw)' }} data-testid="remove-dialog">
+              <div className="ph"><h2 id="remove-title">{w.title}</h2></div>
+              <div className="pb col" style={{ gap: 14, overflow: 'auto' }}>
+                <div id="remove-text" className="col" style={{ gap: 10 }}>
+                  <div className="col" style={{ gap: 4 }}><b style={{ fontWeight: 600 }}>Removed</b><ul className="dim" style={{ fontSize: 13.5, paddingLeft: 18 }}>{w.removed.map((t) => <li key={t}>{t}</li>)}</ul></div>
+                  <div className="col" style={{ gap: 4 }}><b style={{ fontWeight: 600 }}>Kept</b><ul className="dim" style={{ fontSize: 13.5, paddingLeft: 18, overflowWrap: 'anywhere' }}>{w.kept.map((t) => <li key={t}>{t}</li>)}</ul></div>
+                  <p className="dim" style={{ fontSize: 13.5 }}>{w.after}</p>
+                </div>
+                <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn sm ghost" autoFocus onClick={() => setRemoving(null)}><span className="b"><span className="i">Cancel</span></span></button>
+                  <button type="button" className="btn sm danger" onClick={() => void confirmRemove(removing.saber)}><span className="b"><span className="i">{w.button}</span></span></button>
+                </div>
+              </div>
+            </section>
+          </div>
+        );
+      })()}
       <aside className="rail" aria-label="Progress" data-tour="armory-progress">
         {!cur ? (
           <div className="stepc now"><div className="head"><b>Start here</b></div><span className="small dim">Plug a saber in, or press New saber to set one up ahead. Then the steps down the left take it from wiring to an installed board.</span></div>

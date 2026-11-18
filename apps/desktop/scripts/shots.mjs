@@ -39,6 +39,7 @@ const click = "const click = (sel, text) => { const e = [...document.querySelect
 const typeInto = "const typeInto = (el, v) => { const set = Object.getOwnPropertyDescriptor(el.constructor.prototype, 'value').set; set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };";
 const run = (body) => `(async () => { ${sleep} ${click} ${typeInto} ${body} })()`;
 const STATES = {
+  'armory-remove': { page: 'armory', js: run("click('button[aria-label=\"Remove Spare Saber\"]'); await sleep(700);") },
   'about-licence': { page: 'about', js: run("click('button', 'show the licence'); await sleep(900);") },
   'about-notices': { page: 'about', js: run("click('button', 'show the third-party notices'); await sleep(900);") },
   'looks-battery': { page: 'looks', js: run("click('button, li, [role=button]', 'Battery gauge'); await sleep(500);") },
@@ -131,6 +132,12 @@ writeFileSync(join(userData, 'library.json'), JSON.stringify({
     identity: { usbSerial: 'FIXTURE0001', configName: 'hiltwright_fixture_saber', version: '8.x', prop: 'saber', buttons: 2, installed: now, pixelBlades: [144], bladeConfig: 0 },
     presets: presetFonts.map((font, i) => ({ font, track: `tracks/${['duel_of_the_fates', 'imperial_march', 'binary_sunset'][i % 3]}.wav`, styles: [`builtin ${i} 1`], name: font.replace(/_/g, ' ').slice(0, 24), variation: 0 })),
     fonts: presetFonts, tracks: ['duel_of_the_fates.wav'],
+  }, {
+    // A saber seen before and not plugged in now: the one the Armory offers to remove.
+    id: 'fixture0002', name: 'Spare Saber', firstSeen: '2026-10-01T10:00:00.000Z', lastSeen: '2026-10-20T10:00:00.000Z',
+    identity: { usbSerial: 'FIXTURE0002', configName: 'hiltwright_spare_saber', version: '8.x', prop: 'saber', buttons: 2, installed: '2026-10-01T10:00:00.000Z', pixelBlades: [132], bladeConfig: 0 },
+    presets: presetFonts.slice(0, 3).map((font, i) => ({ font, track: '', styles: [`builtin ${i} 1`], name: font.replace(/_/g, ' ').slice(0, 24), variation: 0 })),
+    fonts: presetFonts.slice(0, 3), tracks: [],
   }],
 }));
 
