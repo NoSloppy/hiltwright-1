@@ -82,24 +82,38 @@ export function parseRemovableDrives(stdout: string): Candidate[] {
   } catch { return []; }
 }
 
-/** Candidate roots: removable volumes on Windows, /Volumes and /media elsewhere, plus an override for development. */
-async function candidateRoots(): Promise<Candidate[]> {
+/**
+ * Candidate roots: removable volumes on Windows, /Volumes and /media elsewhere, plus an override for development.
+ * `failed` says why the drive list could not be read (Windows did not answer in time, or the query failed), which is
+ * not the same as "no drives": while a card shared over USB is being opened, Windows can be slow to answer.
+ */
+async function candidateRoots(): Promise<{ list: Candidate[]; failed: string | null }> {
   const override = process.env.HILTWRIGHT_SD_ROOT;
-  if (override) return [{ root: override, label: 'dev override', free: null, total: null, saberSerial: null, fileSystem: null }];
+  if (override) return { list: [{ root: override, label: 'dev override', free: null, total: null, saberSerial: null, fileSystem: null }], failed: null };
   if (process.platform === 'win32') {
-    // 15 s: while a card shared over USB is being read, Windows answers slowly, and a silent empty list reads as "no card".
-    const out = await new Promise<string>((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', DRIVES_SCRIPT], { timeout: 15000, windowsHide: true }, (err, stdout) => {
-      if (err) console.log(`[sd] the drive list failed: ${String(err).slice(0, 200)}`);
-      resolve(err ? '' : stdout);
+    // 15 s: while a card shared over USB is being read, Windows answers slowly. A list that did not come back is
+    // reported as such, never as an empty list (2026-11-18: the V3's card took minutes to open).
+    return await new Promise((resolve) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', DRIVES_SCRIPT], { timeout: DRIVE_LIST_TIMEOUT_MS, windowsHide: true }, (err, stdout) => {
+      if (!err) { resolve({ list: parseRemovableDrives(stdout), failed: null }); return; }
+      const failed = driveListFailure(err);
+      console.log(`[sd] the drive list failed: ${failed}: ${String(err).slice(0, 200)}`);
+      resolve({ list: [], failed });
     }));
-    return parseRemovableDrives(out);
   }
   const bases = process.platform === 'darwin' ? ['/Volumes'] : ['/media', '/run/media', '/mnt'];
   const out: Candidate[] = [];
   for (const b of bases) {
     try { for (const name of await readdir(b)) out.push({ root: join(b, name), label: name, free: null, total: null, saberSerial: null, fileSystem: null }); } catch { /* not present */ }
   }
-  return out;
+  return { list: out, failed: null };
+}
+
+const DRIVE_LIST_TIMEOUT_MS = 15_000;
+/** Why the drive query did not answer, in words for the log and the page. */
+export function driveListFailure(err: unknown): string {
+  const e = err as { killed?: boolean; signal?: unknown; code?: unknown } | null;
+  if (e && (e.killed || e.signal === 'SIGTERM' || e.code === 'ETIMEDOUT')) return `Windows did not answer within ${DRIVE_LIST_TIMEOUT_MS / 1000} s`;
+  return 'the drive query failed';
 }
 
 /**
@@ -211,9 +225,24 @@ export async function readFontSounds(fontDir: string, onFile?: (name: string, do
   return { name: basename(fontDir), files, ini: await readIni('config.ini'), smoothsw: await readIni('smoothsw.ini'), bytes, skipped };
 }
 
+/**
+ * One look for drives: the cards found, or that Windows did not answer (`answered: false`), which callers must not
+ * read as "no card". `ms` is how long the look took.
+ */
+export type DriveLook = { answered: true; cards: CardInfo[]; ms: number } | { answered: false; detail: string; ms: number };
+
+/** The cards found; an empty list also when Windows did not answer. Use `lookForCards` to tell the two apart. */
 export async function locateCards(): Promise<CardInfo[]> {
+  const look = await lookForCards();
+  return look.answered ? look.cards : [];
+}
+
+export async function lookForCards(): Promise<DriveLook> {
+  const started = Date.now();
+  const { list, failed } = await candidateRoots();
+  if (failed) return { answered: false, detail: failed, ms: Date.now() - started };
   const out: CardInfo[] = [];
-  for (const c of await candidateRoots()) {
+  for (const c of list) {
     if (!(await isDir(c.root))) continue;
     const hasPresetsIni = await exists(join(c.root, 'presets.ini')) || await exists(join(c.root, 'presets.tmp'));
     let fontDirs = 0;
@@ -228,7 +257,9 @@ export async function locateCards(): Promise<CardInfo[]> {
     } catch { /* unreadable */ }
     out.push({ root: c.root, label: c.label, freeBytes: c.free, totalBytes: c.total, proffie: hasPresetsIni || fontDirs > 0, hasPresetsIni, saberSerial: c.saberSerial, fileSystem: c.fileSystem, empty: isEmptyCard(names) });
   }
-  return out;
+  const ms = Date.now() - started;
+  if (ms > 3000) console.log(`[sd] the drive list took ${ms} ms (${out.length} removable volume(s))`);
+  return { answered: true, cards: out, ms };
 }
 
 /** `fn` over every item, `n` at a time, results in the items' order. */

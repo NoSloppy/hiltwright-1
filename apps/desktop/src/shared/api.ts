@@ -80,6 +80,12 @@ export interface CardInfo {
   empty: boolean;
 }
 
+/**
+ * One look for drives (`sd.look`): the cards found, or that Windows did not answer the drive list in time or the
+ * query failed (`answered: false`), which is not "no card". `ms` is how long the look took.
+ */
+export type DriveLook = { answered: true; cards: CardInfo[]; ms: number } | { answered: false; detail: string; ms: number };
+
 export interface PackInfo {
   id: string; kind: 'hilt' | 'font'; name: string; creator: string; licence: string;
   allow: { copyToCard: boolean; demoPlayback: boolean };
@@ -260,6 +266,8 @@ export interface HiltwrightApi {
   sd: {
     /** Removable volumes, flagged when they look like a ProffieOS card. */
     locate(): Promise<CardInfo[]>;
+    /** The same look as `locate`, saying when Windows did not answer instead of returning an empty list. */
+    look(): Promise<DriveLook>;
     listFonts(root: string): Promise<FontEntry[]>;
     /** Flush and dismount the card's volume, as 'Safely remove' does. Before the saber takes its card back. */
     eject(root: string): Promise<{ ok: boolean; detail: string }>;

@@ -29,6 +29,11 @@ export interface SendOptions {
   timeoutMs?: number;
   /** The board is expected to go quiet (RebootDFU): a silent ending is not reported through `onSilent`. */
   expectSilence?: boolean;
+  /**
+   * This command's own silence limit, in place of the client's `silentMs`. For the few commands a healthy board is
+   * known to be quiet through (`sd 1`, `sd 0`: the saber lets go of its card, or takes it back, before it answers).
+   */
+  silentMs?: number;
 }
 
 export interface Response {
@@ -237,6 +242,7 @@ export class BoardClient {
       const explicit = /^([A-Za-z0-9_]+)\| /.exec(command)?.[1] ?? null;
       const useTags = this.tagged && !explicit;
       const opts = { idleMs: options.idleMs ?? this.idleMs, timeoutMs: options.timeoutMs ?? (useTags ? this.taggedTimeoutMs : this.timeoutMs), ...options };
+      const silentMs = options.silentMs ?? this.silentMs;
       const started = this.now();
       const chunksAtStart = this.chunks;
       let idleHandle: unknown = null;
@@ -252,7 +258,7 @@ export class BoardClient {
         const cur = this.current!;
         this.current = null;
         const quietFor = this.now() - Math.max(this.lastHeard, started);
-        const silent = timedOut && (this.chunks === chunksAtStart || quietFor >= this.silentMs);
+        const silent = timedOut && (this.chunks === chunksAtStart || quietFor >= silentMs);
         const response: Response = { command, lines: cur.lines, events: cur.events, ms: this.now() - started, timedOut, tagged: cur.sawTag, silent };
         if (silent && !opts.expectSilence && !this.closed) this.onSilent(response);
         resolveOuter(response);
@@ -277,7 +283,7 @@ export class BoardClient {
           if (settled) return;
           const need = useTags || !this.current?.sawTag;
           // Nothing at all for silentMs, kicks included: the board is not going to answer. Stop waiting for the ceiling.
-          if (need && this.now() - Math.max(this.lastHeard, started) >= this.silentMs) { finish(true); return; }
+          if (need && this.now() - Math.max(this.lastHeard, started) >= silentMs) { finish(true); return; }
           // Only a silent board gets kicked. Long commands (font scans, listings) keep printing and need no help.
           const silent = this.now() - Math.max(this.lastHeard, started) >= this.kickMs;
           if (need && silent && sent < this.maxKicks) {

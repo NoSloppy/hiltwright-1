@@ -12,7 +12,7 @@ import type { LookDef } from '@hiltwright/core';
 import { Snapshots } from './snapshots';
 import { lookUpWanted, proffieSerials } from './usb';
 import { activeWant, wantSerial } from './serialGate';
-import { checkFontDir, copyFont, listFonts, listTracks, locateCards, readVoicePack, ejectVolume, readFontSounds, hasFolder } from './sd';
+import { checkFontDir, copyFont, listFonts, listTracks, lookForCards, readVoicePack, ejectVolume, readFontSounds, hasFolder } from './sd';
 import { cancelSetup, ensureToolchainRoot, installToolchain, lockFolder, plannedToolchainRoot, setupOnce, toolchainStatus, userBuildRoot } from './toolchain';
 import { listPacks, packFont, packMesh, userPacksDir } from './packs';
 import { FontLibrary, type ImportResult } from './fontLibrary';
@@ -145,7 +145,14 @@ export function registerIpc(): void {
   // SD card via a card reader. Roots must come from locate() so the renderer cannot point us at arbitrary folders.
   let knownRoots = new Set<string>();
   const root = (v: unknown) => { const r = str(v, 500); if (!knownRoots.has(r)) throw new Error('Unknown card'); return r; };
-  handle('sd:locate', async () => { const cards = await locateCards(); knownRoots = new Set(cards.map((c) => c.root)); return cards; });
+  // `{ detailed: true }` returns the whole look (DriveLook), saying when Windows did not answer; without it, the cards
+  // as before, an empty list included when it did not. A look Windows did not answer leaves the known cards as they were.
+  handle('sd:locate', async (_e, opts: unknown) => {
+    const look = await lookForCards();
+    if (look.answered) knownRoots = new Set(look.cards.map((c) => c.root));
+    const detailed = !!opts && typeof opts === 'object' && (opts as { detailed?: unknown }).detailed === true;
+    return detailed ? look : look.answered ? look.cards : [];
+  });
   handle('sd:listFonts', (_e, r: unknown) => listFonts(root(r)));
   handle('sd:eject', (_e, r: unknown) => ejectVolume(root(r)));
   handle('sd:hasFolder', (_e, r: unknown, name: unknown) => hasFolder(root(r), str(name, 200)));

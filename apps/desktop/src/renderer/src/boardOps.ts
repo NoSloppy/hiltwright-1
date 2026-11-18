@@ -2,7 +2,7 @@
 // (test/boardOps.test.ts). useBoard (board.ts) uses each.
 
 import { NO_SD_CARD, parseBattery, parseBatteryVoltage, sdFailureIn, wasRejected } from '@hiltwright/core';
-import type { PresetRecord } from '@hiltwright/core';
+import type { PresetRecord, SendOptions } from '@hiltwright/core';
 import type { SaberIdentity } from '../../shared/api';
 
 /** Whether the saber said it cannot read its SD card (preset-editor-fixes D6); the rule lives with `editCurrentPreset`. */
@@ -245,4 +245,25 @@ export function parseSdAccess(lines: string[]): boolean | null {
     if (m) return m[1] === 'ON';
   }
   return null;
+}
+
+/**
+ * How long `sd 1` and `sd 0` may be quiet before the link is called stalled. Before it answers, the saber waits for
+ * its sound to stop and lets go of its card (or takes it back): a Proffieboard V3 was silent for more than 10 s after
+ * `sd 1` on 2026-11-18, which the ordinary 10 s limit took for a stall. 45 s is well past that and still ends the
+ * wait for a saber that really has stopped answering; then the usual reopen applies (usb-power-connect D3).
+ */
+export const CARD_ACCESS_SILENCE_MS = 45_000;
+const CARD_ACCESS = /^\s*sd\s+[01]\s*$/;
+
+/**
+ * The send options for a command: `sd 1` and `sd 0` get their own silence limit, and a total limit past it; every
+ * other command is sent with its options unchanged. On an untagged board (ProffieOS 7) a response ends after a quiet
+ * spell, so there the answer line ends it instead, and the quiet spell allowed is the same long one.
+ */
+export function sendOptionsFor(command: string, opts: SendOptions | undefined, tagged: boolean): SendOptions | undefined {
+  if (!CARD_ACCESS.test(command)) return opts;
+  const timeoutMs = Math.max(opts?.timeoutMs ?? 0, CARD_ACCESS_SILENCE_MS + 15_000);
+  if (tagged) return { ...opts, silentMs: CARD_ACCESS_SILENCE_MS, timeoutMs };
+  return { ...opts, silentMs: CARD_ACCESS_SILENCE_MS, timeoutMs, idleMs: CARD_ACCESS_SILENCE_MS, until: (l) => /SD Access (ON|OFF)\b/.test(l) };
 }

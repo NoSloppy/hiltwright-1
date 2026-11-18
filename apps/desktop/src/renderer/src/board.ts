@@ -10,7 +10,7 @@ import {
 import type { SaberIdentity, SaberPatch, SaberRecord, SnapshotMeta } from '../../shared/api';
 import { PROFFIE_FILTER, WebSerialTransport, describePort, grantedProffiePorts } from './serial';
 import { setConnectionSnapshot } from './support';
-import { connectGate, createRecovery, deleteShown, duplicateShown, moveShown, parseSdAccess, readBattery, runOperation, sdFailureIn, serialQueue, storedLayout, type SaveState } from './boardOps';
+import { connectGate, createRecovery, deleteShown, duplicateShown, moveShown, parseSdAccess, readBattery, runOperation, sdFailureIn, sendOptionsFor, serialQueue, storedLayout, type SaveState } from './boardOps';
 
 export interface BoardInfo {
   version: VersionInfo | null;
@@ -203,7 +203,8 @@ export function useBoard() {
     if (!client.current) throw new Error('Not connected');
     log('in', command);
     const stalls = recovery.count;
-    const r = await client.current.send(command, opts);
+    // `sd 1` and `sd 0` are allowed a long quiet while the saber lets go of its card or takes it back; nothing else is.
+    const r = await client.current.send(command, sendOptionsFor(command, opts, client.current.isTagged));
     for (const l of r.lines) log('out', l);
     // A stall in this turn: the next command in the queue waits for the reopen, and goes to the new client (D3).
     if (r.silent || recovery.count !== stalls) await recovery.since(stalls);
