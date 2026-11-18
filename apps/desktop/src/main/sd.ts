@@ -89,7 +89,8 @@ export function parseRemovableDrives(stdout: string): Candidate[] {
  */
 async function candidateRoots(): Promise<{ list: Candidate[]; failed: string | null }> {
   const override = process.env.HILTWRIGHT_SD_ROOT;
-  if (override) return { list: [{ root: override, label: 'dev override', free: null, total: null, saberSerial: null, fileSystem: null }], failed: null };
+  // Dev aid: HILTWRIGHT_SD_FS names the override card's file system (for example exFAT), to see the page's warning.
+  if (override) return { list: [{ root: override, label: 'dev override', free: null, total: null, saberSerial: null, fileSystem: process.env.HILTWRIGHT_SD_FS?.trim() || null }], failed: null };
   if (process.platform === 'win32') {
     // 15 s: while a card shared over USB is being read, Windows answers slowly. A list that did not come back is
     // reported as such, never as an empty list (2026-11-18: the V3's card took minutes to open).

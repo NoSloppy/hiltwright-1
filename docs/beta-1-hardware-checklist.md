@@ -8,8 +8,8 @@ Before you start: build the installer with `npm run dist` and install it, so the
 ## 1. Packaged build (no saber needed)
 
 - [ ] The installer shows the licence page.
-- [ ] About (under Tools) shows version 0.2.0-beta.1, opens the licence text and the third-party notices, and the source link opens the browser.
-- [ ] The sidebar footer says "beta".
+- [x] About (under Tools) shows version 0.2.0-beta.1, opens the licence text and the third-party notices, and the source link opens the browser. Version, licence text and notices checked in the hidden copy of the app, 2026-11-18. Not checked: the source link opening the browser, and the packaged build.
+- [x] The sidebar footer says "beta". Checked in the hidden copy of the app, 2026-11-18.
 
 ## 2. V3 smoke
 
@@ -64,13 +64,13 @@ Re-run the same day in a hidden copy of the app on a copy of the owner's data, w
 - [x] Load a set whose style was removed from the library but is still in the saber's plan ("hotetest presets"): it loads with no warning and the preset shows the style ("My style").
 - [x] Load a set that names a style gone from both the library and the plan ("hote2 presets"): the problem is listed first, and the button reads "Load it anyway".
 - [x] With presets staged, load a set: the page says it replaces the staged presets and waits for "Load it" or Cancel.
-- [ ] After "Load it anyway", Build accepts the plan. Not run.
+- [x] After "Load it anyway", Build accepts the plan. Built in 14 s at 84% of the V2's flash; the preset whose style is gone uses Steady. Checked in the hidden copy of the app, 2026-11-18.
 
 ## 7. Cards and fonts
 
-- [ ] A font in per-sound folders (`hum/hum1.wav`) gets the same verdict in the Font library and on the card, with no "no hum".
+- [x] A font in per-sound folders (`hum/hum1.wav`) gets the same verdict in the Font library and on the card, with no "no hum". A fixture font in `hum/hum1.wav` folders reads Ready with 16 files in both places. Checked in the hidden copy of the app, 2026-11-18.
 - [ ] hote2's card shared over USB: the font list loads, and giving the card back works straight after, including while a list is still loading.
-- [ ] A card formatted exFAT in the reader: Fonts & SD shows its format and a red warning, and copying a font asks first.
+- [x] A card formatted exFAT in the reader: Fonts & SD shows its format and a red warning, and copying a font asks first. With a simulated exFAT card: the format is shown with the red warning. Not checked: a real exFAT card, and the "Copy anyway" question. Checked in the hidden copy of the app, 2026-11-18.
 - [ ] Fonts & SD and Font library at the smallest window size, and at 150% display scaling: nothing cut off.
 
 ## 8. Blade against preview (hote2, then the same six on the V3)
