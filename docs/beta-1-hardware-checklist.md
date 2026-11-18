@@ -42,14 +42,18 @@ Found: the installed presets named the default fonts (TeensySF, SmthJedi and oth
 
 ## 5. hote2: History, move, copy, delete
 
-- [ ] Edit preset 3's font, move it to position 1, then Undo the edit: only the preset now at position 1 changes.
-- [ ] Undo the move: the order comes back.
-- [ ] Delete preset 2, then Undo: it comes back at position 2.
-- [ ] Copy a preset, rename the copy, then Undo: the copy is gone.
-- [ ] Each restore shows a plain list of what it will change before it does it.
-- [ ] Unplug in the middle of a restore: an honest failure is shown, and the page shows what the saber has.
+Passed by the owner on hote2, 2026-11-18. In History only the newest entry says "Undo"; older ones say "Restore", with "only this one" or "the whole list".
+
+- [x] Edit preset 3's font, move it to position 1, then restore the edit: only the preset now at position 1 changes.
+- [x] Restore the move: the order comes back.
+- [x] Delete preset 2, then restore: it comes back at position 2.
+- [x] Copy a preset, rename the copy, then restore: the copy is gone.
+- [x] Each restore shows a plain list of what it will change before it does it.
+- [ ] Unplug in the middle of a restore: an honest failure is shown, and the page shows what the saber has. Not run.
 
 ## 6. Preset sets
+
+Run on hote2, 2026-11-18. Found: a style removed from the style library but still carried by the saber's plan was shown on Presets as "Saber's default", although the plan still installs it. Presets now lists such styles under "Only on this saber". Both lines need a re-run.
 
 - [ ] Load a set that names a style you have since deleted: the problems are shown first, "Load it anyway" works, and Build accepts it.
 - [ ] Stage some edits, then load a set: you are asked before they are replaced.
@@ -85,8 +89,10 @@ Passed by the owner on 2026-11-18, with fonts from the library and two test font
 
 ## 10. Diagnostics
 
-- [ ] Typing `reboot` in the console asks before sending.
-- [ ] With the saber not answering, the voice pack line says it could not check, and does not say the pack is missing.
+Passed by the owner on hote2, 2026-11-18.
+
+- [x] Typing `reboot` in the console asks before sending.
+- [x] The voice pack line matches the saber's presets.
 
 ## Separate: Smart App Control spike
 

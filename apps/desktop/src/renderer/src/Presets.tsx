@@ -82,7 +82,11 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
   useEffect(() => { if (isLive && info?.currentPreset != null) setIx(info.currentPreset); }, [isLive, info?.currentPreset]);
   useEffect(() => { setConfirmDelete(false); }, [ix, saber?.id]);
 
-  const allLooks = useMemo(() => [...STARTER_LOOKS, ...saved], [saved]);
+  // Styles the saber's plan still carries after they were removed from the style library: they stay on this saber and
+  // stay choosable here, or a preset using one would read as "Saber's default" while the plan installs the style (hote2, 2026-11-18).
+  const keptLooks = useMemo(() => (model?.looks ?? []).filter((l) => !saved.some((x) => x.id === l.id) && !STARTER_LOOKS.some((x) => x.id === l.id)), [model?.looks, saved]);
+  const keptIds = useMemo(() => new Set(keptLooks.map((l) => l.id)), [keptLooks]);
+  const allLooks = useMemo(() => [...STARTER_LOOKS, ...saved, ...keptLooks], [saved, keptLooks]);
   const lookById = (id: string | null | undefined) => (id ? allLooks.find((l) => l.id === id) ?? null : null);
   const compiled = new Set((saber?.firmware?.looks ?? []).map((l) => l.id));
 
@@ -295,7 +299,8 @@ export function Presets({ ws, board, go }: { ws: Workspace; board: Board; go: (p
                             {/* "Saber's default" means no style chosen, which only a staged list can mean (F36). */}
                             {isLive ? <option value="" disabled>No style chosen</option> : <option value="">Saber's default (uses {starterLookFor(b.role).name})</option>}
                             <optgroup label="Hiltwright">{choices.filter((l) => l.source === 'starter').map((l) => <option key={l.id} value={l.id}>{l.name}{compiled.has(l.id) ? '' : live ? ' (needs a build)' : ''}</option>)}</optgroup>
-                            {choices.some((l) => l.source !== 'starter') && <optgroup label="Your styles">{choices.filter((l) => l.source !== 'starter').map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}{compiled.has(l.id) ? '' : live ? ' (needs a build)' : ''}</option>)}</optgroup>}
+                            {choices.some((l) => keptIds.has(l.id)) && <optgroup label="Only on this saber (removed from your styles)">{choices.filter((l) => keptIds.has(l.id)).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</optgroup>}
+                            {choices.some((l) => l.source !== 'starter' && !keptIds.has(l.id)) && <optgroup label="Your styles">{choices.filter((l) => l.source !== 'starter' && !keptIds.has(l.id)).map((l) => <option key={l.id} value={l.id}>{l.name}{l.by && l.by !== 'you' ? ` (${l.by})` : ''}{compiled.has(l.id) ? '' : live ? ' (needs a build)' : ''}</option>)}</optgroup>}
                           </Select></span>
                         {shownLook && !onSaber && <span className="chip warn" title="Goes on with the next Build & Install"><Icon name="clock" />Queued</span>}
                         {shownLook && canSimulate(shownLook.id) && <div style={{ width: ROLE_META[b.role].kind === 'pixel' ? 150 : 24, flex: 'none' }}><BladePreview lookId={shownLook.id} args={args} leds={ROLE_META[b.role].kind === 'pixel' ? Math.min(60, Math.max(4, Math.round(b.pixels / 3))) : 1} dot={ROLE_META[b.role].kind !== 'pixel'} size="sm" /></div>}
