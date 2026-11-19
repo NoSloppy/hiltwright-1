@@ -1,4 +1,4 @@
-# Hiltwright 0.2.0-beta.2: install guide
+# Hiltwright 0.2.0-beta.3: install guide
 
 Hiltwright Beta 1 is not signed. Windows will warn you. This guide takes you from the download to your first firmware install.
 
@@ -14,8 +14,8 @@ You need:
 
 ## 1 Download
 
-1. Open https://github.com/safwyls/hiltwright/releases/tag/v0.2.0-beta.2
-2. Download `Hiltwright-0.2.0-beta.2-setup.exe`.
+1. Open https://github.com/safwyls/hiltwright/releases/tag/v0.2.0-beta.3
+2. Download `Hiltwright-0.2.0-beta.3-setup.exe`.
 
 ## 2 Windows warnings when you run the installer
 
@@ -104,9 +104,9 @@ Unsigned files are sometimes flagged by mistake. If Defender or another antiviru
 
 ## 7 Newer betas
 
-Coming from 0.2.0-beta.1? It cannot update itself. Install this beta by hand, once: download the installer and run it, as in sections 1 and 2. It installs over the old one. Your sabers, styles, fonts and backups are kept.
+Coming from 0.2.0-beta.1 or 0.2.0-beta.2? Neither can update itself. Install this beta by hand, once: download the installer and run it, as in sections 1 and 2. It installs over the old one. Your sabers, styles, fonts and backups are kept.
 
-From 0.2.0-beta.2 on, Hiltwright looks for newer versions itself:
+From 0.2.0-beta.3 on, Hiltwright looks for newer versions itself:
 
 - A little after it starts, and every few hours while it is open, it asks GitHub for Hiltwright's list of releases. It sends nothing about your sabers or you; GitHub sees your internet address, as with any web page.
 - When a newer version is out, a small chip under the version in the sidebar says "Version ... is available". Nothing is downloaded yet.
@@ -123,4 +123,4 @@ The browser warning and the **Unblock** step in section 2 are only for installer
 3. Describe what happened and which step you were on.
 4. Attach the diagnostics file.
 
-Source for this build: https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.2
+Source for this build: https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.3

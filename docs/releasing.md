@@ -2,7 +2,9 @@
 
 How to cut a Hiltwright beta from now on, and how an installed copy then finds it. Every release is a GitHub release on `safwyls/hiltwright`, marked as a pre-release, tagged `v<version>` (for example `v0.2.0-beta.2`).
 
-**0.2.0-beta.1 has no updater.** Testers on 0.2.0-beta.1 must install the next beta by hand once, as they did the first: download the installer from the release page and run it (it installs over 0.2.0-beta.1 and keeps their data). Every copy from that beta on finds later betas itself.
+**0.2.0-beta.1 has no updater, and the one in 0.2.0-beta.2 cannot check** (it failed to load electron-updater; that release was withdrawn). Anyone on either must install a newer beta by hand once: download the installer from the release page and run it (it installs over the old one and keeps their data). Every copy from 0.2.0-beta.3 on finds later betas itself.
+
+**Before publishing, run a real check.** Unit tests stand in a fake for electron-updater, which is how 0.2.0-beta.2 shipped unable to check. After step 6, install the new build (or keep the previous one installed) and do step 7 every time.
 
 ## Steps
 

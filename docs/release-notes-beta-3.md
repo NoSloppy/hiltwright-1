@@ -1,4 +1,4 @@
-# Hiltwright 0.2.0-beta.2
+# Hiltwright 0.2.0-beta.3
 
 ## New in this beta
 
@@ -6,7 +6,7 @@
 - **Remove a saber from the Armory.** Every saber that is not plugged in has a Remove button. It asks first, and says what is removed and what is kept. Firmware backups and preset history stay as files.
 - **A website.** hiltwright.com has a walkthrough of every page and the user docs.
 
-Not yet proven: the update itself. This is the first beta with the updater, so the first real update will be from this beta to the next one. If it does not work, install the next beta by hand and tell us.
+0.2.0-beta.2 was withdrawn: its update check failed every time. This beta fixes that. Checking for a newer version is now tested against GitHub; downloading one and restarting into it is not yet proven, because the first real update will be from this beta to the next. If it does not work, install the next beta by hand and tell us.
 
 ## What Hiltwright is
 
@@ -37,15 +37,15 @@ The six free ProffieOS fonts are included and can be copied to a card from Fonts
 
 ## Install
 
-Coming from 0.2.0-beta.1? Download this installer and run it. It installs over the old one and keeps your sabers, styles, fonts and backups. This is the last beta you install by hand.
+Coming from 0.2.0-beta.1 or 0.2.0-beta.2? Download this installer and run it. It installs over the old one and keeps your sabers, styles, fonts and backups. This is the last beta you install by hand.
 
 The installer is unsigned, so Windows will warn you before it runs. If Smart App Control is on, Windows blocks both the installer and the app, and it has to stay off while you use this beta: check that first (install guide, section 3). The install guide covers each Windows barrier to unsigned software.
 
-Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.2/docs/install-guide.md
+Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.3/docs/install-guide.md
 
 ## Licence and source
 
-Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.2
+Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.3
 
 ## Report a problem
 
