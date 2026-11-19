@@ -1,0 +1,52 @@
+[
+  {
+    "id": "station",
+    "name": "Station",
+    "about": "Gloss black, with trooper green for what is selected and what comes next."
+  },
+  {
+    "id": "hull",
+    "name": "Scorched hull",
+    "about": "Warm soot and worn paint, with enamel orange for what comes next."
+  },
+  {
+    "id": "hoth",
+    "name": "Hoth",
+    "about": "A base cut into the ice: pale, cold and soft-edged, with flight-suit orange for what comes next."
+  },
+  {
+    "id": "ronin",
+    "name": "Ronin",
+    "about": "An old black-and-white film: ink, grain and brush strokes, with red only for what is selected."
+  },
+  {
+    "id": "ninth",
+    "name": "The Ninth Jedi",
+    "about": "A temple above the mist at dusk: plum and slate, gold-framed, with lantern gold for what comes next."
+  },
+  {
+    "id": "coruscant",
+    "name": "Coruscant at night",
+    "about": "The city planet from orbit: black glass, rounded shapes, city amber and the blue of its atmosphere."
+  },
+  {
+    "id": "crait",
+    "name": "Crait",
+    "about": "White salt over red mineral: pale, sharp-cornered, with red showing under every edge."
+  },
+  {
+    "id": "naboo",
+    "name": "Naboo",
+    "about": "A lake city in daylight: pale stone, arched panels, verdigris for what comes next and wisteria for what is selected."
+  },
+  {
+    "id": "kashyyyk",
+    "name": "Kashyyyk",
+    "about": "A village in the giant trees: dark timber, hewn corners, moss green and lantern amber."
+  },
+  {
+    "id": "saberbench",
+    "name": "Saberbench",
+    "about": "The appearance Hiltwright first had: dark navy, cut-corner buttons and cyan."
+  }
+]

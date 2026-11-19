@@ -6,7 +6,7 @@
 //
 // Every link is relative, so the site works at any path. It is published at hiltwright.com.
 
-import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -22,6 +22,15 @@ const REPO_URL = 'https://github.com/safwyls/hiltwright';
 const RELEASES_URL = `${REPO_URL}/releases`;
 const ISSUES_URL = `${REPO_URL}/issues`;
 const tour = JSON.parse(read(join(here, 'data/tour.json')));
+// The app's themes (written by scripts/capture.mjs) and their paintings, which live with the app.
+const themes = JSON.parse(read(join(here, 'data/themes.json')));
+const feature = JSON.parse(read(join(here, 'data/feature.json')));
+const PLANES_DIR =join(repo, 'apps/desktop/src/renderer/src/assets/backdrops');
+const isPicture = (f) => /\.(jpe?g|webp|png)$/i.test(f);
+const paintings = new Map(readdirSync(PLANES_DIR).filter(isPicture).map((f) => [f.replace(/\.[^.]+$/, ''), f]));
+// The theme in front when the home page opens.
+const FIRST_THEME = 'ninth';
+if (!themes.some((t) => t.id === FIRST_THEME)) throw new Error(`themes.json has no "${FIRST_THEME}" theme`);
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const slugify = (s) => s.toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -53,26 +62,25 @@ function layout({ title, description, nav, root, body, cls = '', scripts = [] })
 <title>${esc(full)}</title>
 <meta name="description" content="${esc(description)}">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#0a0e13">
+<meta name="theme-color" content="#17110c">
 <meta property="og:title" content="${esc(full)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://hiltwright.com/assets/shots/clean-41.png">
+<meta property="og:image" content="https://hiltwright.com/assets/themes/${FIRST_THEME}.jpg">
 <link rel="icon" type="image/svg+xml" href="${root}assets/brand/hiltwright-icon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Michroma&display=swap" rel="stylesheet">
+<link rel="preload" href="${root}assets/fonts/gloock-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${root}assets/site.css">
 </head>
-<body class="${cls}">
+<body class="${`${cls} p-${nav ?? 'none'}`.trim()}">
 <a class="skip" href="#main">Skip to the content</a>
 <header class="top">
   <div class="wrap bar">
-    <a class="brand" href="${root}index.html" aria-label="Hiltwright, home"><img src="${root}assets/brand/hiltwright-icon.svg" width="30" height="30" alt=""><img class="wordmark" src="${root}assets/brand/hiltwright-wordmark.svg" width="150" height="14" alt="Hiltwright"></a>
+    <a class="brand" href="${root}index.html" aria-label="Hiltwright, home"><img src="${root}assets/brand/hiltwright-icon.svg" width="30" height="30" alt="">Hiltwright</a>
     <button class="menu" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
     <nav id="nav" aria-label="Site">
-      ${NAV.map((n) => `<a href="${root}${n.href}"${n.id === nav ? ' aria-current="page"' : ''}>${n.label}</a>`).join('\n      ')}
-      <a class="gh" href="${REPO_URL}">GitHub</a>
+      ${NAV.filter((n) => n.id !== 'download').map((n) => `<a href="${root}${n.href}"${n.id === nav ? ' aria-current="page"' : ''}>${n.label}</a>`).join('\n      ')}
+      <a href="${REPO_URL}">GitHub</a>
+      <a class="get" href="${root}download.html"${nav === 'download' ? ' aria-current="page"' : ''}>Download</a>
     </nav>
   </div>
 </header>
@@ -82,12 +90,12 @@ ${body}
 <footer class="foot">
   <div class="wrap footgrid">
     <div>
-      <img src="${root}assets/brand/hiltwright-logo.svg" width="202" height="32" alt="Hiltwright">
+      <a class="brand" href="${root}index.html"><img src="${root}assets/brand/hiltwright-icon.svg" width="30" height="30" alt="">Hiltwright</a>
       <p>ProffieOS for people who never want to see a compiler. Version ${esc(VERSION)}, a closed beta for Windows.</p>
     </div>
-    <div><h2>Site</h2><a href="${root}features.html">Features</a><a href="${root}walkthrough.html">Walkthrough</a><a href="${root}download.html">Download</a></div>
-    <div><h2>Docs</h2><a href="${root}docs/install.html">Install guide</a><a href="${root}docs/quick-start.html">Quick start</a><a href="${root}docs/troubleshooting.html">Troubleshooting</a><a href="${root}docs/faq.html">Questions</a></div>
-    <div><h2>Project</h2><a href="${REPO_URL}">Source on GitHub</a><a href="${ISSUES_URL}">Report a problem</a><a href="${RELEASES_URL}">Releases</a><a href="${REPO_URL}/blob/main/LICENSE">Licence: GPL-3.0-or-later</a></div>
+    <div><p class="foot-h">Site</p><a href="${root}features.html">Features</a><a href="${root}walkthrough.html">Walkthrough</a><a href="${root}download.html">Download</a></div>
+    <div><p class="foot-h">Docs</p><a href="${root}docs/install.html">Install guide</a><a href="${root}docs/quick-start.html">Quick start</a><a href="${root}docs/troubleshooting.html">Troubleshooting</a><a href="${root}docs/faq.html">Questions</a></div>
+    <div><p class="foot-h">Project</p><a href="${REPO_URL}">Source on GitHub</a><a href="${ISSUES_URL}">Report a problem</a><a href="${RELEASES_URL}">Releases</a><a href="${REPO_URL}/blob/main/LICENSE">Licence: GPL-3.0-or-later</a></div>
   </div>
   <div class="wrap legal">Hiltwright is an independent, open-source project. It is not affiliated with or endorsed by the ProffieOS project, any board or saber maker, or Lucasfilm Ltd. ProffieOS and Proffieboard are the work of Fredrik Hübinette. All other names belong to their owners.</div>
 </footer>
@@ -104,6 +112,10 @@ mkdirSync(join(dist, 'docs'), { recursive: true });
 cpSync(join(here, 'assets'), join(dist, 'assets'), { recursive: true });
 mkdirSync(join(dist, 'assets/img'), { recursive: true });
 cpSync(join(repo, 'docs/images/smart-app-control.png'), join(dist, 'assets/img/smart-app-control.png'));
+mkdirSync(join(dist, 'assets/planes'), { recursive: true });
+for (const f of paintings.values()) cpSync(join(PLANES_DIR, f), join(dist, 'assets/planes', f));
+cpSync(join(repo, 'apps/desktop/src/renderer/src/assets/hiltwright-icon.svg'), join(dist, 'assets/brand/hiltwright-icon.svg'));
+for (const t of themes) if (!existsSync(join(here, 'assets/themes', `${t.id}.jpg`))) throw new Error(`no picture of the ${t.id} theme: run npm run capture`);
 writeFileSync(join(dist, '.nojekyll'), '');
 
 // ---------- the live blade demo: the app's simulator, for the browser ----------
@@ -184,10 +196,29 @@ for (const d of docs) {
 writeFileSync(join(dist, 'docs/search.json'), JSON.stringify(search));
 
 // ---------- promo pages ----------
-const vars = { version: VERSION, repo: REPO_URL, releases: RELEASES_URL, issues: ISSUES_URL, steps: String(tour.chapters.reduce((n, c) => n + c.steps.length, 0)), tour: JSON.stringify(tour).replace(/</g, '\\u003c') };
+// The home page's stage: one plane per theme. The first is in front; the rest stand as slices, in order.
+let slot = 0;
+// A theme with no painting shows its own app as its plane. Those are spread out, so no two stand side by side.
+const unpainted = themes.filter((t) => !paintings.has(t.id));
+const painted = themes.filter((t) => paintings.has(t.id));
+const siteOrder = new Array(themes.length).fill(null);
+unpainted.forEach((t, i) => { siteOrder[unpainted.length > 1 ? Math.round((i * (themes.length - 1)) / (unpainted.length - 1)) : 0] = t; });
+for (const t of painted) siteOrder[siteOrder.indexOf(null)] = t;
+// The slices and the row of names use this one order, so a name and its slice sit in the same place in line.
+themes.splice(0, themes.length, ...siteOrder);
+const planes = themes.map((t) => {
+  const front = t.id === FIRST_THEME;
+  const pic = paintings.get(t.id);
+  const style = `${front ? '' : `--s:${slot++};`}background-image:url(${pic ? `assets/planes/${pic}` : `assets/themes/${t.id}.jpg`})`;
+  return `<button type="button" class="plane${front ? ' front' : ''}${pic ? '' : ' unpainted'}" data-theme="${t.id}" style="${style}" aria-label="Show the app in the ${esc(t.name)} theme"${front ? ' tabindex="-1" aria-hidden="true"' : ''}></button>`;
+}).join('\n  ');
+const themeButtons = themes.map((t) => `<button type="button" role="radio" data-theme="${t.id}" aria-checked="${t.id === FIRST_THEME}" tabindex="${t.id === FIRST_THEME ? 0 : -1}" title="${esc(t.about)}">${esc(t.name)}</button>`).join('\n    ');
+const vars = { planes, themeButtons, themeCount: String(themes.length), sliceCount: String(themes.length - 1), firstTheme: FIRST_THEME, firstThemeName: esc(themes.find((t) => t.id === FIRST_THEME).name), version: VERSION, repo: REPO_URL, releases: RELEASES_URL, issues: ISSUES_URL, steps: String(tour.chapters.reduce((n, c) => n + c.steps.length, 0)), tour: JSON.stringify(tour).replace(/</g, '\\u003c') };
 for (const f of readdirSync(join(here, 'src/pages')).filter((x) => x.endsWith('.html'))) {
   const { meta, body } = frontmatter(read(join(here, 'src/pages', f)));
-  const filled = body.replace(/\{\{(\w+)\}\}/g, (m, k) => (k === 'root' ? '' : vars[k] ?? m));
+  const filled = body.replace(/\{\{(\w+)\}\}/g, (m, k) => (k === 'root' ? '' : vars[k] ?? m))
+    // A feature row's picture is the one taken in its own theme (scripts/capture.mjs), named under the picture.
+    .replace(/<figure class="frame">(<img [^>]*?)src="assets\/shots\/clean-(\d\d)\.png"([^>]*>)<\/figure>/g, (m, a, n, b) => (feature[n] ? `<figure class="frame">${a}src="assets/feature/${n}.jpg"${b}<figcaption>Shown in the ${esc(feature[n].name)} theme</figcaption></figure>` : m));
   writeFileSync(join(dist, f), layout({ title: meta.title, description: meta.description, nav: meta.nav, root: '', body: filled, cls: meta.class ?? '', scripts: (meta.scripts ?? '').split(',').map((s) => s.trim()).filter(Boolean) }));
 }
 

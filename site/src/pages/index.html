@@ -3,27 +3,29 @@ title:
 description: Hiltwright sets up a Proffieboard saber from wiring to installed firmware: presets, styles and sound fonts, built and installed over USB. No Arduino, no C++, no style code.
 nav: home
 class: home
-scripts: assets/blade-demo.js
+scripts: assets/stage.js, assets/blade-demo.js
 ---
-<section class="hero">
-  <div class="wrap herogrid">
-    <div>
-      <p class="eyebrow">Closed beta · Windows · Proffieboard V2.2 and V3</p>
-      <h1>ProffieOS without the compiler.</h1>
-      <p class="lede">Hiltwright sets up a Proffieboard saber from wiring to installed firmware. Choose presets, styles and sound fonts, then build and install over USB. No Arduino, no C++, no style code.</p>
-      <div class="cta">
-        <a class="btn primary" href="download.html">Get the beta</a>
-        <a class="btn" href="walkthrough.html">Take the walkthrough</a>
-      </div>
-      <p class="fine">Free and open source (GPL-3.0-or-later). Version {{version}}.</p>
+<section class="stage" data-stage style="--n:{{sliceCount}}" aria-label="Hiltwright, shown in each of its themes">
+  {{planes}}
+  <div class="stage-shade"></div>
+  <div class="stage-cel">
+    <h1>ProffieOS without the compiler.</h1>
+    <p class="lede">Hiltwright sets up a Proffieboard saber from wiring to installed firmware. Choose presets, styles and sound fonts, then build and install over USB. No Arduino, no C++, no style code.</p>
+    <div class="cta">
+      <a class="btn primary big" href="download.html">Get the beta</a>
+      <a class="btn big" href="walkthrough.html">Take the walkthrough</a>
     </div>
-    <figure class="frame tilt"><img src="assets/shots/clean-41.png" width="1480" height="980" alt="Hiltwright's demo room: a lit blue saber in a dark room, with style, colour and effect controls beside it"></figure>
+    <p class="fine">Free and open source. Version {{version}}, a closed beta for Windows and Proffieboard V2.2 and V3.</p>
+  </div>
+  <figure class="win stage-win"><img src="assets/themes/{{firstTheme}}.jpg" width="1480" height="980" alt="The Hiltwright app: the Armory page with an example saber plugged in, in the {{firstThemeName}} theme"></figure>
+  <div class="stage-names" role="radiogroup" aria-label="Show the app in this theme">
+    <span>{{themeCount}} themes</span>
+    {{themeButtons}}
   </div>
 </section>
 
 <section class="band" id="try">
   <div class="wrap">
-    <p class="eyebrow">Live demo</p>
     <h2>Try a blade, right here.</h2>
     <p class="sub">This is the simulator from the app, running in your browser. It works out what ProffieOS would put on each of 132 LEDs, so you see a style before it goes near a saber.</p>
     <div class="bd" data-blade-demo>
@@ -61,21 +63,19 @@ scripts: assets/blade-demo.js
 
 <section class="band alt">
   <div class="wrap">
-    <p class="eyebrow">How it works</p>
     <h2>Four steps from a plan to an installed saber.</h2>
     <ol class="path">
-      <li><span class="num">1</span><h3>Wiring</h3><p>Choose the board, the buttons and the prop. Say which pins each blade uses. Hiltwright checks for clashes and writes the settings.</p><a href="docs/wiring.html">Wiring</a></li>
-      <li><span class="num">2</span><h3>Presets</h3><p>A sound font, a track and a style for each blade. Change them live while the saber is plugged in.</p><a href="docs/presets.html">Presets</a></li>
-      <li><span class="num">3</span><h3>Fonts &amp; SD</h3><p>Copy fonts to the card through a reader, or let the saber lend its card over USB. Every font is checked.</p><a href="docs/fonts-and-sd.html">Fonts &amp; SD</a></li>
-      <li><span class="num">4</span><h3>Build &amp; Install</h3><p>One button builds the firmware in about a minute. Install backs up the saber first, then writes the new firmware.</p><a href="docs/build-and-install.html">Build &amp; Install</a></li>
+      <li><span class="num">1</span><h3>Wiring</h3><p>Choose the board, the buttons and the prop. Say which pins each blade uses. Hiltwright checks for clashes and writes the settings.</p><a href="docs/wiring.html">How Wiring works</a></li>
+      <li><span class="num">2</span><h3>Presets</h3><p>A sound font, a track and a style for each blade. Change them live while the saber is plugged in.</p><a href="docs/presets.html">How Presets work</a></li>
+      <li><span class="num">3</span><h3>Fonts &amp; SD</h3><p>Copy fonts to the card through a reader, or let the saber lend its card over USB. Every font is checked.</p><a href="docs/fonts-and-sd.html">How Fonts &amp; SD works</a></li>
+      <li><span class="num">4</span><h3>Build &amp; Install</h3><p>One button builds the firmware in about a minute. Install backs up the saber first, then writes the new firmware.</p><a href="docs/build-and-install.html">How Build &amp; Install works</a></li>
     </ol>
   </div>
 </section>
 
-<section class="band">
+<section class="band scene deep s-hoth">
   <div class="wrap feature">
     <div>
-      <p class="eyebrow">Styles</p>
       <h2>Pick a style. Recolour it live.</h2>
       <p>Hiltwright comes with dozens of blade styles of its own, each with a live preview. Every colour is editable from the Presets page with no rebuild.</p>
       <p>Already have a style you like? Paste its code, from the Fett263 style library or anywhere else, and it keeps its credit.</p>
@@ -83,9 +83,8 @@ scripts: assets/blade-demo.js
     </div>
     <figure class="frame"><img loading="lazy" src="assets/shots/clean-31.png" width="1480" height="980" alt="The Styles page: a grid of blade styles with previews, and one style open with effect buttons and colour pickers"></figure>
   </div>
-  <div class="wrap feature flip">
+  <div class="wrap feature">
     <div>
-      <p class="eyebrow">Style editor</p>
       <h2>Build your own, in blocks or in full.</h2>
       <p>Simple builds a style from a few plain blocks: a blade, effects on top, an ignition and a retraction. Full shows every ProffieOS layer, and you say what it shows, where on the blade, and when.</p>
       <p>The blade beside the editor shows the style as you change it.</p>
@@ -95,7 +94,6 @@ scripts: assets/blade-demo.js
   </div>
   <div class="wrap feature">
     <div>
-      <p class="eyebrow">Build &amp; Install</p>
       <h2>A backup before every install.</h2>
       <p>Install reads the saber's whole firmware into a backup file before it writes anything. "Put back" restores a backup exactly as it was.</p>
       <p>The compiler is a one-time download into Hiltwright's own folder. You never open Arduino and never read a config file, unless you are curious.</p>
@@ -107,7 +105,6 @@ scripts: assets/blade-demo.js
 
 <section class="band alt">
   <div class="wrap">
-    <p class="eyebrow">Who it is for</p>
     <h2>Coming from Crystal Focus X, Xenopixel or LGT?</h2>
     <div class="cards three">
       <div class="card"><h3>No toolchain to set up</h3><p>ProffieOS normally means Arduino, board packages, drivers and a config file in C++. Hiltwright does those parts for you.</p></div>
@@ -117,15 +114,14 @@ scripts: assets/blade-demo.js
   </div>
 </section>
 
-<section class="band">
+<section class="band scene close">
   <div class="wrap beta">
     <div>
-      <p class="eyebrow">Where it stands</p>
-      <h2>Beta 1 is a closed beta for experts.</h2>
+      <h2>This is a closed beta for experts.</h2>
       <p>It is for installers and style builders who own a Proffieboard V2.2 or V3 and run Windows. The installer is not signed, so Windows warns you, and Smart App Control must be off. The <a href="docs/install.html">install guide</a> covers every step.</p>
       <div class="cta">
-        <a class="btn primary" href="download.html">Download and requirements</a>
-        <a class="btn" href="docs/index.html">Read the docs</a>
+        <a class="btn primary big" href="download.html">Download and requirements</a>
+        <a class="btn big" href="docs/index.html">Read the docs</a>
       </div>
     </div>
     <ul class="ticks">
@@ -134,6 +130,7 @@ scripts: assets/blade-demo.js
       <li>Try any style and font in the demo room</li>
       <li>Build and install, with a backup first</li>
       <li>Edit presets live on the saber</li>
+      <li>Ten themes for the app itself</li>
       <li class="no">Not yet: macOS and Linux, code signing, card formatting, building fonts from sounds</li>
     </ul>
   </div>

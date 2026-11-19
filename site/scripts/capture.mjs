@@ -3,7 +3,8 @@
 //   npm run capture            (in site/; needs the workspace installed at the repo root: npm ci)
 //
 // Writes site/assets/shots/tour-NN.png (each tour step, with its card), clean-NN.png (the same page with the tour
-// hidden, for the steps listed in CLEAN) and site/data/tour.json (chapters, titles and text, from tourSteps.ts).
+// hidden, for the steps listed in CLEAN), site/assets/themes/<theme>.jpg and site/data/themes.json (the Armory in
+// every theme, and the themes' names) and site/data/tour.json (chapters, titles and text, from tourSteps.ts).
 //
 // It runs the app in development mode with the main process's development aids, as apps/desktop/scripts/shots.mjs
 // does. It never reaches a board or a real card: HILTWRIGHT_NO_BOARD is always set (the script stops if it cannot
@@ -24,6 +25,10 @@ const W = 1480, H = 980;
 
 // Steps (counted from 1) that are also photographed without the tour over them.
 const CLEAN = [7, 11, 14, 19, 20, 22, 24, 28, 29, 31, 34, 36, 39, 40, 41, 42, 44, 46];
+// The step photographed once in every theme: the Armory, with the example saber.
+const THEME_STEP = 7;
+// Steps photographed for the promo pages' feature rows, and the theme each is taken in.
+const FEATURE = { 7: 'kashyyyk', 11: 'hull', 14: 'coruscant', 22: 'ronin', 24: 'naboo', 28: 'saberbench', 29: 'ninth', 31: 'hoth', 34: 'station', 36: 'crait', 39: 'naboo', 41: 'crait' };
 
 // The tour's words: tourSteps.ts only imports a type, so Node can load it with its types stripped.
 const { TOUR } = await import(pathToFileURL(join(desktop, 'src/renderer/src/tourSteps.ts')).href);
@@ -73,13 +78,40 @@ delete env.ELECTRON_RUN_AS_NODE;
 if (env.HILTWRIGHT_NO_BOARD !== '1') { console.error('Could not set HILTWRIGHT_NO_BOARD. Not starting the app.'); process.exit(1); }
 
 const HIDE = "(() => { if (!document.getElementById('site-hide')) { const s = document.createElement('style'); s.id = 'site-hide'; s.textContent = '.site-clean .tour{visibility:hidden!important}'; document.head.appendChild(s); } })();";
+// No picture may show this computer's folders (they carry the account's name): wherever the made-up data folder's
+// path is on the page, it is shown as a neutral one. Every step waits, then cleans, then is photographed.
+const NEUTRAL = 'D:\\Sabers';
+// The made-up card is a plain folder, so the app marks it as a developer's stand-in and cannot read its size or
+// format. In the pictures it reads as the example card it stands for.
+const EXAMPLE_CARD = [[' (dev override)', ''], ['— free of —', '14.2 GB free of 29.7 GB'], ['format not reported', 'FAT32']];
+const SCRUB = `(() => { const swap = (s) => { let out = s; for (const from of ${JSON.stringify([base, base.replace(/\\/g, '/')])}) out = out.split(from).join(${JSON.stringify(NEUTRAL)}); for (const [a, b] of ${JSON.stringify(EXAMPLE_CARD)}) out = out.split(a).join(b); return out; }; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); for (let n; (n = w.nextNode());) { const t = swap(n.nodeValue); if (t !== n.nodeValue) n.nodeValue = t; } for (const el of document.querySelectorAll('input,[title]')) { if (el.value && swap(el.value) !== el.value) el.value = swap(el.value); if (el.title && swap(el.title) !== el.title) el.title = swap(el.title); } })();`;
+const step = (statements, wait = 450) => `(async () => { ${statements}; await new Promise((r) => setTimeout(r, ${wait})); ${SCRUB} })()`;
 const shots = [];
 for (let k = 1; k <= COUNT; k++) {
-  shots.push({ file: join(outDir, `tour-${pad(k)}.png`), js: `${HIDE} document.documentElement.classList.remove('site-clean'); window.hiltwrightTour(${k - 1})` });
-  if (CLEAN.includes(k)) shots.push({ file: join(outDir, `clean-${pad(k)}.png`), js: "document.documentElement.classList.add('site-clean'); new Promise((r) => setTimeout(r, 300))" });
+  shots.push({ file: join(outDir, `tour-${pad(k)}.png`), js: step(`${HIDE} document.documentElement.classList.remove('site-clean'); window.hiltwrightTour(${k - 1})`) });
+  if (CLEAN.includes(k)) shots.push({ file: join(outDir, `clean-${pad(k)}.png`), js: step("document.documentElement.classList.add('site-clean')", 300) });
 }
+// The same Armory in every theme, for the theme stage on the home page: site/assets/themes/<id>.jpg. The walkthrough
+// above is taken in the default theme; the app is put back to it afterwards.
+const { THEMES, DEFAULT_THEME } = await import(pathToFileURL(join(desktop, 'src/shared/themes.ts')).href);
+const themeDir = join(site, 'assets/themes');
+for (const t of THEMES) {
+  shots.push({ file: join(themeDir, `${t.id}.jpg`), js: step(`${HIDE} document.documentElement.classList.add('site-clean'); window.hiltwrightTheme(${JSON.stringify(t.id)}); window.hiltwrightTour(${THEME_STEP - 1})`, 900) });
+}
+// The pictures beside the promo pages' feature rows: each page of the app in a different theme, so the site shows
+// all of them. site/assets/feature/<step>.jpg, and which theme each is in.
+const featureDir = join(site, 'assets/feature');
+for (const [n, theme] of Object.entries(FEATURE)) {
+  if (!THEMES.some((t) => t.id === theme)) { console.error(`FEATURE: no theme "${theme}"`); process.exit(1); }
+  shots.push({ file: join(featureDir, `${pad(Number(n))}.jpg`), js: step(`${HIDE} document.documentElement.classList.add('site-clean'); window.hiltwrightTheme(${JSON.stringify(theme)}); window.hiltwrightTour(${Number(n) - 1})`, 900) });
+}
+mkdirSync(featureDir, { recursive: true });
+writeFileSync(join(site, 'data/feature.json'), JSON.stringify(Object.fromEntries(Object.entries(FEATURE).map(([n, id]) => [pad(Number(n)), { id, name: THEMES.find((t) => t.id === id).name }])), null, 2) + '\n');
+shots.push({ file: join(base, 'reset.png'), js: `window.hiltwrightTheme(${JSON.stringify(DEFAULT_THEME)})` });
+writeFileSync(join(site, 'data/themes.json'), JSON.stringify(THEMES.map((t) => ({ id: t.id, name: t.name, about: t.about })), null, 2) + '\n');
 env.HILTWRIGHT_SHOTS = JSON.stringify(shots);
 mkdirSync(outDir, { recursive: true });
+mkdirSync(themeDir, { recursive: true });
 
 const child = spawn(process.execPath, [join(root, 'node_modules/electron-vite/bin/electron-vite.js'), 'dev'], { cwd: desktop, env });
 let log = ''; let finished = false;

@@ -111,11 +111,17 @@ function mount(root: HTMLElement): void {
     sim.trigger('blast', Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
   });
 
+  // A visitor who asked for less motion gets the blade already lit and held still: one frame, drawn as it is two
+  // seconds after ignition. It starts moving only when they use a control.
+  let still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let ready = false;
   let w = 0, h = 0, dpr = 1;
   function size(): void {
     dpr = Math.min(2, window.devicePixelRatio || 1);
     w = stage.clientWidth; h = stage.clientHeight;
     for (const c of [glow, core]) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    // Sizing a canvas clears it, and a still blade has no next frame to bring it back.
+    if (ready && still) draw(performance.now());
   }
   new ResizeObserver(size).observe(stage);
   size();
@@ -153,14 +159,22 @@ function mount(root: HTMLElement): void {
 
   load(select.value, false);
   let visible = false, raf = 0, started = false;
-  const loop = (t: number) => { draw(t); raf = visible ? requestAnimationFrame(loop) : 0; };
+  const loop = (t: number) => { draw(t); raf = visible && !still ? requestAnimationFrame(loop) : 0; };
+  const wake = () => { if (!still) return; still = false; if (visible && !raf) raf = requestAnimationFrame(loop); };
+  for (const ev of ['pointerdown', 'keydown', 'input', 'change']) root.addEventListener(ev, wake, true);
   new IntersectionObserver((entries) => {
     visible = entries[0].isIntersecting;
-    if (visible && !raf) raf = requestAnimationFrame(loop);
-    // The first time it comes into view, light it (unless the visitor asked for less motion).
-    if (visible && !started) { started = true; if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(() => setOn(true), 500); }
+    if (visible && !raf && !still) raf = requestAnimationFrame(loop);
+    // The first time it comes into view, light it.
+    if (visible && !started) { started = true; if (!still) setTimeout(() => setOn(true), 500); }
   }, { threshold: 0 }).observe(stage); // any of the blade on screen keeps it moving
-  draw(performance.now());
+  if (still) {
+    const t = performance.now();
+    setOn(true);
+    sim.frame(t - 2000);
+    draw(t);
+  } else draw(performance.now());
+  ready = true;
 }
 
 document.querySelectorAll<HTMLElement>('[data-blade-demo]').forEach(mount);

@@ -6,7 +6,6 @@ scripts: assets/walkthrough.js
 ---
 <section class="pagehead slim">
   <div class="wrap">
-    <p class="eyebrow">Walkthrough</p>
     <h1>Every page, in {{steps}} steps.</h1>
     <p class="lede">This is the tour that is built into the app, on an example saber. Use the arrows, or pick a chapter. In the app, "Take the tour" runs the same steps on the real pages.</p>
   </div>
@@ -15,14 +14,14 @@ scripts: assets/walkthrough.js
 <section class="wrap wt" id="wt" aria-label="Walkthrough">
   <nav class="wt-chapters" aria-label="Chapters"></nav>
   <div class="wt-main">
-    <figure class="frame wt-shot"><img width="1480" height="980" alt=""></figure>
+    <figure class="frame wt-shot"><img src="assets/shots/tour-01.png" width="1480" height="980" alt=""></figure>
     <div class="wt-card" aria-live="polite">
-      <p class="wt-count mono"></p>
       <h2 class="wt-title"></h2>
       <div class="wt-text"></div>
       <div class="wt-nav">
         <button type="button" class="btn wt-prev">Back</button>
         <button type="button" class="btn primary wt-next">Next</button>
+        <span class="wt-count"></span>
         <a class="wt-doc more" href="#"></a>
       </div>
       <div class="wt-bar" aria-hidden="true"><i></i></div>
