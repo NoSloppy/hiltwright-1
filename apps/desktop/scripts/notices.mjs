@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Generates THIRD-PARTY-NOTICES.md at the repo root. It lists the production dependencies that ship inside the
 // packaged app: the dependencies of apps/desktop and packages/core, their transitive dependencies, and Electron
-// (a devDependency that ships in the app). The hand-written part comes from docs/notices-header.md.
+// and the typefaces (devDependencies that ship in the app). The hand-written part comes from docs/notices-header.md.
 //
 //   node scripts/notices.mjs [--modules <dir>] [--check]
 //
@@ -15,7 +15,9 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..', '..');
 const roots = [join(repoRoot, 'apps', 'desktop', 'package.json'), join(repoRoot, 'packages', 'core', 'package.json')];
-const extras = ['electron'];
+// The typefaces are bundled into the page by the build, so they ship although they are devDependencies. They are
+// under the SIL Open Font License, which allows bundling with software under any licence.
+const extras = ['electron', '@fontsource/barlow', '@fontsource/barlow-condensed', '@fontsource/jetbrains-mono', '@fontsource/josefin-sans', '@fontsource/shippori-mincho'];
 const outputFile = join(repoRoot, 'THIRD-PARTY-NOTICES.md');
 const headerFile = join(repoRoot, 'docs', 'notices-header.md');
 const firstPartyScope = '@hiltwright/';
@@ -25,7 +27,7 @@ const firstPartyScope = '@hiltwright/';
 const compatible = new Set([
   'MIT', 'MIT-0', 'ISC', 'BSD', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'CC0-1.0', 'Unlicense',
   'BlueOak-1.0.0', 'Python-2.0', 'Zlib', 'MPL-2.0', 'GPL-3.0', 'GPL-3.0-only', 'GPL-3.0-or-later',
-  'LGPL-3.0', 'LGPL-3.0-only', 'LGPL-3.0-or-later', 'LGPL-2.1', 'LGPL-2.1-only', 'LGPL-2.1-or-later', 'Public Domain',
+  'LGPL-3.0', 'LGPL-3.0-only', 'LGPL-3.0-or-later', 'LGPL-2.1', 'LGPL-2.1-only', 'LGPL-2.1-or-later', 'Public Domain', 'OFL-1.1',
 ]);
 
 function fail(message) {

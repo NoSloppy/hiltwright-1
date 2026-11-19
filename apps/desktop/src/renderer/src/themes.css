@@ -1,0 +1,227 @@
+/* Every theme but the default. Each is a block of tokens (see the list at the top of styles.css) and, where a token
+   cannot say it, a few rules of its own. A theme changes colour, shapes, lines, type and the backdrop. It never
+   changes where anything is: no rule here sets a width, a height, a margin, padding, a grid or an order.
+
+   The list of themes, and the colours that live outside the page, are in shared/themes.ts. */
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Scorched hull: the plating of a much-repaired ship. Warm soot, dust on the paint, large hull seams on the ground,
+   and enamel orange as the accent. */
+:root[data-theme="hull"]{
+  --bg0:#191612;--bg1:#2b2823;--bg2:#35312b;--bg3:#3f3b34;--bg4:#4c473e;
+  --side:#1f1c18;--bar:#24211d;--field:#161513;--well:#0c0b0a;--track:#3a3935;
+  --seam:#090807;--line:#423d35;--line2:#6b6457;
+  --text:#e6dfd0;--hi:#fffaf0;--dim:#b8b1a2;--mute:#a39d8f;
+  --holo:#f08c55;--holo-hi:#f6a678;--holo-fill:#d9642b;--holo-ink:#1d0c03;--holo-dim:#8c4c26;
+  --tape-ink:#fff3e4;--sel:#f08c55;--plate:linear-gradient(180deg,#4a2c18,#33200f);--on-plate-dim:#ead9c6;--on-plate-mute:#d8c3ad;
+  --rail:var(--grain),#1f1c18;--rail-edge:#090807;
+  --btn:linear-gradient(180deg,#46423a,#38342d);--btn-hover:linear-gradient(180deg,#544f45,#443f37);
+  --pri:linear-gradient(180deg,#e27a45,#d9642b 55%,#c4551f);--pri-hover:linear-gradient(180deg,#ea8a58,#e2733a 55%,#cf6029);--pri-edge:#1d0c03;
+  --lit:linear-gradient(180deg,#b9cf7c,#93ad55);--lit-edge:#c6da8c;--lit-ink:#141a05;--lit-glow:0 0 0 transparent;
+  --amber:#f0b040;--amber-fill:#e9a92e;--amber-ink:#231a00;--red:#ec7560;--green:#a6c06c;
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .96 0 0 0 0 .86 .1 0 0 0 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --gloss:linear-gradient(180deg,rgba(255,250,235,.045),transparent 70px);
+  --ground:linear-gradient(rgba(0,0,0,.6) 2px,transparent 2px) 0 46px/100% 270px,linear-gradient(90deg,rgba(0,0,0,.6) 2px,transparent 2px) 130px 0/390px 100%,linear-gradient(rgba(255,240,210,.05) 1px,transparent 1px) 0 48px/100% 270px,linear-gradient(90deg,rgba(255,240,210,.05) 1px,transparent 1px) 132px 0/390px 100%,var(--grain),var(--bg0);
+  --r-ctl:2px;--r-panel:2px;--r-field:2px;--r-chip:2px;--r-num:2px;--r-slot:3px;
+  --panel-shadow:inset 0 1px 0 rgba(255,250,235,.05),0 3px 8px rgba(0,0,0,.4);
+  --edge-hi:rgba(255,250,235,.06);--btn-hi:rgba(255,250,235,.1);
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Hoth: the rebel base cut into the ice. Pale, cold and soft-edged: walls of carved ice with slanting strata, panels
+   like frosted slabs with a bevel, rounded corners everywhere, and the orange of a pilot's flight suit for the next
+   action. The rail is the slate of insulated equipment. Blades keep their dark wells. */
+:root[data-theme="hoth"]{
+  --bg0:#b9c6cf;--bg1:#dfe7ec;--bg2:#d1dce3;--bg3:#c6d2da;--bg4:#b6c4ce;
+  --side:#34424d;--bar:#d2dde4;--field:#f0f5f8;--well:#070b0f;--track:#a8b7c2;
+  --seam:#7f919d;--line:#aab9c4;--line2:#6d7f8c;
+  --text:#14202a;--hi:#04080b;--dim:#2c3b46;--mute:#3a4954;
+  --holo:#853204;--holo-hi:#a3410a;--holo-fill:#e8742a;--holo-ink:#1f0d02;--holo-dim:#c79a7c;--sel-text:#853204;
+  --tape-ink:#1f0d02;--sel:#bf4f0e;--plate:linear-gradient(180deg,#fbe0cc,#f3c9a9);--on-plate-dim:#4a3122;--on-plate-mute:#674632;
+  --rail:linear-gradient(180deg,#42515d,#2f3c46 60%,#28333c);--rail-edge:#1c252c;
+  --btn:linear-gradient(180deg,#f5f9fb,#d2dde4);--btn-hover:linear-gradient(180deg,#fff,#dfe8ee);
+  --pri:linear-gradient(180deg,#f59350,#e8742a 55%,#d8601a);--pri-hover:linear-gradient(180deg,#f8a468,#ee8238 55%,#df6c25);--pri-edge:#8a3a08;
+  --lit:linear-gradient(180deg,#8ed1a6,#57a877);--lit-edge:#3f8a5d;--lit-ink:#06200f;--lit-glow:0 0 0 transparent;
+  --amber:#765300;--amber-fill:#eab836;--amber-ink:#231a00;--red:#a51c13;--green:#1e6a3d;
+  --grain:none;
+  --gloss:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0) 44px);
+  /* A wall of carved ice: slanting strata, a few brighter seams, lighter toward the top where the light comes in. */
+  --ground:var(--bg0);--scrim:linear-gradient(180deg,rgba(214,225,232,.4),rgba(196,210,219,.5));--loose:rgba(226,234,239,.88);--loose-ctl:rgba(240,245,248,.92);--loose-blur:blur(10px);
+  --hover:rgba(20,40,55,.07);--edge-hi:#fff;--btn-hi:#fff;
+  --r-ctl:9px;--r-panel:11px;--r-field:7px;--r-chip:12px;--r-num:6px;--r-slot:12px;
+  --panel-edge:1px solid #8c9eaa;--panel-shadow:inset 0 1px 0 #fff,inset 0 -4px 7px rgba(110,140,160,.28),0 6px 14px rgba(40,60,75,.28);--panel-overflow:clip;
+  --rule:1px solid var(--line);
+  color-scheme:light;
+}
+/* The backdrop: the theme's picture behind the main view, under a wash of the theme's own colour. */
+:root[data-theme="hoth"] .main{background:var(--scrim),url(./assets/backdrops/hoth.jpg) center/cover no-repeat,var(--bg0)}
+:root[data-theme="hoth"] .side{--text:#eaf1f5;--hi:#fff;--dim:#cbd8e0;--mute:#b3c3ce;--line:#55656f;--line2:#8597a3;--holo:#ffb884;--hover:rgba(255,255,255,.08);--amber:#ffd166;--green:#a4e3b9;--red:#ffb3ab;--field:#26323b;color:var(--text)}
+:root[data-theme="hoth"] .nav a.on{--amber:#765300;--green:#1e6a3d;--red:#a51c13}
+:root[data-theme="hoth"] .btn .i{color:#14202a}
+:root[data-theme="hoth"] .btn.pri .i{color:var(--holo-ink)}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Ronin: an old black-and-white film. Ink black, the grey-white of the print, grain and scratches on the ground,
+   square corners, panels ruled in ink, a brush stroke under each title, and serif headings. Red is the only colour,
+   and it is kept for what is selected and for a finished step's seal. */
+:root[data-theme="ronin"]{
+  --bg0:#0b0b0b;--bg1:#151515;--bg2:#1e1e1e;--bg3:#282828;--bg4:#343434;
+  --side:#0e0e0e;--bar:#101010;--field:#090909;--well:#000;--track:#333;
+  --seam:#cfcabd;--line:#3a3a37;--line2:#8a877f;
+  --text:#e4e0d6;--hi:#f6f2e7;--dim:#bab6ac;--mute:#918d84;
+  --holo:#e4e0d6;--holo-hi:#fff;--holo-fill:#e4e0d6;--holo-ink:#0b0b0b;--holo-dim:#6d6a63;
+  --tape-ink:#f6f2e7;--sel:#d8281d;--plate:linear-gradient(180deg,#2a0f0c,#1c0a08);--on-plate-dim:#e0cfc8;--on-plate-mute:#c2aaa2;
+  --rail:var(--grain),#0e0e0e;--rail-edge:#cfcabd;
+  --btn:linear-gradient(180deg,#191919,#191919);--btn-hover:linear-gradient(180deg,#2b2b2b,#2b2b2b);
+  --pri:linear-gradient(180deg,#ebe7dc,#d9d4c7);--pri-hover:linear-gradient(180deg,#f8f4ea,#e8e3d6);--pri-edge:#ebe7dc;
+  --lit:linear-gradient(180deg,#d8281d,#b81d14);--lit-edge:#d8281d;--lit-ink:#fff3ea;--lit-glow:0 0 0 transparent;
+  --amber:#dcb94d;--amber-fill:#d6b03c;--amber-ink:#1c1400;--red:#ff6a5c;--green:#cfcabd;
+  /* Film grain. */
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 .95 .2 0 0 0 -.02'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --gloss:none;
+  /* The print: a few vertical scratches, grain, and a vignette. */
+  --ground:var(--bg0);--scrim:linear-gradient(180deg,rgba(8,8,8,.48),rgba(8,8,8,.66));--loose:rgba(14,14,14,.8);--loose-ctl:rgba(9,9,9,.84);--loose-blur:blur(8px);
+  --hover:rgba(255,255,255,.07);--edge-hi:transparent;--btn-hi:transparent;
+  --r-ctl:0px;--r-panel:0px;--r-field:0px;--r-chip:0px;--r-num:0px;--r-slot:2px;
+  --panel-edge:1.5px solid #cfcabd;--panel-shadow:0 0 0 transparent;
+  --rule:1px solid #3a3a37;
+  /* A brush stroke under a panel's title. */
+  --ph-deco:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 6' preserveAspectRatio='none'%3E%3Cpath d='M0 3C22 1 44 5 74 3S132 1 172 3 252 5 300 2V4C262 6 204 3 162 5S62 6 0 5Z' fill='%23cfcabd'/%3E%3C/svg%3E") left center/min(46%,300px) 100% no-repeat;--ph-deco-h:5px;
+  --h-font:'Shippori Mincho','Yu Mincho',Georgia,serif;--h-case:none;--h-track:.05em;--h-weight:700;
+  --plate-ring:inset 0 0 0 2px var(--sel);--sel-text:#ff7c6e;
+}
+/* The backdrop: the theme's picture behind the main view, under a wash of the theme's own colour. */
+:root[data-theme="ronin"] .main{background:var(--grain),var(--scrim),url(./assets/backdrops/ronin.jpg) center/cover no-repeat,var(--bg0)}
+:root[data-theme="ronin"] .btn:not(.ghost):not(.pri):not(.danger):not(.warn) .b{background:#cfcabd}
+:root[data-theme="ronin"] .chip.ok,:root[data-theme="ronin"] .chip.live{border-style:double;border-width:3px}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   The Ninth Jedi: a temple above the mist at dusk. Plum and slate, the gold of lantern light, a line of maple red
+   under each title, panels framed with a double line of gold, and buttons cut to a point at both ends like a blade
+   blank. Headings are in the reading face, in sentence case. */
+:root[data-theme="ninth"]{
+  --bg0:#15131f;--bg1:#1f1c2d;--bg2:#29253b;--bg3:#332e49;--bg4:#403a5a;
+  --side:#191626;--bar:#191725;--field:#100e18;--well:#07060b;--track:#332e49;
+  --seam:#8f7338;--line:#2f2a43;--line2:#6e6792;
+  --text:#ece6d8;--hi:#fff8e6;--dim:#c4bfd2;--mute:#9e99b6;
+  --holo:#ffc46b;--holo-hi:#ffd794;--holo-fill:#f2a93e;--holo-ink:#1f1202;--holo-dim:#7a5e26;
+  --tape-ink:#fff3df;--sel:#ffc46b;--plate:linear-gradient(180deg,#40301c,#2c2013);--on-plate-dim:#ead9bf;--on-plate-mute:#cfba9b;
+  --rail:linear-gradient(180deg,#1e1b2c,#131120);--rail-edge:#8f7338;
+  --btn:linear-gradient(180deg,#353050,#24203a);--btn-hover:linear-gradient(180deg,#423c62,#2e2948);
+  --pri:linear-gradient(180deg,#ffe09a,#f2a93e 55%,#d98322);--pri-hover:linear-gradient(180deg,#ffe8b3,#f7b656 55%,#e08f30);--pri-edge:#ffe6b0;
+  --lit:linear-gradient(180deg,#ffe09a,#f2a93e);--lit-edge:#ffe6b0;--lit-ink:#1f1202;--lit-glow:0 0 14px rgba(242,169,62,.5);
+  --amber:#ffe066;--amber-fill:#f4d23c;--amber-ink:#1c1600;--red:#ff7163;--green:#9bd6a2;
+  --grain:none;
+  --gloss:linear-gradient(180deg,rgba(255,225,170,.07),transparent 64px);
+  --ground:var(--bg0);--scrim:linear-gradient(180deg,rgba(21,19,31,.38),rgba(21,19,31,.62));--loose:rgba(26,23,38,.8);--loose-ctl:rgba(16,14,24,.84);--loose-blur:blur(10px);
+  --hover:rgba(255,225,170,.07);--edge-hi:rgba(255,230,176,.18);--btn-hi:rgba(255,255,255,.16);
+  --r-ctl:0px;--r-panel:3px;--r-field:2px;--r-chip:2px;--r-num:2px;--r-slot:3px;
+  /* A blade blank: pointed at both ends. */
+  --clip-ctl:polygon(9px 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,9px 100%,0 50%);
+  --panel-edge:1px solid #8f7338;--panel-shadow:inset 0 0 0 3px #1f1c2d,inset 0 0 0 4px rgba(143,115,56,.55),0 10px 26px rgba(0,0,0,.55);
+  --rule:1px solid var(--line);
+  --ph-deco:linear-gradient(90deg,#d8363f,#ffc46b 34%,rgba(255,196,107,0) 70%);--ph-deco-h:1px;
+  --h-font:var(--body);--h-case:none;--h-track:.02em;--h-weight:600;
+}
+/* The backdrop: the theme's picture behind the main view, under a wash of the theme's own colour. */
+:root[data-theme="ninth"] .main{background:var(--scrim),url(./assets/backdrops/ninth.jpg) center/cover no-repeat,var(--bg0)}
+:root[data-theme="ninth"] .btn:not(.ghost):not(.pri):not(.danger):not(.warn) .b{background:#8f7338}
+:root[data-theme="ninth"] .btn.sm .i{padding-left:16px;padding-right:16px}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Coruscant at night: the city planet seen from orbit. Black space, the amber of a world of city lights, and the
+   blue line of its atmosphere. Glassy rounded panels, pill-shaped buttons, round number tabs, and widely spaced
+   capitals. City amber is the next action; atmosphere blue is what is selected. */
+:root[data-theme="coruscant"]{
+  --bg0:#05070c;--bg1:#0d1119;--bg2:#141a25;--bg3:#1c2432;--bg4:#273140;
+  --side:#0a0d14;--bar:#080b11;--field:#06080c;--well:#020305;--track:#232c3a;
+  --seam:#2c3a4f;--line:#1c2533;--line2:#566478;
+  --text:#eef1f6;--hi:#fff;--dim:#bac2d0;--mute:#909aab;
+  --holo:#ffb659;--holo-hi:#ffcf8f;--holo-fill:#ffad42;--holo-ink:#1d1000;--holo-dim:#7a5a22;
+  --tape-ink:#fff;--sel:#6fb0ff;--plate:linear-gradient(90deg,#122a50,#0c1a31);--on-plate-dim:#cfdcf2;--on-plate-mute:#a7b9d8;
+  --rail:linear-gradient(180deg,#0d1119,#06080d);--rail-edge:#1c2533;
+  --btn:linear-gradient(180deg,#232c3a,#141a25);--btn-hover:linear-gradient(180deg,#2e394a,#1b2330);
+  --pri:linear-gradient(180deg,#ffd08a,#ffad42 50%,#ee8f1c);--pri-hover:linear-gradient(180deg,#ffdca6,#ffba5c 50%,#f39c30);--pri-edge:#ffe0ae;
+  --lit:linear-gradient(180deg,#ffd08a,#ffad42);--lit-edge:#ffe0ae;--lit-ink:#1d1000;--lit-glow:0 0 14px rgba(255,173,66,.45);
+  --amber:#ff8552;--amber-fill:#ff7a45;--amber-ink:#210d00;--red:#ff5c7a;--green:#5fe0b4;
+  --grain:none;
+  --gloss:linear-gradient(180deg,rgba(140,180,255,.09),transparent 84px);
+  --ground:var(--bg0);--scrim:linear-gradient(180deg,rgba(5,7,12,.3),rgba(5,7,12,.58));--loose:rgba(10,14,21,.76);--loose-ctl:rgba(6,8,12,.82);--loose-blur:blur(10px);
+  --hover:rgba(140,180,255,.09);--edge-hi:rgba(200,220,255,.18);--btn-hi:rgba(255,255,255,.16);
+  --r-ctl:20px;--r-panel:14px;--r-field:10px;--r-chip:12px;--r-num:11px;--r-slot:20px;
+  --panel-edge:1px solid rgba(120,160,220,.34);--panel-shadow:inset 0 1px 0 var(--edge-hi),0 14px 34px rgba(0,0,0,.6);--panel-overflow:clip;
+  --rule:1px solid var(--line);
+  --ph-deco:linear-gradient(90deg,#6fb0ff,#ffad42 38%,rgba(255,173,66,0) 74%);--ph-deco-h:1px;
+  --h-font:'Josefin Sans',var(--disp);--h-track:.18em;--h-weight:600;
+  --plate-ring:inset 0 0 0 1px #6fb0ff,0 0 12px rgba(111,176,255,.3);
+}
+/* The backdrop: the theme's picture behind the main view, under a wash of the theme's own colour. */
+:root[data-theme="coruscant"] .main{background:var(--scrim),url(./assets/backdrops/coruscant.jpg) center/cover no-repeat,var(--bg0)}
+:root[data-theme="coruscant"] .btn:not(.ghost):not(.pri):not(.danger):not(.warn) .b{background:var(--line2)}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Crait: a crust of white salt over red mineral. Pale and sharp: square panels with a line of red showing under
+   each one, buttons with one corner sheared off, slanted bold headings with a red stroke under them, red tracks
+   scored across the ground, and a rail of the red mineral itself. Blades keep their dark wells. */
+:root[data-theme="crait"]{
+  --bg0:#d8d2cc;--bg1:#f1ede9;--bg2:#e6e1dc;--bg3:#dcd6d0;--bg4:#cec7c0;
+  --side:#7d0c13;--bar:#e7e2dd;--field:#fbf9f7;--well:#0e0506;--track:#c8c0b9;
+  --seam:#a89e95;--line:#cdc5be;--line2:#8a8078;
+  --text:#1d1210;--hi:#000;--dim:#45332f;--mute:#67554f;
+  --holo:#a3121b;--holo-hi:#c41a25;--holo-fill:#b8141e;--holo-ink:#fff4f0;--holo-dim:#d6a3a5;
+  --tape-ink:#fff4f0;--sel:#b8141e;--plate:linear-gradient(180deg,#c41824,#a0101a);--on-plate-dim:#ffdcd7;--on-plate-mute:#f9c4bd;
+  --rail:linear-gradient(180deg,#92101a,#6c0a11);--rail-edge:#4c060b;
+  --btn:linear-gradient(180deg,#fbf9f7,#e2dcd6);--btn-hover:linear-gradient(180deg,#fff,#ece7e2);
+  --pri:linear-gradient(180deg,#cf1c28,#b8141e 55%,#9c0f18);--pri-hover:linear-gradient(180deg,#dc2a36,#c61a25 55%,#aa131c);--pri-edge:#5e080e;
+  --lit:linear-gradient(135deg,#e2343f,#9c0f18);--lit-edge:#7d0c13;--lit-ink:#fff4f0;--lit-glow:0 0 0 transparent;
+  --amber:#765000;--amber-fill:#e8b12c;--amber-ink:#231a00;--red:#8c0f55;--green:#1e6a3d;
+  /* Salt: fine dark specks. */
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .25 0 0 0 0 .12 0 0 0 0 .1 .2 0 0 0 -.03'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --gloss:none;
+  /* The salt flat, scored with red where something has crossed it. */
+  --ground:var(--bg0);--scrim:linear-gradient(180deg,rgba(241,237,233,.2),rgba(241,237,233,.36));--loose:rgba(241,237,233,.9);--loose-ctl:rgba(251,249,247,.93);--loose-blur:blur(10px);
+  --hover:rgba(60,10,10,.06);--edge-hi:#fff;--btn-hi:#fff;
+  --r-ctl:0px;--r-panel:0px;--r-field:0px;--r-chip:0px;--r-num:0px;--r-slot:0px;
+  /* A shard: one corner sheared off. */
+  --clip-ctl:polygon(0 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%);
+  --panel-edge:1px solid #a89e95;--panel-shadow:0 3px 0 #b8141e,0 10px 18px rgba(70,15,15,.2);
+  --rule:1px solid var(--line);
+  --ph-deco:linear-gradient(90deg,#b8141e 0 54px,rgba(184,20,30,0) 54px);--ph-deco-h:3px;
+  --h-style:italic;--h-weight:600;--h-track:.07em;
+  --plate-ring:0 0 0 transparent;
+  color-scheme:light;
+}
+/* The backdrop: the theme's picture behind the main view, under a wash of the theme's own colour. */
+:root[data-theme="crait"] .main{background:var(--scrim),url(./assets/backdrops/crait.jpg) center/cover no-repeat,var(--bg0)}
+:root[data-theme="crait"] .side{--text:#fff4f0;--hi:#fff;--dim:#ffd6d0;--mute:#f6bdb5;--line:#a52a32;--line2:#d9858a;--holo:#fff4f0;--hover:rgba(255,255,255,.1);--amber:#ffd98a;--green:#c9f0d4;--red:#ffe0f0;--field:#5e080e;color:var(--text)}
+/* On the red rail the page you are on is a slab of salt. */
+:root[data-theme="crait"] .side .nav a.on{background:#f1ede9;color:#1d1210;--mute:#67554f;--dim:#45332f;--sel:#a3121b;--amber:#765000}
+:root[data-theme="crait"] .btn .i{color:#1d1210}
+:root[data-theme="crait"] .btn.pri .i{color:var(--holo-ink)}
+:root[data-theme="crait"] .btn.danger .i,:root[data-theme="crait"] .btn.ghost .i{color:var(--holo)}
+:root[data-theme="crait"] .insp.now{--sel:#fff4f0;--sel-text:#fff4f0}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   The pale themes keep a dark recess wherever a blade glows or code prints, and the whole demo room stays dark.
+   Inside one, the tokens are a dark set, so text and controls there stay readable. */
+:root:is([data-theme="hoth"],[data-theme="crait"]) :is(.dark,.well,.console,.curve){
+  --bg0:#08090b;--bg1:#121418;--bg2:#1b1e23;--bg3:#24282e;--bg4:#30353d;--bar:#0d0f12;--field:#07080a;--track:#2c3037;
+  --seam:#3b4048;--line:#2a2e35;--line2:#5f6670;
+  --text:#e6e9ec;--hi:#fff;--dim:#b7bcc3;--mute:#9096a0;
+  --amber:#f2b632;--red:#ff6a5c;--green:#7fd69b;
+  --btn:linear-gradient(180deg,#2c3037,#1a1d22);--btn-hover:linear-gradient(180deg,#393e47,#23272d);
+  --gloss:none;--grain:none;--hover:rgba(255,255,255,.06);--edge-hi:rgba(255,255,255,.12);--btn-hi:rgba(255,255,255,.16);
+  --panel-edge:1px solid var(--seam);--panel-shadow:0 10px 26px rgba(0,0,0,.6);
+  --sel-text:var(--sel);color:var(--text);color-scheme:dark}
+:root[data-theme="hoth"] :is(.dark,.well,.console,.curve){--holo:#ff9d5e;--holo-hi:#ffb787;--sel:#ff9d5e;--plate:linear-gradient(180deg,#4a2a14,#33200f);--tape-ink:#fff3e4;--on-plate-dim:#ead9c6;--on-plate-mute:#d8c3ad}
+:root[data-theme="hoth"] :is(.dark,.well,.console,.curve) .btn:not(.pri) .i{color:var(--text)}
+:root[data-theme="crait"] :is(.dark,.well,.console,.curve){--holo:#ff6a70;--holo-hi:#ff8f94;--sel:#ff6a70;--on-plate-dim:#ffdcd7;--on-plate-mute:#f9c4bd}
+:root[data-theme="crait"] :is(.dark,.well,.console,.curve) .btn:not(.pri) .i{color:var(--text)}
+
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Themes with a picture behind the main view. Panels let a little of it through, softened, so they sit in the
+   scene instead of on top of it; a note that sits straight on the picture gets the same backing as other loose text. */
+:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"]) :is(.panel,.inspect){background:var(--gloss),var(--grain),color-mix(in srgb,var(--bg1) 88%,transparent);backdrop-filter:blur(16px) saturate(1.15)}
+:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"]) .panel.amber{background:repeating-linear-gradient(-45deg,var(--amber-fill) 0 7px,#201d17 7px 14px) top/100% 5px no-repeat,var(--gloss),color-mix(in srgb,var(--bg1) 88%,transparent)}
+:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"]) :is(.main,.rail)>.note{background:var(--loose);backdrop-filter:var(--loose-blur)}

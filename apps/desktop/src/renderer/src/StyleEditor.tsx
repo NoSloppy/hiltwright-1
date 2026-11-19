@@ -181,7 +181,7 @@ export function StyleEditor({ editing, onSaved, onDemo, onLeaveGuard }: { editin
                   {!adding && <button type="button" className="btn sm" onClick={() => setAdding(true)}><span className="b"><span className="i"><Icon name="plus" />Add an effect</span></span></button>}
                 </div>
                 {adding && (
-                  <div className="col" style={{ gap: 6, padding: 12, border: '1px solid var(--holo)', background: '#0d131a' }}>
+                  <div className="col" style={{ gap: 6, padding: 12, border: '1px solid var(--holo)', background: 'var(--bar)' }}>
                     <div className="row between"><span className="small" style={{ fontWeight: 600 }}>Add an effect on top</span><button type="button" className="chip" onClick={() => setAdding(false)}><Icon name="x" /></button></div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
                       {EFFECTS.map((e) => (

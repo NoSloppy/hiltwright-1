@@ -34,6 +34,7 @@ import { JsonStore, storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
 import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
 import { Updates, WorkCounter, pickAutoUpdater } from './updates';
+import { saveTheme } from './appearance';
 import { WORK_CHANNELS, type BusyFacts, type UpdateState, type WorkKind } from '../shared/updates';
 import type { FontLibraryStatus, JobEvent } from '../shared/api';
 import type { FirmwareManifest } from '@hiltwright/core';
@@ -541,6 +542,16 @@ export function registerIpc(): void {
     emit: sendUpdate, workInMain: () => work.now(), log: (l) => console.log(l), now: () => new Date(),
     pretend: !app.isPackaged ? process.env.HILTWRIGHT_UPDATE_STATE : undefined,
   });
+  // Themes (appearance.ts). Picking one saves it and recolours the parts of the window the page cannot reach.
+  handle('theme:set', async (_e, id: unknown) => {
+    const theme = await saveTheme(userData, id);
+    for (const w of BrowserWindow.getAllWindows()) {
+      w.setBackgroundColor(theme.window.back);
+      w.setTitleBarOverlay({ color: theme.window.bar, symbolColor: theme.window.symbols, height: 60 });
+    }
+    return theme.id;
+  });
+
   handle('updates:state', () => updates.state());
   handle('updates:check', (_e, asked: unknown) => updates.check(asked === true), () => updates.state());
   handle('updates:download', () => updates.download());

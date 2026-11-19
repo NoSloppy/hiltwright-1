@@ -10,6 +10,7 @@
 // blade comes to rest: up when the hand is high, out and down when it is low.
 
 import * as THREE from 'three';
+import { themeById } from '../../shared/themes';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -21,6 +22,8 @@ import { Wield, handOnArc } from './wield';
 import { Steer } from './steer';
 import { disposeObject, fitHilt, type HiltFit } from './hiltModel';
 
+/** The room's colours in the theme in force. WebGL cannot read CSS tokens, so the theme list carries them. */
+const roomColours = () => themeById(document.documentElement.dataset.theme).scene;
 const BLADE_LENGTH = 0.92; // metres: a 36 inch blade, the default
 const BLADE_RADIUS = 0.0127; // a one inch tube, the default
 export { BLADE_DIAMETERS, STRIP_DENSITIES, DEFAULT_SCENE, type BladeDiameter, type SceneSettings } from '../../shared/demoSettings';
@@ -149,17 +152,17 @@ export class DemoScene {
     this.sim.prop = this.prop;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    this.renderer.setClearColor(0x05070a);
+    this.renderer.setClearColor(roomColours().clear);
     this.renderer.domElement.style.display = 'block';
     host.appendChild(this.renderer.domElement);
 
-    this.scene.background = new THREE.Color(0x05070a);
+    this.scene.background = new THREE.Color(roomColours().clear);
     // Something for metal to reflect: a neutral studio room, dim, so chrome reads as chrome rather than black.
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.35;
     pmrem.dispose();
-    this.scene.fog = new THREE.FogExp2(0x05070a, 0.09);
+    this.scene.fog = new THREE.FogExp2(roomColours().clear, 0.09);
     this.buildRoom();
 
     // The blade: a tube whose colour along its length is the LED strip, one texel per LED.
@@ -256,22 +259,22 @@ export class DemoScene {
 
   private buildRoom(): void {
     // The floor barely picks up the reflection environment: it is there for the metal of the hilt, not to grey the room.
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), new THREE.MeshStandardMaterial({ color: 0x10151b, roughness: 0.42, metalness: 0.35, envMapIntensity: 0.08 }));
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), new THREE.MeshStandardMaterial({ color: roomColours().floor, roughness: 0.42, metalness: 0.35, envMapIntensity: 0.08 }));
     floor.rotation.x = -Math.PI / 2;
     this.scene.add(floor);
-    const grid = new THREE.GridHelper(28, 56, 0x27465a, 0x16222c);
+    const grid = new THREE.GridHelper(28, 56, roomColours().gridMajor, roomColours().gridMinor);
     this.grid = grid;
     grid.position.y = 0.002;
     (grid.material as THREE.Material).transparent = true;
     (grid.material as THREE.Material).opacity = 0.55;
     this.scene.add(grid);
-    const ambient = new THREE.AmbientLight(0x8fa4b8, 0.5);
+    const ambient = new THREE.AmbientLight(roomColours().ambient, 0.5);
     this.scene.add(ambient);
     // A soft lamp by the viewer, so the hilt reads as metal even with the blade off.
-    const fill = new THREE.PointLight(0xdfe9f2, 6, 8, 2);
+    const fill = new THREE.PointLight(roomColours().fill, 6, 8, 2);
     fill.position.set(0.6, 1.7, 2.0);
     this.scene.add(fill);
-    const key = new THREE.DirectionalLight(0xbfd4e8, 0.9);
+    const key = new THREE.DirectionalLight(roomColours().key, 0.9);
     key.position.set(-2, 4, 3);
     this.scene.add(key);
     this.roomLamps = [{ light: ambient, base: 0.5 }, { light: fill, base: 6 }, { light: key, base: 0.9 }];
@@ -628,7 +631,7 @@ export class DemoScene {
     this.scene.background = null; this.scene.fog = null;
     this.renderer.setClearColor(0x000000);
     this.glowComposer.render();
-    this.renderer.setClearColor(0x05070a);
+    this.renderer.setClearColor(roomColours().clear);
     this.scene.background = background; this.scene.fog = fog;
     for (const [m, mat] of kept) m.material = mat;
     for (const o of hidden) o.visible = true;

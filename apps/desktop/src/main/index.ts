@@ -10,6 +10,7 @@ import { scrubDevEnv } from './devEnv';
 import { activeWant, isProffie, serialAllowed } from './serialGate';
 import { lookUpWanted } from './usb';
 import { startLog } from './log';
+import { readTheme } from './appearance';
 
 // A packaged build ignores every HILTWRIGHT_* development switch: they are removed before anything reads one.
 scrubDevEnv(process.env, app.isPackaged);
@@ -51,21 +52,26 @@ function grantSerial(): void {
 }
 
 function createWindow(): void {
+  // The chosen theme (appearance.ts), read before the window exists so it opens in the right colours.
+  // Dev aid: HILTWRIGHT_THEME=<id> shows a theme without saving it.
+  const theme = readTheme(app.getPath('userData'), process.env.HILTWRIGHT_THEME);
   const win = new BrowserWindow({
     width: Number(process.env.HILTWRIGHT_W) || 1480,
     height: Number(process.env.HILTWRIGHT_H) || 980,
     show: !process.env.HILTWRIGHT_OFFSCREEN,
     minWidth: 1180,
     minHeight: 700,
-    backgroundColor: '#0a0e13',
+    backgroundColor: theme.window.back,
     title: 'Hiltwright',
     // The window and taskbar icon (the installed app also carries it in its .exe, from build/icon.ico).
     icon: app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'resources', 'icon.png'),
     autoHideMenuBar: true,
     // The app's header row is the title bar: draggable, with the caption buttons overlaid in the header's colours.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#0d131a', symbolColor: '#c9d3de', height: 52 },
+    titleBarOverlay: { color: theme.window.bar, symbolColor: theme.window.symbols, height: 60 },
     webPreferences: {
+      // The page reads this before it draws anything (preload: theme.initial), so there is no flash of another theme.
+      additionalArguments: [`--hiltwright-theme=${theme.id}`],
       preload: join(import.meta.dirname, '../preload/index.cjs'),
       sandbox: true,
       contextIsolation: true,
@@ -75,6 +81,10 @@ function createWindow(): void {
     },
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // Dev aid: HILTWRIGHT_ZOOM=0.69 lays the page out wider than the window, for a screenshot of the full-size layout
+  // on a display too small to hold the window (a remote session, or a screen asleep at 1024x768).
+  const zoom = Number(process.env.HILTWRIGHT_ZOOM);
+  if (zoom > 0) win.webContents.on('did-finish-load', () => win.webContents.setZoomFactor(zoom));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   // The Style editor holds the window open while it has unsaved work (a beforeunload that asks to stay). Ask the owner.
   win.webContents.on('will-prevent-unload', (e) => {

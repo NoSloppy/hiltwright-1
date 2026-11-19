@@ -174,7 +174,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
             <div className="ph"><h2>Paste a style</h2><button type="button" className="chip" aria-label="Close" onClick={() => setPasting(false)}><Icon name="x" /></button></div>
             <div className="pb col scroll" style={{ gap: 12 }}>
               <span className="hint">Paste the whole block from the Fett263 style library, comments included. Its copyright header stays with the style and goes into your config; Hiltwright never redistributes the library itself.</span>
-              <textarea className="console" autoFocus style={{ minHeight: 220, resize: 'vertical', width: '100%', boxSizing: 'border-box', color: 'var(--text)', background: '#0b1016', border: '1px solid var(--line)', padding: 10 }} value={code} onChange={(e) => setCode(e.target.value)} aria-label="Style code" placeholder={'// Fett263 Style Library\n// Copyright ...\nStylePtr<Layers<...>>()'} spellCheck={false} />
+              <textarea className="console" autoFocus style={{ minHeight: 220, resize: 'vertical', width: '100%', boxSizing: 'border-box', color: 'var(--text)', padding: 10 }} value={code} onChange={(e) => setCode(e.target.value)} aria-label="Style code" placeholder={'// Fett263 Style Library\n// Copyright ...\nStylePtr<Layers<...>>()'} spellCheck={false} />
               {analysis && !analysis.ok && analysis.problems.map((p) => <div key={p} className="note red"><Icon name="x" /><span>{p}</span></div>)}
               {pasteState.error && <div className="note red" role="alert"><Icon name="x" /><span>Could not save the style: {pasteState.error}</span></div>}
               {analysis?.ok && (
@@ -209,7 +209,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
             <button type="button" className="btn sm pri" style={{ marginLeft: 'auto' }} data-tour="looks-new" onClick={onNew}><span className="b"><span className="i"><Icon name="plus" />Build a style</span></span></button>
             <button type="button" className="btn sm" onClick={() => setPasting(true)}><span className="b"><span className="i"><Icon name="import" />Paste style code</span></span></button>
           </div>
-          <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(176px, 1fr))', gap: 10, alignContent: 'start', paddingRight: 4 }} data-tour="looks-grid">
+          <div className="scroll" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, alignContent: 'start', paddingRight: 4 }} data-tour="looks-grid">
             {visible.map((l) => (
               <button key={l.id} type="button" className={`lookcard ${l.id === sel.id ? 'on' : ''}`} aria-pressed={l.id === sel.id} data-tour={stateOf(l.id) === 'queued' ? 'look-card-queued' : 'look-card'} onClick={() => { setSelectedId(l.id); setNote(null); }}>
                 <div style={{ padding: '8px 14px 0', width: '100%', boxSizing: 'border-box' }}>
@@ -293,7 +293,7 @@ export function Looks({ ws, board, initialCreator, onPresets, onBuild, onDemo, o
             })()}
             {(sel.source === 'pasted' || sel.source === 'built') && confirmRemove !== sel.id && <button type="button" className="btn sm ghost" onClick={() => setConfirmRemove(sel.id)}><span className="b"><span className="i"><Icon name="trash" />Remove from library</span></span></button>}
           </div>
-          <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }} data-tour="looks-use">
+          <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: 'var(--bar)', flex: 'none' }} data-tour="looks-use">
               {!connected && <span className="hint">No saber yet: start one in the Armory, and styles can be put into its presets before it is ever plugged in.</span>}
               {connected && model && (
                 <div className="row" style={{ gap: 8, alignItems: 'end' }}>

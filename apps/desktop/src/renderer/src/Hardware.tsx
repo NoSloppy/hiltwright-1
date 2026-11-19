@@ -165,7 +165,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
                       {on && (
                         <div className="col" style={{ gap: 6 }}>
                           {vs.map((v) => (
-                            <div key={v.id} className="row" style={{ gap: 10, padding: '8px 10px', border: '1px solid var(--line)', background: '#0b1016' }}>
+                            <div key={v.id} className="row" style={{ gap: 10, padding: '8px 10px', border: '1px solid var(--line)', background: 'var(--field)' }}>
                               <span className="input sans" style={{ width: 170, height: 32 }}><input type="text" value={v.name} disabled={locked} aria-label="Blade name" onChange={(e) => setV(v.id, { name: e.target.value })} /></span>
                               {v.noBlade
                                 ? <span className="mono grow small dim">nothing plugged in · no measurement needed</span>
@@ -190,7 +190,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
       </div>
 
       <aside className="col sticky" style={{ gap: 12, flex: '0 0 280px', maxWidth: '100%' }}>
-        <div style={{ border: '1px solid var(--line)', background: '#0b1016', padding: 12 }} className="col">
+        <div style={{ border: '1px solid #000', background: 'var(--well)', padding: 12 }} className="col dark">
           <div className="row" style={{ gap: 0, padding: '4px 0 10px' }}><Hilt crystal={crystal ? '#ff3d3d' : null} /><BladeBar color="#3d7bff" /></div>
           <div className="list" style={{ border: '1px solid var(--line)' }}>
             {blades.map((b, i) => {
@@ -209,7 +209,7 @@ export function HardwareEditor({ blades, board, detected, locked, onChange, swap
             })}
           </div>
         </div>
-        <div style={{ border: '1px solid var(--line)', background: '#0b1016', padding: 12, gap: 0 }} className="col" data-tour="wiring-pins">
+        <div style={{ border: '1px solid var(--line)', background: 'var(--field)', padding: 12, gap: 0 }} className="col" data-tour="wiring-pins">
           <div className="row between" style={{ paddingBottom: 6 }}><b style={{ fontWeight: 600, fontSize: 13 }}>Pins · Proffieboard {board}</b>{pins.problems.length ? <span className="chip err"><Icon name="x" />{pins.problems.length} problem{pins.problems.length > 1 ? 's' : ''}</span> : pins.shared.length ? <span className="chip warn"><Icon name="info" />Shared power</span> : <span className="chip ok"><Icon name="check" />No conflicts</span>}</div>
           {pins.data.map((r) => <div key={r.pin} className={`pin ${r.conflict ? 'bad' : ''}`}><span className="k">{r.pin}</span>{r.users.length ? <span className="v">{r.users.map((id) => `Blade ${blades.findIndex((b) => b.id === id) + 1}`).join(', then ')}</span> : <span className="free">free</span>}</div>)}
           <div style={{ height: 1, background: 'var(--line)', margin: '6px 0' }} />

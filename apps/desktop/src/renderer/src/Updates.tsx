@@ -90,7 +90,7 @@ export function UpdatesPanel({ view }: { view: UpdatesView }) {
           </div>
           {state.phase === 'downloading' && (
             <div className="col" style={{ gap: 5 }} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={state.percent} aria-label="Download progress">
-              <div style={{ height: 8, background: '#1b2836' }}><div style={{ height: '100%', width: `${state.percent}%`, background: 'var(--holo)', transition: 'width .3s linear' }} /></div>
+              <div style={{ height: 8, background: 'var(--track)' }}><div style={{ height: '100%', width: `${state.percent}%`, background: 'var(--holo)', transition: 'width .3s linear' }} /></div>
               <span className="hint">You can keep working while it downloads. Nothing is installed until you press Restart to update.</span>
             </div>
           )}

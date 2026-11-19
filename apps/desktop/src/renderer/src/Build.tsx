@@ -427,7 +427,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
           {result?.ok && (
             <div className="col" style={{ gap: 5 }}>
               <div className="row between" style={{ alignItems: 'baseline' }}><span className="mono" style={{ fontSize: 18 }}>{pct ?? '?'}%<span className="mute small"> of flash</span></span><span className="mono mute small">{result.textBytes != null ? (result.textBytes / 1024).toFixed(1) : '?'} of {result.flashBytes / 1024} KB</span></div>
-              <div style={{ height: 6, background: '#1b2836' }}><div style={{ height: '100%', width: `${Math.min(100, pct ?? 0)}%`, background: (pct ?? 0) > 90 ? 'var(--red)' : (pct ?? 0) > 70 ? 'var(--amber)' : 'var(--holo)' }} /></div>
+              <div style={{ height: 6, background: 'var(--track)' }}><div style={{ height: '100%', width: `${Math.min(100, pct ?? 0)}%`, background: (pct ?? 0) > 90 ? 'var(--red)' : (pct ?? 0) > 70 ? 'var(--amber)' : 'var(--holo)' }} /></div>
             </div>
           )}
           {result?.problems.map((p) => <div key={p} className="note red"><Icon name="x" /><span>{p}</span></div>)}
@@ -439,13 +439,13 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
           {(step === 'bootloader' || step === 'backup' || step === 'writing' || step === 'verifying') && (
             <div className="col" style={{ gap: 5 }} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(overall)} aria-label="Install progress">
               <div className="row between" style={{ alignItems: 'baseline' }}><span className="small">{phaseText}</span><span className="mono mute small">{Math.round(overall)}%</span></div>
-              <div style={{ height: 8, background: '#1b2836' }}><div style={{ height: '100%', width: `${overall}%`, background: 'var(--amber)', transition: 'width .3s linear' }} /></div>
+              <div style={{ height: 8, background: 'var(--track)' }}><div style={{ height: '100%', width: `${overall}%`, background: 'var(--amber)', transition: 'width .3s linear' }} /></div>
               <span className="hint">Leave the saber plugged in until this finishes.</span>
               {step === 'bootloader' && elapsed >= 5 && <span className="hint">Still waiting for the saber to restart in bootloader mode. This can take up to {BOOTLOADER_WAIT_MS / 1000} seconds.</span>}
             </div>
           )}
           {askTarget ? (
-            <div className="col" style={{ gap: 10, padding: 12, border: '1px solid var(--amber)', background: 'rgba(255,181,71,.08)' }}>
+            <div className="col" style={{ gap: 10, padding: 12, border: '1px solid var(--amber)', background: 'color-mix(in srgb,var(--amber) 8%,transparent)' }}>
               <span className="small"><b style={{ fontWeight: 600 }}>Hiltwright cannot tell which saber this board is.</b> A board is in bootloader mode, but its serial number belongs to no saber Hiltwright knows. Is it {askTarget.name}? Nothing has been read or written yet.</span>
               <div className="row" style={{ gap: 8 }}>
                 <button type="button" className="btn danger grow" onClick={() => askTarget.answer(true)}><span className="b"><span className="i">Yes, it is {askTarget.name}</span></span></button>
@@ -467,7 +467,7 @@ export function Build({ ws, board, go }: { ws: Workspace; board: Board; go: (pag
           ) : built && !confirmedWiring ? (
             // The one thing standing between a finished build and the install: say so here, with the switch itself,
             // instead of a greyed-out button and a line of small print.
-            <div className="col" style={{ gap: 10, padding: 12, border: '1px solid var(--amber)', background: 'rgba(255,181,71,.08)' }}>
+            <div className="col" style={{ gap: 10, padding: 12, border: '1px solid var(--amber)', background: 'color-mix(in srgb,var(--amber) 8%,transparent)' }}>
               <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><span className="amber" style={{ display: 'flex', width: 16, flex: 'none', marginTop: 2 }}><Icon name="warn" /></span><span className="small"><b style={{ fontWeight: 600 }}>Confirm the wiring to unlock the install.</b> Wrong power pins can damage hardware, so Hiltwright will not write firmware until you have checked them.</span></div>
               <label className="row" style={{ gap: 10, fontSize: 13, alignItems: 'flex-start' }}>
                 <button type="button" className={`tog ${confirmedWiring ? 'on' : ''}`} role="switch" aria-checked={confirmedWiring} disabled={busy} onClick={() => setConfirmedWiring(true)}><i /></button>

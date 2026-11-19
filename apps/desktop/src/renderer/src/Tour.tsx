@@ -184,7 +184,7 @@ export function Tour({ steps, index, page, onIndex, onEnd }: { steps: TourStep[]
         <section ref={cardRef} className="panel tourcard" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-text" style={{ left: place.left, top: place.top, width: Math.min(CARD_WIDTH, view.width - 24) }}>
           <div ref={bodyRef} className="tourbody">
           <div className="row between" style={{ gap: 10 }}>
-            <span className="eyebrow ellip">{at.chapterName}</span>
+            <b className="ellip" style={{ fontWeight: 600, fontSize: 12.5 }}>{at.chapterName}</b>
             <span className="row" style={{ gap: 12, flex: 'none' }}>
               {skip !== null && at.chapterSize > 1 && <button type="button" className="holo nowrap" style={{ fontSize: 11.5 }} onClick={() => go(skip)}>Skip chapter</button>}
               <span className="mono mute nowrap" style={{ fontSize: 11 }}>{stepCounter(steps, at.index)}</span>

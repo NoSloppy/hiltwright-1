@@ -223,6 +223,13 @@ export interface ConnectionSnapshot {
 export interface HiltwrightApi {
   appVersion: string;
   platform: string;
+  /** The app's look (shared/themes.ts). */
+  theme: {
+    /** The theme the window opened in: the saved one, or the default. */
+    initial: string;
+    /** Save a theme and recolour the window's own parts. Resolves to the theme now in force. */
+    set(id: string): Promise<string>;
+  };
   library: {
     list(): Promise<SaberRecord[]>;
     /** Match an identity to a known saber, or create one. Returns the stored record. */

@@ -1,10 +1,13 @@
-// About: the app's version and licence, the source of this exact build, and the notices for what it is made from.
+// About: the app's version and licence, the source of this exact build, the theme, and the notices for what it is
+// made from.
 
 import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import { LICENCE_NAME, STYLE_STATEMENT, sourceUrl } from '../../shared/about';
 import type { LegalTexts } from '../../shared/about';
 import { UpdatesPanel, type UpdatesView } from './Updates';
+import { THEMES } from '../../shared/themes';
+import { chooseTheme, currentTheme } from './theme';
 
 /** `updates`: the update state and its buttons; null during the tour, when nothing about updates shows. */
 export function About({ updates }: { updates: UpdatesView | null }) {
@@ -13,6 +16,7 @@ export function About({ updates }: { updates: UpdatesView | null }) {
   const [failed, setFailed] = useState(false);
   const [show, setShow] = useState<'licence' | 'notices' | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [theme, setTheme] = useState(() => currentTheme().id);
   useEffect(() => { void window.hiltwright.app.legal().then(setLegal, () => setFailed(true)); }, []);
   const url = sourceUrl(version);
   const open = async () => { setLinkError(null); try { await window.hiltwright.app.openSource(); } catch (err) { setLinkError(String(err).replace(/^Error: /, '')); } };
@@ -39,6 +43,24 @@ export function About({ updates }: { updates: UpdatesView | null }) {
           <span className="dim">{STYLE_STATEMENT}</span>
         </div>
       </section>
+      {/* Not shown during the tour: choosing a theme saves a setting, and nothing is saved while the tour runs. */}
+      {updates && (
+        <section className="panel" aria-label="Theme">
+          <div className="ph"><h2>Theme</h2></div>
+          <div className="pb row wrap" role="radiogroup" aria-label="Theme" style={{ gap: 10, alignItems: 'stretch' }}>
+            {THEMES.map((t) => (
+              <button key={t.id} type="button" role="radio" aria-checked={theme === t.id} className={`opt ${theme === t.id ? 'on' : ''}`} style={{ minWidth: 260 }} onClick={() => void chooseTheme(t.id).then((now) => setTheme(now.id))}>
+                <span className="radio" />
+                <span className="col grow" style={{ gap: 6, minWidth: 0 }}>
+                  <b style={{ fontWeight: 600 }}>{t.name}</b>
+                  <span className="hint">{t.about}</span>
+                  <span className="themeswatch" aria-hidden="true">{t.swatch.map((c, i) => <i key={i} style={{ background: c }} />)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
       {updates && <UpdatesPanel view={updates} />}
       {failed && <div className="note amber" role="alert"><Icon name="warn" /><span>The licence and notices could not be read from this install. They are in the Hiltwright source on GitHub.</span></div>}
       {show && legal && (

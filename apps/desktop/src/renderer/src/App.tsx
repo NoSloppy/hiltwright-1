@@ -7,7 +7,6 @@ import { registerLookSim, wiringConfirmed, type LookDef } from '@hiltwright/core
 import { useBoard } from './board';
 import { Icon } from './Icon';
 import logoIcon from './assets/hiltwright-icon.svg';
-import logoWordmark from './assets/hiltwright-wordmark.svg';
 import { Presets } from './Presets';
 import { Fonts } from './Fonts';
 import { Build } from './Build';
@@ -182,7 +181,7 @@ export function App() {
   return (
     <div className="app">
       <aside className={`side${!tour && chipText(updates.state) ? ' hasupd' : ''}`} aria-label="Primary">
-        <div className="brand"><img src={logoIcon} alt="" width={28} height={28} /><img src={logoWordmark} alt="Hiltwright" className="wordmark" /></div>
+        <div className="brand"><img src={logoIcon} alt="" width={28} height={28} /><span className="wordmark">Hiltwright</span></div>
         <nav className="nav" aria-label="Sections">
           {NAV.map((g) => (
             <div key={g.section} className="col" style={{ gap: 2 }} data-tour={`nav-${g.section.toLowerCase()}`}>
@@ -372,12 +371,13 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
             </span></div>
           )}
           <div className="list" style={{ overflow: 'auto' }}>
-            {board.library.length === 0 && <div className="li hint" style={{ minHeight: 44 }}>No sabers yet. Plug one in and it is remembered, or start a new one to set up ahead.</div>}
-            {board.library.map((s) => {
+            {board.library.length === 0 && <div className="hint" style={{ padding: '14px 18px' }}>No sabers yet. Plug one in and it is remembered, or start a new one to set up ahead.</div>}
+            {board.library.map((s, n) => {
               const isCur = s.id === cur?.id; const plugged = ws.live && isCur;
               return (
-                <div key={s.id} className={`li ${isCur ? 'on' : ''}`} style={{ gap: 14, minHeight: 50 }}>
-                  <span style={{ color: plugged ? 'var(--holo)' : 'var(--mute)', display: 'flex', width: 18 }}><Icon name={plugged ? 'usb' : s.planned ? 'gear' : 'blade'} /></span>
+                <div key={s.id} className={`li ${isCur ? 'on' : ''}`} style={{ gap: 12, minHeight: 52 }}>
+                  <span className="n" aria-hidden="true">{n + 1}</span>
+                  <span style={{ color: 'var(--mute)', display: 'flex', width: 18 }} title={plugged ? 'Plugged in' : s.planned ? 'Set up ahead' : 'Not plugged in'}><Icon name={plugged ? 'usb' : s.planned ? 'gear' : 'blade'} /></span>
                   {editing && isCur
                     ? <form className="row grow" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); void board.renameSaber(draft); setEditing(false); }}>
                         <span className="input sans grow" style={{ height: 32 }}><input type="text" value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} aria-label="Saber name" /></span>
@@ -385,11 +385,11 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
                         <button type="button" className="btn sm ghost" onClick={() => setEditing(false)}><span className="b"><span className="i">Cancel</span></span></button>
                       </form>
                     : <>
-                        <span className="col grow" style={{ gap: 0 }} title={s.identity.configName ? `${s.identity.configName}, USB serial ${s.identity.usbSerial ?? 'unknown'}` : undefined}>
+                        <span className="col grow" style={{ gap: 0, minWidth: 0 }} title={s.identity.configName ? `${s.identity.configName}, USB serial ${s.identity.usbSerial ?? 'unknown'}` : undefined}>
                           <b className="ellip" style={{ fontWeight: 600 }}>{s.name}</b>
                           <span className="hint ellip">{plugged ? 'plugged in' : s.planned ? `set up ahead · ${s.model?.presets.length ?? 0} presets · not seen yet` : `${s.identity.configName ?? '?'} · ${s.presets.length} presets · last seen ${new Date(s.lastSeen).toLocaleDateString()}`}</span>
                         </span>
-                        {isCur ? <span className="chip live"><span className="dot" />Working on it</span> : <button type="button" className="btn sm" disabled={ws.live} title={ws.live ? 'Unplug the connected saber to work on another' : undefined} onClick={() => ws.choose(s.id)}><span className="b"><span className="i">Work on it</span></span></button>}
+                        {isCur ? <span className="chip"><span className="dot" style={{ background: 'currentColor' }} />Working on it</span> : <button type="button" className="btn sm" disabled={ws.live} title={ws.live ? 'Unplug the connected saber to work on another' : undefined} onClick={() => ws.choose(s.id)}><span className="b"><span className="i">Work on it</span></span></button>}
                         {isCur && plugged && <button type="button" className="chip" onClick={() => { setDraft(s.name); setEditing(true); }}>Rename</button>}
                         {s.id !== EXAMPLE_ID && (() => { const why = removeBlock(s, plugged ? s.id : null); return <button type="button" className="chip" disabled={!!why} title={why ?? (s.planned ? 'Remove this plan' : 'Remove this saber from the Armory')} aria-label={`Remove ${s.name}`} onClick={() => askRemove(s)}><Icon name="trash" /></button>; })()}
                       </>}
@@ -427,15 +427,18 @@ function Armory({ board, ws, go }: { board: ReturnType<typeof useBoard>; ws: Wor
         ) : (
           <>
             <div className="row between" style={{ minHeight: 24 }}><b style={{ fontWeight: 600 }} className="ellip">{cur.name}</b><span className="hint">{ws.live ? 'plugged in' : cur.planned ? 'set up ahead' : 'unplugged'}</span></div>
-            {steps.map((st, i) => {
-              const done = (st.step === 'wiring' && wiringConfirmed(ws.model)) || (st.step === 'presets' && !!ws.model?.presets.length) || (st.step === 'build' && !!cur.firmware && !queuedLookIds(ws.model ?? undefined, cur.firmware).length && !ws.model?.presetsFrom);
-              const now = st.step === next;
-              return (
-                <button key={st.step} type="button" className={`stepc ${done ? 'done' : now ? 'now' : ''}`} style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go(stepPage[st.step])}>
-                  <div className="head"><span className="nbox">{done ? <Icon name="check" /> : i + 1}</span><b>{stepTitle[st.step]}</b><span className="what">{st.label}</span></div>
-                </button>
-              );
-            })}
+            <div className="inspect">
+              {steps.map((st, i) => {
+                const done = (st.step === 'wiring' && wiringConfirmed(ws.model)) || (st.step === 'presets' && !!ws.model?.presets.length) || (st.step === 'build' && !!cur.firmware && !queuedLookIds(ws.model ?? undefined, cur.firmware).length && !ws.model?.presetsFrom);
+                const now = st.step === next;
+                return (
+                  <button key={st.step} type="button" className={`insp ${done ? 'done' : now ? 'now' : ''}`} onClick={() => go(stepPage[st.step])}>
+                    <span className="box" aria-hidden="true">{done ? <Icon name="check" /> : i + 1}</span>
+                    <b>{stepTitle[st.step]}{done && <span className="sr"> (done)</span>}</b><span className="what" title={st.label}>{st.label}</span>
+                  </button>
+                );
+              })}
+            </div>
             <button type="button" className="btn pri full" onClick={() => go(stepPage[next])}><span className="b"><span className="i"><Icon name="chev" />Continue with {stepTitle[next]}</span></span></button>
             <span className="hint">Styles are chosen on the Presets step; make and try new ones in the Workshop.</span>
           </>

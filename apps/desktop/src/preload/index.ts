@@ -9,6 +9,11 @@ declare const __APP_VERSION__: string;
 const api: HiltwrightApi = {
   appVersion: __APP_VERSION__,
   platform: process.platform,
+  theme: {
+    // Main passes the saved theme on the command line of this page's process (index.ts createWindow).
+    initial: process.argv.find((a) => a.startsWith('--hiltwright-theme='))?.slice('--hiltwright-theme='.length) ?? '',
+    set: (id) => ipcRenderer.invoke('theme:set', id),
+  },
   library: {
     list: () => ipcRenderer.invoke('library:list'),
     upsert: (input) => ipcRenderer.invoke('library:upsert', input),

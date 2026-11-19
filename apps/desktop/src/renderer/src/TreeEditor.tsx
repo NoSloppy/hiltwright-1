@@ -239,7 +239,7 @@ export function PasteStyle({ onParsed, onClose }: { onParsed: (t: Node, origin: 
   const author = pastedAuthor(by, unknown);
   const go = () => { if (author === null) return; try { onParsed(parseStyle(text), { by: author, header: analyzeStyleCode(text).header }); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); } };
   return (
-    <div className="col" style={{ gap: 8, padding: 12, border: '1px solid var(--holo)', background: '#0d131a' }}>
+    <div className="col" style={{ gap: 8, padding: 12, border: '1px solid var(--holo)', background: 'var(--bar)' }}>
       <div className="row between"><span className="small" style={{ fontWeight: 600 }}>Paste a style</span><button type="button" className="chip" onClick={onClose}><Icon name="x" /></button></div>
       <textarea className="console mono" value={text} rows={6} spellCheck={false} aria-label="Style code" placeholder="StylePtr<Layers<Red, ResponsiveClashL<White>, InOutTrL<TrWipe<300>, TrWipeIn<500>>>>()" style={{ resize: 'vertical', fontSize: 12 }} onChange={(e) => { setText(e.target.value); setErr(null); }} />
       {err && <div className="note red"><Icon name="warn" /><span>{err}</span></div>}

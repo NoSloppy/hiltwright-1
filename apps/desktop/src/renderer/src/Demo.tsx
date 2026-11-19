@@ -432,12 +432,12 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
   const room = scene.current;
 
   return (
-    <div style={{ position: 'relative', flex: 1, minHeight: 0, margin: '-18px -24px', overflow: 'hidden' }}>
+    <div className="dark" style={{ position: 'relative', flex: 1, minHeight: 0, margin: '-18px -24px', overflow: 'hidden' }}>
       <div ref={host} style={{ position: 'absolute', inset: 0, cursor: 'grab', touchAction: 'none' }} role="img" aria-label="A saber in a dark room. Drag to move the hand that holds it." />
       {failed && <div className="note red" style={{ position: 'absolute', left: 20, top: 20, maxWidth: 420 }}><Icon name="x" /><span>The demo room needs WebGL, which is not available here. {failed}</span></div>}
 
       {/* The saber panel: what is on the blade, what it sounds like, what the saber around it does; the deck of things to do to it stays at the foot. */}
-      <section className="panel" style={{ position: 'absolute', left: 20, top: 20, width: 340, maxHeight: 'calc(100% - 40px)', display: 'flex', flexDirection: 'column', background: 'rgba(12,17,23,.9)' }} aria-label="Saber" data-tour="demo-panel">
+      <section className="panel" style={{ position: 'absolute', left: 20, top: 20, width: 340, maxHeight: 'calc(100% - 40px)', display: 'flex', flexDirection: 'column', background: 'color-mix(in srgb,var(--bg1) 92%,transparent)' }} aria-label="Saber" data-tour="demo-panel">
         <div className="seg" role="tablist" aria-label="Saber panel" style={{ margin: 10, marginBottom: 0, height: 32 }}>
           {([['blade', 'Blade'], ['sound', 'Sound'], ['saber', 'Saber'], ['help', 'Help']] as const).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} style={{ flex: 1, justifyContent: 'center', height: 30, fontSize: 12.5 }} data-tour={`demo-tab-${id}`} onClick={() => setTab(id)}>{label}</button>
@@ -575,7 +575,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
         </div>
 
         {/* The deck: everything you can do to the saber, with its key. */}
-        <div className="col" style={{ gap: 8, padding: 12, borderTop: '1px solid var(--line)', background: 'rgba(8,12,17,.6)' }} data-tour="demo-deck">
+        <div className="col" style={{ gap: 8, padding: 12, borderTop: '1px solid var(--line)', background: 'color-mix(in srgb,var(--bg0) 60%,transparent)' }} data-tour="demo-deck">
           <div className="row" style={{ gap: 8 }}>
             <button type="button" className="btn sm pri grow" style={{ justifyContent: 'center' }} title={motion.preon ? 'Preon is playing; pressing again cancels it, as on the saber' : undefined} onClick={() => { room?.setOn(!room.isOn); setHold(null); }}><span className="b"><span className="i">{motion.on ? 'Retract' : motion.preon ? 'Cancel preon' : 'Ignite'}<kbd className="kbd">Space</kbd></span></span></button>
             <button type="button" className="chip" aria-pressed={tab === 'help'} title="Every mouse and keyboard control" onClick={toggleHelp}><kbd className="kbd" style={{ margin: '0 6px 0 0' }}>?</kbd>Controls</button>
@@ -605,7 +605,7 @@ export function Demo({ initialLook, initialFont, board }: { initialLook?: string
         <div>twist <span style={{ color: 'var(--text)' }}>{motion.twist}°</span></div>
       </div>
 
-      <section className="panel" style={{ position: 'absolute', right: 20, bottom: 18, width: 280, maxHeight: 'calc(100% - 130px)', display: 'flex', flexDirection: 'column', background: 'rgba(12,17,23,.9)' }} aria-label="Scene" data-tour="demo-scene">
+      <section className="panel" style={{ position: 'absolute', right: 20, bottom: 18, width: 280, maxHeight: 'calc(100% - 130px)', display: 'flex', flexDirection: 'column', background: 'color-mix(in srgb,var(--bg1) 92%,transparent)' }} aria-label="Scene" data-tour="demo-scene">
         <div className="row between" style={{ padding: '8px 12px', flex: 'none' }}>
           <button type="button" className="row" style={{ gap: 8 }} aria-expanded={sceneOpen} onClick={() => setSceneOpen((o) => !o)}><Icon name={sceneOpen ? 'down' : 'up'} /><b style={{ fontWeight: 600, fontSize: 13 }}>Scene</b></button>
           {sceneOpen && <button type="button" className="holo small" onClick={() => setLook3d({ ...DEFAULT_SCENE })}>Reset</button>}

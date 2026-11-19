@@ -52,7 +52,7 @@ export function MotionPad({ tilt, color, onTilt, onSwing }: { tilt: number; colo
   const tip = { x: PIVOT.x + Math.cos(rad) * REACH, y: PIVOT.y - Math.sin(rad) * REACH };
   const grip = { x: PIVOT.x + Math.cos(rad) * 18, y: PIVOT.y - Math.sin(rad) * 18 };
   return (
-    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE} style={{ flex: 'none', border: '1px solid var(--line2)', background: '#0b1016', cursor: 'grab', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
+    <svg className="dark" viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE} style={{ flex: 'none', border: '1px solid var(--line2)', background: 'var(--well)', cursor: 'grab', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
       role="img" aria-label={`Motion pad. The blade is tilted ${tilt} degrees. Drag to tilt and swing it; the sliders do the same.`}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
       <path d={`M ${PIVOT.x} ${PIVOT.y - REACH} A ${REACH} ${REACH} 0 0 1 ${PIVOT.x} ${PIVOT.y + REACH}`} fill="none" stroke="var(--line2)" strokeDasharray="2 4" />
@@ -61,7 +61,7 @@ export function MotionPad({ tilt, color, onTilt, onSwing }: { tilt: number; colo
       <text x={SIZE - 4} y={SIZE - 5} textAnchor="end" fontSize="9" fill="var(--mute)" fontFamily="var(--mono)">down</text>
       <line x1={grip.x} y1={grip.y} x2={tip.x} y2={tip.y} stroke={color} strokeWidth="7" strokeLinecap="round" opacity="0.35" />
       <line x1={grip.x} y1={grip.y} x2={tip.x} y2={tip.y} stroke={color} strokeWidth="3" strokeLinecap="round" />
-      <line x1={PIVOT.x - Math.cos(rad) * 8} y1={PIVOT.y + Math.sin(rad) * 8} x2={grip.x} y2={grip.y} stroke="#9aa9b8" strokeWidth="6" strokeLinecap="butt" />
+      <line x1={PIVOT.x - Math.cos(rad) * 8} y1={PIVOT.y + Math.sin(rad) * 8} x2={grip.x} y2={grip.y} stroke="#a39c8e" strokeWidth="6" strokeLinecap="butt" />
     </svg>
   );
 }

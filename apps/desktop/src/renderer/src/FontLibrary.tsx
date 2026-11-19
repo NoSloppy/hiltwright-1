@@ -255,7 +255,7 @@ export function FontLibrary({ onDemo, board }: { onDemo: (folder: string) => voi
             <datalist id="hw-makers">{makerNames.map((m) => <option key={m} value={m} />)}</datalist>
             <datalist id="hw-bundles">{bundles.map((b) => <option key={b} value={b} />)}</datalist>
           </div>
-          <div className="row" style={{ gap: 10, padding: '10px 14px', borderTop: '1px solid var(--line)', background: '#0d131a' }}>
+          <div className="row" style={{ gap: 10, padding: '10px 14px', borderTop: '1px solid var(--line)', background: 'var(--bar)' }}>
             <span className="small dim nowrap">Library folder</span>
             <span className="mono small ellip grow" title={status?.root}>{status?.root ?? '…'}</span>
             <span className="hint nowrap">{fonts.length} font{fonts.length === 1 ? '' : 's'} · {mb(fonts.reduce((a, f) => a + f.bytes, 0))}</span>
@@ -415,7 +415,7 @@ function FontDetail({ font, detail, card, askCard, looking, player, onSetLogo, o
           </div>
         )}
       </div>
-      <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: '#0d131a', flex: 'none' }}>
+      <div className="col" style={{ gap: 8, padding: '12px 18px 14px', borderTop: '1px solid var(--line)', background: 'var(--bar)', flex: 'none' }}>
         {askFs && card && <div className="note amber"><Icon name="warn" /><span>{copyAnywayQuestion(font.meta.name || font.folder, card.root, card.fileSystem)}</span><span className="row" style={{ gap: 8, marginLeft: 'auto' }}><button type="button" className="btn sm warn" onClick={() => void copy(onCard, true)}><span className="b"><span className="i">Copy anyway</span></span></button><button type="button" className="btn sm ghost" onClick={() => setAskFs(false)}><span className="b"><span className="i">Cancel</span></span></button></span></div>}
         {note && <div className={`note ${note.tone}`}><Icon name={note.tone === 'green' ? 'check' : note.tone === 'red' ? 'x' : 'warn'} /><span>{note.text}{note.replace && <> <button type="button" className="holo" disabled={copying} onClick={() => void copy(true)}>Replace it</button></>}</span></div>}
         <div className="row wrap" style={{ gap: 8 }}>

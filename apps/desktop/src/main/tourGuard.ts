@@ -40,6 +40,8 @@ export const TOUR_BLOCKED: ReadonlySet<string> = new Set([
   'support:save',
   // In-app updates: a check (answered quietly with the state as it is), a download and a restart to update.
   'updates:check', 'updates:download', 'updates:install',
+  // The theme is a saved setting.
+  'theme:set',
 ]);
 
 /** Whether the tour is running, as the page last said. Main starts with it off; the page turns it off again when it loads. */

@@ -129,7 +129,7 @@ export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 1
   if (!ok) {
     return (
       <div className="col" style={{ gap: 6 }}>
-        <div className="row" style={{ gap: 0, height, paddingRight: 28 }}>{hilt && <Hilt />}<BladeBar color={fallbackColor} thin={size === 'sm'} /></div>
+        <div className={`row well${size === 'sm' ? ' sm' : ''}`}><div className="row grow" style={{ gap: 0, height, paddingRight: 28 }}>{hilt && <Hilt />}<BladeBar color={fallbackColor} thin={size === 'sm'} /></div></div>
         {controls && <span className="hint">{broken ? 'The live preview needs WebGL, which is not available here. This bar only shows the main colour.' : 'No live preview for this style: only Hiltwright’s own styles can be simulated. This bar only shows its main colour.'}</span>}
       </div>
     );
@@ -142,7 +142,7 @@ export function BladePreview({ lookId, args, fallbackColor = '#3d7bff', leds = 1
 
   return (
     <div className="col" style={{ gap: 10 }}>
-      <div className="row" style={{ gap: 0 }}>
+      <div className={`row well${size === 'sm' ? ' sm' : ''}`} style={{ gap: 0 }}>
         {hilt && <Hilt />}
         <div ref={wrap} className="grow" style={{ minWidth: 0, height, marginLeft: hilt ? -1 : 0 }}>
           <canvas ref={canvas} style={{ width: '100%', height, display: 'block', cursor: controls && !dot ? 'crosshair' : undefined }} aria-label="Simulated blade"
