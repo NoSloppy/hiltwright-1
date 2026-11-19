@@ -9,7 +9,7 @@ import {
   CHECK_EVERY_MS, FIRST_CHECK_MS, NETWORK_NOTE, SHARED_STAGING_ID, WORK_CHANNELS, actionLabel, actionsFor, checksOnStart, chipText, initialState, isOffline, nextCheckIn,
   nextState, plainReason, pretendState, restartRefusal, statusText, type UpdateState,
 } from '../src/shared/updates';
-import { Updates, WorkCounter, configure, type UpdaterLike, type UpdatesSys } from '../src/main/updates';
+import { Updates, WorkCounter, configure, pickAutoUpdater, type UpdaterLike, type UpdatesSys } from '../src/main/updates';
 import { duringWork, workNow } from '../src/renderer/src/work';
 import { TOUR_ALLOWED, TOUR_BLOCKED } from '../src/main/tourGuard';
 
@@ -285,5 +285,20 @@ describe('the tour and the build settings', () => {
     expect(pkg.scripts.dist).toMatch(/--publish never/);
     // Unsigned, and the updater must not ask the downloaded installer for a signature.
     expect(pkg.build.win.verifyUpdateCodeSignature).toBe(false);
+  });
+});
+
+describe('loading electron-updater (0.2.0-beta.2: every check failed with "Cannot set properties of undefined")', () => {
+  it('finds autoUpdater on the default export, where an ES import of the real package puts it', async () => {
+    const mod = await import('electron-updater') as unknown as Record<string, unknown> & { default: object };
+    // Not read here: its getter starts the updater, which needs a running Electron app. Where it is defined is enough.
+    expect(Object.getOwnPropertyNames(mod).includes('autoUpdater') || Object.getOwnPropertyNames(mod.default).includes('autoUpdater')).toBe(true);
+    const fake = fakeUpdater({});
+    expect(pickAutoUpdater({ default: { autoUpdater: fake } })).toBe(fake);
+    expect(pickAutoUpdater({ autoUpdater: fake })).toBe(fake);
+  });
+  it('says so plainly when the package gives none', () => {
+    expect(() => pickAutoUpdater({})).toThrow(/did not give an autoUpdater/);
+    expect(() => pickAutoUpdater(null)).toThrow(/did not give an autoUpdater/);
   });
 });

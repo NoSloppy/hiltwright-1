@@ -33,7 +33,7 @@ import { tourGuarded, tourState } from './tourGuard';
 import { JsonStore, storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
 import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
-import { Updates, WorkCounter } from './updates';
+import { Updates, WorkCounter, pickAutoUpdater } from './updates';
 import { WORK_CHANNELS, type BusyFacts, type UpdateState, type WorkKind } from '../shared/updates';
 import type { FontLibraryStatus, JobEvent } from '../shared/api';
 import type { FirmwareManifest } from '@hiltwright/core';
@@ -537,7 +537,7 @@ export function registerIpc(): void {
   const sendUpdate = (s: UpdateState) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('updates:changed', s); };
   const updates = new Updates({
     packaged: app.isPackaged, version: app.getVersion(),
-    load: async () => (await import('electron-updater')).autoUpdater,
+    load: async () => pickAutoUpdater(await import('electron-updater')),
     emit: sendUpdate, workInMain: () => work.now(), log: (l) => console.log(l), now: () => new Date(),
     pretend: !app.isPackaged ? process.env.HILTWRIGHT_UPDATE_STATE : undefined,
   });

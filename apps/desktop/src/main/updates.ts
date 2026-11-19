@@ -40,6 +40,18 @@ export interface UpdatesSys {
   pretend?: string;
 }
 
+/**
+ * electron-updater's autoUpdater, from the module as an ES import gives it. The package is CommonJS and defines
+ * autoUpdater with a getter, which Node cannot see as a named export: it is only on the default export. Reading
+ * it straight off the module gave undefined in 0.2.0-beta.2, and every check failed.
+ */
+export function pickAutoUpdater(mod: unknown): UpdaterLike {
+  const m = mod as { autoUpdater?: UpdaterLike; default?: { autoUpdater?: UpdaterLike } } | null;
+  const found = m?.autoUpdater ?? m?.default?.autoUpdater;
+  if (!found) throw new Error('electron-updater did not give an autoUpdater');
+  return found;
+}
+
 /** Configure electron-updater the one way Hiltwright uses it. Exported so a test can check every setting. */
 export function configure(u: UpdaterLike, log: (line: string) => void): void {
   u.autoDownload = false; // the owner presses Download
