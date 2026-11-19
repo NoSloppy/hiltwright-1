@@ -28,7 +28,7 @@ const CLEAN = [7, 11, 14, 19, 20, 22, 24, 28, 29, 31, 34, 36, 39, 40, 41, 42, 44
 // The step photographed once in every theme: the Armory, with the example saber.
 const THEME_STEP = 7;
 // Steps photographed for the promo pages' feature rows, and the theme each is taken in.
-const FEATURE = { 7: 'kashyyyk', 11: 'hull', 14: 'coruscant', 22: 'ronin', 24: 'naboo', 28: 'saberbench', 29: 'ninth', 31: 'hoth', 34: 'station', 36: 'crait', 39: 'naboo', 41: 'crait' };
+const FEATURE = { 7: 'kashyyyk', 11: 'hull', 14: 'coruscant', 22: 'ronin', 24: 'naboo', 28: 'original', 29: 'ninth', 31: 'hoth', 34: 'station', 36: 'crait', 39: 'naboo', 41: 'crait' };
 
 // The tour's words: tourSteps.ts only imports a type, so Node can load it with its types stripped.
 const { TOUR } = await import(pathToFileURL(join(desktop, 'src/renderer/src/tourSteps.ts')).href);

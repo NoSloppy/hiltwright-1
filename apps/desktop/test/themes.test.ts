@@ -36,6 +36,10 @@ describe('the theme list', () => {
     expect(themeById(undefined).id).toBe(DEFAULT_THEME);
     expect(themeById(42).id).toBe(DEFAULT_THEME);
   });
+
+  it('opens a theme saved under an id it has since been renamed from', () => {
+    expect(themeById('saberbench').id).toBe('original');
+  });
 });
 
 describe('the tokens in styles.css', () => {

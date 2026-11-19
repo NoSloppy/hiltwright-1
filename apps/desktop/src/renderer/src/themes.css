@@ -220,9 +220,9 @@
 
 
 /* ---------------------------------------------------------------------------------------------------------------
-   Saberbench: the appearance the app first had. Dark navy, flat panels with square corners, buttons with two cut
+   Original: the appearance the app first had. Dark navy, flat panels with square corners, buttons with two cut
    corners, wide-spaced lettering, fine scan lines across the ground, and cyan as the accent. */
-:root[data-theme="saberbench"]{
+:root[data-theme="original"]{
   --bg0:#0a0e13;--bg1:#101720;--bg2:#16202b;--bg3:#1c2833;--bg4:#263544;
   --side:#0c1117;--bar:#0d131a;--field:#0b1016;--well:#05080b;--track:#24313f;
   --seam:#24313f;--line:#24313f;--line2:#3b4c5e;

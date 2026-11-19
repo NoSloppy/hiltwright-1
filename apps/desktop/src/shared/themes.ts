@@ -93,8 +93,8 @@ export const THEMES: readonly ThemeDef[] = [
     scene: { clear: 0x070503, floor: 0x1a140c, gridMajor: 0x55472a, gridMinor: 0x261f13, ambient: 0xb0a88c, fill: 0xffe2b0, key: 0xdcd8b8 },
   },
   {
-    id: 'saberbench',
-    name: 'Saberbench',
+    id: 'original',
+    name: 'Original',
     about: 'The appearance Hiltwright first had: dark navy, cut-corner buttons and cyan.',
     window: { back: '#0a0e13', bar: '#0d131a', symbols: '#e6edf3' },
     swatch: ['#0a0e13', '#101720', '#5fd3ff', '#e6edf3'],
@@ -106,5 +106,9 @@ export const DEFAULT_THEME = THEMES[0].id;
 
 /** The theme with this id, or the default for anything else (an older file, a theme since removed, a wrong type). */
 export function themeById(id: unknown): ThemeDef {
-  return THEMES.find((t) => t.id === id) ?? THEMES[0];
+  const now = typeof id === 'string' ? RENAMED[id] ?? id : id;
+  return THEMES.find((t) => t.id === now) ?? THEMES[0];
 }
+
+/** Ids a theme once had, so a choice saved under the old id still opens the same theme. */
+const RENAMED: Record<string, string> = { saberbench: 'original' };
