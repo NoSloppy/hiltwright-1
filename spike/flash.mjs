@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SaberBench flash spike (Windows). Exercises the install half of the pipeline against a real Proffieboard.
+// Hiltwright flash spike (Windows). Exercises the install half of the pipeline against a real Proffieboard.
 //
 //   node spike/flash.mjs detect                      # USB + driver + COM port state (read-only)
 //   node spike/flash.mjs probe                       # talk to the running board over serial (read-only)

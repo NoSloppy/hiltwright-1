@@ -90,7 +90,7 @@ Accepted sacrifices: zero-install tryout, phone-based tweaks, instant web distri
 - Hardware profiles: board variants, pin maps, LED chip tables, Blade ID conventions.
 - Flash-budget estimator: empirical size table per style family and feature define, calibrated against real builds.
 - Importers: CFX `config.txt`/`colors.txt`/`font_config.txt`, Xenopixel `SET/config.ini`/`fontconfig.ini`, font naming converter (CFX/GH/Xeno → Proffie).
-- Prop definitions as data (seeded from ProffieConfig's GPL `.pconf` files and pod.hubbe.net).
+- Prop definitions as data, taken from ProffieOS's own prop files and pod.hubbe.net. (An earlier draft proposed seeding them from ProffieConfig's `.pconf` files; that was never done, and nothing from ProffieConfig is used.)
 
 **`@hiltwright/app` (Electron).**
 

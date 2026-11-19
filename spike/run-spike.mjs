@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SaberBench pipeline spike.
+// Hiltwright pipeline spike.
 // Vets the Phase 2 build pipeline headlessly: arduino-cli bootstrap, Proffieboard core + GCC install,
 // ProffieOS checkout, compile of real configs with timing and size, error capture, dfu-util presence.
 // Everything lives under spike/.cache (gitignored). Idempotent: rerun to skip finished phases.
@@ -163,7 +163,7 @@ function compileOne(name, { configFile, fqbn, mutate, incremental }) {
 const V3 = (usb = "cdc_msc_webusb") => `proffieboard:stm32l4:ProffieboardV3-L452RE:usb=${usb},dosfs=sdmmc1,speed=80,opt=os`;
 const V2 = (usb = "cdc_msc_webusb") => `proffieboard:stm32l4:ProffieboardV2-L433CC:usb=${usb},dosfs=sdspi,speed=80,opt=os`;
 
-// Derive a realistic "SaberBench baseline" config from the stock OS6 example (Fett263 prop, edit mode,
+// Derive a realistic "Hiltwright baseline" config from the stock OS6 example (Fett263 prop, edit mode,
 // two blades: 136 px main + 6 px accent). Adds the golden-baseline defines the app will always emit.
 const GOLDEN = "#define SAVE_STATE\n#define MOUNT_SD_SETTING\n";
 function baseline(board) {
@@ -171,7 +171,7 @@ function baseline(board) {
     const src = readFileSync(join(dir, "config", "OS6_config_example.h"), "utf8");
     let out = src.replace('#include "proffieboard_v2_config.h"', `#include "proffieboard_${board}_config.h"`);
     out = out.replace("#define ENABLE_SD\n", "#define ENABLE_SD\n" + GOLDEN);
-    writeFileSync(join(dir, "config", `saberbench_${board}_baseline.h`), out);
+    writeFileSync(join(dir, "config", `hiltwright_${board}_baseline.h`), out);
   };
 }
 const CONFIGS_DIR = join(here, "configs");
@@ -182,10 +182,10 @@ function fromConfigs(file, board) {
     writeFileSync(join(dir, "config", file), src);
   };
 }
-const OS8_V3 = { configFile: "saberbench_v3_os8.h", fqbn: V3(), mutate: fromConfigs("saberbench_v3_os8.h", "v3") };
-const OS8_V2 = { configFile: "saberbench_v3_os8.h", fqbn: V2(), mutate: fromConfigs("saberbench_v3_os8.h", "v2") };
-const BASE_V3 = { configFile: "saberbench_v3_baseline.h", fqbn: V3(), mutate: baseline("v3") };
-const BASE_V2 = { configFile: "saberbench_v2_baseline.h", fqbn: V2(), mutate: baseline("v2") };
+const OS8_V3 = { configFile: "hiltwright_v3_os8.h", fqbn: V3(), mutate: fromConfigs("hiltwright_v3_os8.h", "v3") };
+const OS8_V2 = { configFile: "hiltwright_v3_os8.h", fqbn: V2(), mutate: fromConfigs("hiltwright_v3_os8.h", "v2") };
+const BASE_V3 = { configFile: "hiltwright_v3_baseline.h", fqbn: V3(), mutate: baseline("v3") };
+const BASE_V2 = { configFile: "hiltwright_v2_baseline.h", fqbn: V2(), mutate: baseline("v2") };
 
 function compile() {
   mkdirSync(BUILD_ROOT, { recursive: true });
@@ -204,14 +204,14 @@ function compile() {
   compileOne("v3-baseline-incremental-nochange", { ...BASE_V3 });
   compileOne("v3-baseline-incremental-nochange", { ...BASE_V3, mutate: null, incremental: true });
   compileOne("v3-baseline-incremental-edited", { ...BASE_V3 });
-  compileOne("v3-baseline-incremental-edited", { ...BASE_V3, incremental: true, mutate: (dir) => { const p = join(dir, "config", "saberbench_v3_baseline.h"); writeFileSync(p, readFileSync(p, "utf8").replace("Blue", "DodgerBlue")); } });
+  compileOne("v3-baseline-incremental-edited", { ...BASE_V3, incremental: true, mutate: (dir) => { const p = join(dir, "config", "hiltwright_v3_baseline.h"); writeFileSync(p, readFileSync(p, "utf8").replace("Blue", "DodgerBlue")); } });
 }
 
 function errors() {
   // Representative user mistakes, to see what the compiler says and whether it is translatable.
   const mutateBase = (edit) => (dir) => {
     baseline("v3")(dir);
-    const p = join(dir, "config", "saberbench_v3_baseline.h");
+    const p = join(dir, "config", "hiltwright_v3_baseline.h");
     const before = readFileSync(p, "utf8"); const after = edit(before);
     if (after === before) throw new Error("mutation did not apply");
     writeFileSync(p, after);

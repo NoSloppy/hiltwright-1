@@ -7,7 +7,7 @@ import {
 } from '../src';
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
-const FIXTURES = ['saberbench_v3_os8.h', 'proffieboard_v3_verification_config.h', 'proffieboard_v2_verification_config.h', 'OS6_config_example.h', 'proffieboard_v2_ob4.h'];
+const FIXTURES = ['hiltwright_v3_os8.h', 'proffieboard_v3_verification_config.h', 'proffieboard_v2_verification_config.h', 'OS6_config_example.h', 'proffieboard_v2_ob4.h'];
 
 /** Strip the volatile `raw` fields so two parses of equivalent text compare equal. */
 function semantic(x: unknown): unknown {
@@ -15,7 +15,7 @@ function semantic(x: unknown): unknown {
 }
 
 describe('spike OS8 config', () => {
-  const doc = parseConfig(fixture('saberbench_v3_os8.h'));
+  const doc = parseConfig(fixture('hiltwright_v3_os8.h'));
 
   it('reads the top section', () => {
     expect(boardInclude(doc)).toBe('proffieboard_v3_config.h');

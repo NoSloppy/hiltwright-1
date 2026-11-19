@@ -1,5 +1,5 @@
 /*
-SaberBench spike: OS8-native baseline config for Proffieboard V3.
+Hiltwright spike: OS8-native baseline config for Proffieboard V3.
 Hardware (same as the stock OS6 example): two buttons, 136 px main blade on LED2/3 + data1,
 6 px accent/crystal strip on LED4 + data2.
 Styles below were generated with Fett263's ProffieOS7/8 Style Library (public access, OS7.15 v3.44p)
