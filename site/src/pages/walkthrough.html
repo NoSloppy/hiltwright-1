@@ -16,14 +16,15 @@ scripts: assets/walkthrough.js
   <div class="wt-main">
     <figure class="frame wt-shot"><img src="assets/shots/tour-01.png" width="1480" height="980" alt=""></figure>
     <div class="wt-card" aria-live="polite">
-      <h2 class="wt-title"></h2>
-      <div class="wt-text"></div>
+      <!-- The controls come first, so Back and Next stay in one place however long a step's words are. -->
       <div class="wt-nav">
         <button type="button" class="btn wt-prev">Back</button>
         <button type="button" class="btn primary wt-next">Next</button>
         <span class="wt-count"></span>
         <a class="wt-doc more" href="#"></a>
       </div>
+      <h2 class="wt-title"></h2>
+      <div class="wt-text"></div>
       <div class="wt-bar" aria-hidden="true"><i></i></div>
     </div>
   </div>
