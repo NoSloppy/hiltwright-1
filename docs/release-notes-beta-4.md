@@ -1,12 +1,13 @@
-# Hiltwright 0.2.0-beta.3
+# Hiltwright 0.2.0-beta.4
 
 ## New in this beta
 
-- **Updates from inside the app.** Hiltwright now looks for a newer version a little after it starts and every few hours, by asking GitHub for its list of releases. A chip under the version in the sidebar says when one is out. Nothing is downloaded until you press Download on the About page, and nothing is installed until you press Restart to update. A switch on About turns the check off. The check sends nothing about your sabers or you.
-- **Remove a saber from the Armory.** Every saber that is not plugged in has a Remove button. It asks first, and says what is removed and what is kept. Firmware backups and preset history stay as files.
-- **A website.** hiltwright.com has a walkthrough of every page and the user docs.
+- **A new appearance.** The blue is gone. Hiltwright now opens in Station: gloss black, with green for what is selected and what comes next. Every page is where it was.
+- **Themes.** The About page has a Theme panel with seven to choose from: Station, Scorched hull, Hoth, Ronin, The Ninth Jedi, Coruscant at night and Crait. A theme changes the colours, the shapes of buttons and panels, the lettering and the backdrop. It never moves anything, so every button stays where you learned it. Your choice is kept on this PC. The theme cannot be changed while the tour is running.
 
-0.2.0-beta.2 was withdrawn: its update check failed every time. This beta fixes that. Checking for a newer version is now tested against GitHub; downloading one and restarting into it is not yet proven, because the first real update will be from this beta to the next. If it does not work, install the next beta by hand and tell us.
+This is the first beta that an installed copy can update to by itself, from 0.2.0-beta.3. Checking for a newer version was tested against GitHub; downloading one and restarting into it has not been proven until now. If it does not work for you, install this beta by hand and tell us.
+
+The walkthrough pictures on hiltwright.com still show the earlier blue appearance.
 
 ## What Hiltwright is
 
@@ -37,15 +38,17 @@ The six free ProffieOS fonts are included and can be copied to a card from Fonts
 
 ## Install
 
-Coming from 0.2.0-beta.1 or 0.2.0-beta.2? Download this installer and run it. It installs over the old one and keeps your sabers, styles, fonts and backups. This is the last beta you install by hand.
+On 0.2.0-beta.3? Open About, press Check now, then Download, then Restart to update.
+
+Coming from 0.2.0-beta.1 or 0.2.0-beta.2? Download this installer and run it. It installs over the old one and keeps your sabers, styles, fonts and backups. After that, Hiltwright updates itself.
 
 The installer is unsigned, so Windows will warn you before it runs. If Smart App Control is on, Windows blocks both the installer and the app, and it has to stay off while you use this beta: check that first (install guide, section 3). The install guide covers each Windows barrier to unsigned software.
 
-Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.3/docs/install-guide.md
+Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.4/docs/install-guide.md
 
 ## Licence and source
 
-Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.3
+Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.4
 
 ## Report a problem
 

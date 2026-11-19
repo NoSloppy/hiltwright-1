@@ -1,4 +1,4 @@
-# Hiltwright 0.2.0-beta.3: install guide
+# Hiltwright 0.2.0-beta.4: install guide
 
 Hiltwright Beta 1 is not signed. Windows will warn you. This guide takes you from the download to your first firmware install.
 
@@ -14,8 +14,8 @@ You need:
 
 ## 1 Download
 
-1. Open https://github.com/safwyls/hiltwright/releases/tag/v0.2.0-beta.3
-2. Download `Hiltwright-0.2.0-beta.3-setup.exe`.
+1. Open https://github.com/safwyls/hiltwright/releases/tag/v0.2.0-beta.4
+2. Download `Hiltwright-0.2.0-beta.4-setup.exe`.
 
 ## 2 Windows warnings when you run the installer
 
@@ -123,4 +123,4 @@ The browser warning and the **Unblock** step in section 2 are only for installer
 3. Describe what happened and which step you were on.
 4. Attach the diagnostics file.
 
-Source for this build: https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.3
+Source for this build: https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.4
