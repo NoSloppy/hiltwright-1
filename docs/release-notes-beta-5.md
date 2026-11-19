@@ -1,13 +1,13 @@
-# Hiltwright 0.2.0-beta.4
+# Hiltwright 0.2.0-beta.5
 
 ## New in this beta
 
-- **A new appearance.** The blue is gone. Hiltwright now opens in Station: gloss black, with green for what is selected and what comes next. Every page is where it was.
-- **Themes.** The About page has a Theme panel with seven to choose from: Station, Scorched hull, Hoth, Ronin, The Ninth Jedi, Coruscant at night and Crait. A theme changes the colours, the shapes of buttons and panels, the lettering and the backdrop. It never moves anything, so every button stays where you learned it. Your choice is kept on this PC. The theme cannot be changed while the tour is running.
+- **Three more themes, ten in all.** Naboo is a lake city in daylight: pale stone, arched panels and serif headings. Kashyyyk is a village in the giant trees: dark timber, moss green and lantern amber. Saberbench is the navy and cyan appearance Hiltwright first had. Choose a theme on the About page, as before.
+- **The logo follows the theme.** The blade in the logo at the top left takes the colour of the theme you chose.
+- **About scrolls to its end.** In a short window the last panel of the About page could not be reached. It can now.
 
-This is the first beta that an installed copy can update to by itself, from 0.2.0-beta.3. Checking for a newer version was tested against GitHub; downloading one and restarting into it has not been proven until now. If it does not work for you, install this beta by hand and tell us.
+An installed 0.2.0-beta.3 or 0.2.0-beta.4 can update to this beta by itself. If that does not work for you, install this beta by hand and tell us.
 
-The walkthrough pictures on hiltwright.com still show the earlier blue appearance.
 
 ## What Hiltwright is
 
@@ -38,17 +38,17 @@ The six free ProffieOS fonts are included and can be copied to a card from Fonts
 
 ## Install
 
-On 0.2.0-beta.3? Open About, press Check now, then Download, then Restart to update.
+On 0.2.0-beta.3 or 0.2.0-beta.4? Open About, press Check now, then Download, then Restart to update.
 
 Coming from 0.2.0-beta.1 or 0.2.0-beta.2? Download this installer and run it. It installs over the old one and keeps your sabers, styles, fonts and backups. After that, Hiltwright updates itself.
 
 The installer is unsigned, so Windows will warn you before it runs. If Smart App Control is on, Windows blocks both the installer and the app, and it has to stay off while you use this beta: check that first (install guide, section 3). The install guide covers each Windows barrier to unsigned software.
 
-Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.4/docs/install-guide.md
+Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.5/docs/install-guide.md
 
 ## Licence and source
 
-Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.4
+Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.5
 
 ## Report a problem
 
