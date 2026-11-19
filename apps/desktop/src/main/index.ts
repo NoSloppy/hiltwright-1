@@ -152,7 +152,8 @@ function createWindow(): void {
         for (const s of JSON.parse(series) as { file: string; js: string }[]) {
           try { await win.webContents.executeJavaScript(s.js, true); } catch (err) { console.log('[main] screenshot script failed', String(err)); }
           await new Promise((r) => setTimeout(r, 450));
-          await writeFile(s.file, (await win.webContents.capturePage()).toPNG());
+          const shot = await win.webContents.capturePage();
+          await writeFile(s.file, /\.jpe?g$/i.test(s.file) ? shot.toJPEG(86) : shot.toPNG());
           console.log('[main] screenshot', s.file);
         }
         console.log('[main] screenshots done');

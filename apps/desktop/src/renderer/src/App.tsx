@@ -6,7 +6,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { registerLookSim, wiringConfirmed, type LookDef } from '@hiltwright/core';
 import { useBoard } from './board';
 import { Icon } from './Icon';
-import logoIcon from './assets/hiltwright-icon.svg';
+import { Logo } from './Logo';
 import { Presets } from './Presets';
 import { Fonts } from './Fonts';
 import { Build } from './Build';
@@ -181,7 +181,7 @@ export function App() {
   return (
     <div className="app">
       <aside className={`side${!tour && chipText(updates.state) ? ' hasupd' : ''}`} aria-label="Primary">
-        <div className="brand"><img src={logoIcon} alt="" width={28} height={28} /><span className="wordmark">Hiltwright</span></div>
+        <div className="brand"><Logo size={28} /><span className="wordmark">Hiltwright</span></div>
         <nav className="nav" aria-label="Sections">
           {NAV.map((g) => (
             <div key={g.section} className="col" style={{ gap: 2 }} data-tour={`nav-${g.section.toLowerCase()}`}>

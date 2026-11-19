@@ -16,7 +16,7 @@
   --tape-ink:#fff3e4;--sel:#f08c55;--plate:linear-gradient(180deg,#4a2c18,#33200f);--on-plate-dim:#ead9c6;--on-plate-mute:#d8c3ad;
   --rail:var(--grain),#1f1c18;--rail-edge:#090807;
   --btn:linear-gradient(180deg,#46423a,#38342d);--btn-hover:linear-gradient(180deg,#544f45,#443f37);
-  --pri:linear-gradient(180deg,#e27a45,#d9642b 55%,#c4551f);--pri-hover:linear-gradient(180deg,#ea8a58,#e2733a 55%,#cf6029);--pri-edge:#1d0c03;
+  --blade:#f0873a;--pri:linear-gradient(180deg,#e27a45,#d9642b 55%,#c4551f);--pri-hover:linear-gradient(180deg,#ea8a58,#e2733a 55%,#cf6029);--pri-edge:#1d0c03;
   --lit:linear-gradient(180deg,#b9cf7c,#93ad55);--lit-edge:#c6da8c;--lit-ink:#141a05;--lit-glow:0 0 0 transparent;
   --amber:#f0b040;--amber-fill:#e9a92e;--amber-ink:#231a00;--red:#ec7560;--green:#a6c06c;
   --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .96 0 0 0 0 .86 .1 0 0 0 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -40,7 +40,7 @@
   --tape-ink:#1f0d02;--sel:#bf4f0e;--plate:linear-gradient(180deg,#fbe0cc,#f3c9a9);--on-plate-dim:#4a3122;--on-plate-mute:#674632;
   --rail:linear-gradient(180deg,#42515d,#2f3c46 60%,#28333c);--rail-edge:#1c252c;
   --btn:linear-gradient(180deg,#f5f9fb,#d2dde4);--btn-hover:linear-gradient(180deg,#fff,#dfe8ee);
-  --pri:linear-gradient(180deg,#f59350,#e8742a 55%,#d8601a);--pri-hover:linear-gradient(180deg,#f8a468,#ee8238 55%,#df6c25);--pri-edge:#8a3a08;
+  --blade:#ff8a3d;--pri:linear-gradient(180deg,#f59350,#e8742a 55%,#d8601a);--pri-hover:linear-gradient(180deg,#f8a468,#ee8238 55%,#df6c25);--pri-edge:#8a3a08;
   --lit:linear-gradient(180deg,#8ed1a6,#57a877);--lit-edge:#3f8a5d;--lit-ink:#06200f;--lit-glow:0 0 0 transparent;
   --amber:#765300;--amber-fill:#eab836;--amber-ink:#231a00;--red:#a51c13;--green:#1e6a3d;
   --grain:none;
@@ -73,7 +73,7 @@
   --tape-ink:#f6f2e7;--sel:#d8281d;--plate:linear-gradient(180deg,#2a0f0c,#1c0a08);--on-plate-dim:#e0cfc8;--on-plate-mute:#c2aaa2;
   --rail:var(--grain),#0e0e0e;--rail-edge:#cfcabd;
   --btn:linear-gradient(180deg,#191919,#191919);--btn-hover:linear-gradient(180deg,#2b2b2b,#2b2b2b);
-  --pri:linear-gradient(180deg,#ebe7dc,#d9d4c7);--pri-hover:linear-gradient(180deg,#f8f4ea,#e8e3d6);--pri-edge:#ebe7dc;
+  --blade:#e2332a;--pri:linear-gradient(180deg,#ebe7dc,#d9d4c7);--pri-hover:linear-gradient(180deg,#f8f4ea,#e8e3d6);--pri-edge:#ebe7dc;
   --lit:linear-gradient(180deg,#d8281d,#b81d14);--lit-edge:#d8281d;--lit-ink:#fff3ea;--lit-glow:0 0 0 transparent;
   --amber:#dcb94d;--amber-fill:#d6b03c;--amber-ink:#1c1400;--red:#ff6a5c;--green:#cfcabd;
   /* Film grain. */
@@ -108,7 +108,7 @@
   --tape-ink:#fff3df;--sel:#ffc46b;--plate:linear-gradient(180deg,#40301c,#2c2013);--on-plate-dim:#ead9bf;--on-plate-mute:#cfba9b;
   --rail:linear-gradient(180deg,#1e1b2c,#131120);--rail-edge:#8f7338;
   --btn:linear-gradient(180deg,#353050,#24203a);--btn-hover:linear-gradient(180deg,#423c62,#2e2948);
-  --pri:linear-gradient(180deg,#ffe09a,#f2a93e 55%,#d98322);--pri-hover:linear-gradient(180deg,#ffe8b3,#f7b656 55%,#e08f30);--pri-edge:#ffe6b0;
+  --blade:#f2a93e;--pri:linear-gradient(180deg,#ffe09a,#f2a93e 55%,#d98322);--pri-hover:linear-gradient(180deg,#ffe8b3,#f7b656 55%,#e08f30);--pri-edge:#ffe6b0;
   --lit:linear-gradient(180deg,#ffe09a,#f2a93e);--lit-edge:#ffe6b0;--lit-ink:#1f1202;--lit-glow:0 0 14px rgba(242,169,62,.5);
   --amber:#ffe066;--amber-fill:#f4d23c;--amber-ink:#1c1600;--red:#ff7163;--green:#9bd6a2;
   --grain:none;
@@ -141,7 +141,7 @@
   --tape-ink:#fff;--sel:#6fb0ff;--plate:linear-gradient(90deg,#122a50,#0c1a31);--on-plate-dim:#cfdcf2;--on-plate-mute:#a7b9d8;
   --rail:linear-gradient(180deg,#0d1119,#06080d);--rail-edge:#1c2533;
   --btn:linear-gradient(180deg,#232c3a,#141a25);--btn-hover:linear-gradient(180deg,#2e394a,#1b2330);
-  --pri:linear-gradient(180deg,#ffd08a,#ffad42 50%,#ee8f1c);--pri-hover:linear-gradient(180deg,#ffdca6,#ffba5c 50%,#f39c30);--pri-edge:#ffe0ae;
+  --blade:#6fb0ff;--pri:linear-gradient(180deg,#ffd08a,#ffad42 50%,#ee8f1c);--pri-hover:linear-gradient(180deg,#ffdca6,#ffba5c 50%,#f39c30);--pri-edge:#ffe0ae;
   --lit:linear-gradient(180deg,#ffd08a,#ffad42);--lit-edge:#ffe0ae;--lit-ink:#1d1000;--lit-glow:0 0 14px rgba(255,173,66,.45);
   --amber:#ff8552;--amber-fill:#ff7a45;--amber-ink:#210d00;--red:#ff5c7a;--green:#5fe0b4;
   --grain:none;
@@ -172,7 +172,7 @@
   --tape-ink:#fff4f0;--sel:#b8141e;--plate:linear-gradient(180deg,#c41824,#a0101a);--on-plate-dim:#ffdcd7;--on-plate-mute:#f9c4bd;
   --rail:linear-gradient(180deg,#92101a,#6c0a11);--rail-edge:#4c060b;
   --btn:linear-gradient(180deg,#fbf9f7,#e2dcd6);--btn-hover:linear-gradient(180deg,#fff,#ece7e2);
-  --pri:linear-gradient(180deg,#cf1c28,#b8141e 55%,#9c0f18);--pri-hover:linear-gradient(180deg,#dc2a36,#c61a25 55%,#aa131c);--pri-edge:#5e080e;
+  --blade:#e22633;--pri:linear-gradient(180deg,#cf1c28,#b8141e 55%,#9c0f18);--pri-hover:linear-gradient(180deg,#dc2a36,#c61a25 55%,#aa131c);--pri-edge:#5e080e;
   --lit:linear-gradient(135deg,#e2343f,#9c0f18);--lit-edge:#7d0c13;--lit-ink:#fff4f0;--lit-glow:0 0 0 transparent;
   --amber:#765000;--amber-fill:#e8b12c;--amber-ink:#231a00;--red:#8c0f55;--green:#1e6a3d;
   /* Salt: fine dark specks. */
@@ -204,7 +204,7 @@
 /* ---------------------------------------------------------------------------------------------------------------
    The pale themes keep a dark recess wherever a blade glows or code prints, and the whole demo room stays dark.
    Inside one, the tokens are a dark set, so text and controls there stay readable. */
-:root:is([data-theme="hoth"],[data-theme="crait"]) :is(.dark,.well,.console,.curve){
+:root:is([data-theme="hoth"],[data-theme="crait"],[data-theme="naboo"]) :is(.dark,.well,.console,.curve){
   --bg0:#08090b;--bg1:#121418;--bg2:#1b1e23;--bg3:#24282e;--bg4:#30353d;--bar:#0d0f12;--field:#07080a;--track:#2c3037;
   --seam:#3b4048;--line:#2a2e35;--line2:#5f6670;
   --text:#e6e9ec;--hi:#fff;--dim:#b7bcc3;--mute:#9096a0;
@@ -220,8 +220,100 @@
 
 
 /* ---------------------------------------------------------------------------------------------------------------
+   Saberbench: the appearance the app first had. Dark navy, flat panels with square corners, buttons with two cut
+   corners, wide-spaced lettering, fine scan lines across the ground, and cyan as the accent. */
+:root[data-theme="saberbench"]{
+  --bg0:#0a0e13;--bg1:#101720;--bg2:#16202b;--bg3:#1c2833;--bg4:#263544;
+  --side:#0c1117;--bar:#0d131a;--field:#0b1016;--well:#05080b;--track:#24313f;
+  --seam:#24313f;--line:#24313f;--line2:#3b4c5e;
+  --text:#e6edf3;--hi:#fff;--dim:#a3b3c2;--mute:#8497a8;
+  --holo:#5fd3ff;--holo-hi:#8fe1ff;--holo-fill:#5fd3ff;--holo-ink:#062533;--holo-dim:#2a8bb0;
+  --tape-ink:#fff;--sel:#5fd3ff;--plate:linear-gradient(90deg,#143246,#0f1c27);--on-plate-dim:#cfe3ee;--on-plate-mute:#a9c0cf;
+  --plate-ring:inset 2px 0 0 var(--sel);
+  --rail:#0c1117;--rail-edge:#24313f;
+  --btn:linear-gradient(#1c2833,#1c2833);--btn-hover:linear-gradient(#233242,#233242);
+  --blade:#5fd3ff;--pri:linear-gradient(#5fd3ff,#5fd3ff);--pri-hover:linear-gradient(#8fe1ff,#8fe1ff);--pri-edge:#5fd3ff;
+  --lit:linear-gradient(180deg,#7eeab0,#5ee39a);--lit-edge:#5ee39a;--lit-ink:#04200f;--lit-glow:0 0 10px rgba(94,227,154,.4);
+  --amber:#ffb547;--amber-fill:#ffb547;--amber-ink:#2b1a00;--red:#ff5c5c;--green:#5ee39a;
+  --gloss:none;--grain:none;
+  --ground:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 3px),var(--bg0);
+  --r-chip:0px;--r-num:0px;--r-slot:0px;
+  --clip-ctl:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+  --panel-edge:1px solid var(--line);--panel-shadow:none;
+  --edge-hi:transparent;--btn-hi:transparent;
+  --body:'Segoe UI',system-ui,sans-serif;--disp:'Segoe UI',system-ui,sans-serif;
+  --h-track:.16em;--ctl-track:.08em;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Naboo: a lake city in daylight. Pale carved stone, panels arched at the top like its colonnades, soft rounded
+   buttons, serif headings, a rail of deep lake blue, verdigris from the domes for the next action, and wisteria
+   for what is selected. Blades keep their dark wells. */
+:root[data-theme="naboo"]{
+  --bg0:#d9d3c4;--bg1:#f4efe3;--bg2:#eae4d5;--bg3:#dfd8c7;--bg4:#d0c8b5;
+  --side:#1f3d63;--bar:#ece6d8;--field:#fbf8f1;--well:#070a10;--track:#c6bda9;
+  --seam:#a39a84;--line:#cfc7b4;--line2:#857c68;
+  --text:#1b2233;--hi:#05080f;--dim:#37405a;--mute:#4a526b;
+  --holo:#135f52;--holo-hi:#1b7868;--holo-fill:#4fb8a3;--holo-ink:#04241e;--holo-dim:#a8cfc6;--sel-text:#5b3590;
+  --tape-ink:#2a1647;--sel:#7a4fa8;--plate:linear-gradient(180deg,#ece0f6,#dccaee);--on-plate-dim:#44305f;--on-plate-mute:#56426f;
+  --rail:linear-gradient(180deg,#2a5484,#1d3b62 60%,#172f4f);--rail-edge:#10233c;
+  --btn:linear-gradient(180deg,#fdfbf5,#e4dccb);--btn-hover:linear-gradient(180deg,#fff,#eee7d8);
+  --blade:#b784ff;--pri:linear-gradient(180deg,#74d3be,#4fb8a3 55%,#3ba38e);--pri-hover:linear-gradient(180deg,#8adccb,#60c4b0 55%,#49b09b);--pri-edge:#135f52;
+  --lit:linear-gradient(180deg,#f3d27a,#dcae3c);--lit-edge:#a87c14;--lit-ink:#2a1d00;--lit-glow:0 0 0 transparent;
+  --amber:#6f4f00;--amber-fill:#e9b934;--amber-ink:#231a00;--red:#a11a2a;--green:#1c6a45;
+  --grain:none;
+  --gloss:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,0) 48px);
+  --ground:var(--bg0);--scrim:linear-gradient(180deg,rgba(244,239,227,.2),rgba(244,239,227,.4));--loose:rgba(244,239,227,.9);--loose-ctl:rgba(251,248,241,.93);--loose-blur:blur(10px);
+  --hover:rgba(30,40,80,.07);--edge-hi:#fff;--btn-hi:#fff;
+  /* An arch: round at the top, square at the foot. */
+  --r-ctl:14px;--r-panel:22px 22px 4px 4px;--r-field:8px;--r-chip:12px;--r-num:9px;--r-slot:14px;
+  --panel-edge:1px solid #a39a84;--panel-shadow:inset 0 1px 0 #fff,0 8px 20px rgba(40,50,80,.25);--panel-overflow:clip;
+  --rule:1px solid var(--line);
+  --ph-deco:linear-gradient(90deg,#7a4fa8,#4fb8a3 40%,rgba(79,184,163,0) 75%);--ph-deco-h:2px;
+  --h-font:'Shippori Mincho',var(--body);--h-case:none;--h-track:.03em;--h-weight:700;
+  color-scheme:light;
+}
+:root[data-theme="naboo"] .main{background:var(--scrim),url(./assets/backdrops/naboo.webp) center/cover no-repeat,var(--bg0)}
+:root[data-theme="naboo"] .side{--text:#eef3fa;--hi:#fff;--dim:#cfdcec;--mute:#b4c5da;--line:#3f6188;--line2:#86a2c2;--holo:#9be6d6;--hover:rgba(255,255,255,.08);--amber:#ffd98a;--green:#b4ecd0;--red:#ffc2c8;--field:#162c49;color:var(--text)}
+:root[data-theme="naboo"] .nav a.on{--amber:#6f4f00;--green:#1c6a45;--red:#a11a2a}
+:root[data-theme="naboo"] .btn .i{color:#1b2233}
+:root[data-theme="naboo"] .btn.pri .i{color:var(--holo-ink)}
+:root[data-theme="naboo"] :is(.dark,.well,.console,.curve){--holo:#7fe0cb;--holo-hi:#a5ecdc;--sel:#c9a2ff;--plate:linear-gradient(180deg,#34225a,#22163c);--tape-ink:#f3eaff;--on-plate-dim:#ddd0f2;--on-plate-mute:#bfaede}
+:root[data-theme="naboo"] :is(.dark,.well,.console,.curve) .btn:not(.pri) .i{color:var(--text)}
+
+/* ---------------------------------------------------------------------------------------------------------------
+   Kashyyyk: a village built into giant trees. Dark bark and timber, buttons hewn with all four corners cut, a
+   lashing of rope under each title, moss green for what is selected and lantern amber for the next action. */
+:root[data-theme="kashyyyk"]{
+  --bg0:#14100b;--bg1:#1f1911;--bg2:#2a2217;--bg3:#352b1d;--bg4:#443826;
+  --side:#17130d;--bar:#18130d;--field:#100d08;--well:#070503;--track:#3a301f;
+  --seam:#6b5a36;--line:#3a301f;--line2:#7d6b45;
+  --text:#ece4d0;--hi:#fff7e2;--dim:#c7bda3;--mute:#a59b80;
+  --holo:#a9d46a;--holo-hi:#c3e58f;--holo-fill:#8fbf4f;--holo-ink:#101a03;--holo-dim:#4f6a2a;
+  --tape-ink:#f4ffe0;--sel:#a9d46a;--plate:linear-gradient(180deg,#2c3a17,#1e2810);--on-plate-dim:#d9e4c2;--on-plate-mute:#b9c79d;
+  --rail:linear-gradient(180deg,#221b11,#14100a);--rail-edge:#6b5a36;
+  --btn:linear-gradient(180deg,#43361f,#2c2315);--btn-hover:linear-gradient(180deg,#524226,#372c1a);
+  --blade:#b6e03c;--pri:linear-gradient(180deg,#ffcf7a,#f0a030 55%,#d6841a);--pri-hover:linear-gradient(180deg,#ffdb96,#f5ae48 55%,#de9028);--pri-edge:#ffe0a6;
+  --lit:linear-gradient(180deg,#b9e07a,#8fbf4f);--lit-edge:#cfee9a;--lit-ink:#101a03;--lit-glow:0 0 12px rgba(143,191,79,.4);
+  --amber:#ffc94d;--amber-fill:#f2b830;--amber-ink:#1f1500;--red:#ff7a62;--green:#a9d46a;
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.02 .9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .9 0 0 0 0 .7 .09 0 0 0 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --gloss:linear-gradient(180deg,rgba(255,220,150,.06),transparent 60px);
+  --ground:var(--bg0);--scrim:linear-gradient(180deg,rgba(20,16,11,.3),rgba(20,16,11,.6));--loose:rgba(24,19,13,.8);--loose-ctl:rgba(16,13,8,.85);--loose-blur:blur(10px);
+  --hover:rgba(255,220,150,.07);--edge-hi:rgba(255,225,160,.14);--btn-hi:rgba(255,255,255,.12);
+  --r-ctl:0px;--r-panel:6px;--r-field:4px;--r-chip:4px;--r-num:4px;--r-slot:6px;
+  /* A hewn plank: all four corners cut. */
+  --clip-ctl:polygon(7px 0,calc(100% - 7px) 0,100% 7px,100% calc(100% - 7px),calc(100% - 7px) 100%,7px 100%,0 calc(100% - 7px),0 7px);
+  --panel-edge:1px solid #6b5a36;--panel-shadow:inset 0 0 0 1px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,225,160,.08),0 10px 24px rgba(0,0,0,.55);
+  --rule:1px solid var(--line);
+  --ph-deco:repeating-linear-gradient(90deg,#8a6f3a 0 10px,transparent 10px 16px);--ph-deco-h:3px;
+  --h-track:.12em;
+}
+:root[data-theme="kashyyyk"] .main{background:var(--scrim),url(./assets/backdrops/kashyyyk.webp) center/cover no-repeat,var(--bg0)}
+:root[data-theme="kashyyyk"] .btn:not(.ghost):not(.pri):not(.danger):not(.warn) .b{background:#6b5a36}
+
+/* ---------------------------------------------------------------------------------------------------------------
    Themes with a picture behind the main view. Panels let a little of it through, softened, so they sit in the
    scene instead of on top of it; a note that sits straight on the picture gets the same backing as other loose text. */
-:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"]) :is(.panel,.inspect){background:var(--gloss),var(--grain),color-mix(in srgb,var(--bg1) 88%,transparent);backdrop-filter:blur(16px) saturate(1.15)}
-:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"]) .panel.amber{background:repeating-linear-gradient(-45deg,var(--amber-fill) 0 7px,#201d17 7px 14px) top/100% 5px no-repeat,var(--gloss),color-mix(in srgb,var(--bg1) 88%,transparent)}
-:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"]) :is(.main,.rail)>.note{background:var(--loose);backdrop-filter:var(--loose-blur)}
+:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"],[data-theme="naboo"],[data-theme="kashyyyk"]) :is(.panel,.inspect){background:var(--gloss),var(--grain),color-mix(in srgb,var(--bg1) 88%,transparent);backdrop-filter:blur(16px) saturate(1.15)}
+:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"],[data-theme="naboo"],[data-theme="kashyyyk"]) .panel.amber{background:repeating-linear-gradient(-45deg,var(--amber-fill) 0 7px,#201d17 7px 14px) top/100% 5px no-repeat,var(--gloss),color-mix(in srgb,var(--bg1) 88%,transparent)}
+:root:is([data-theme="hoth"],[data-theme="ronin"],[data-theme="ninth"],[data-theme="coruscant"],[data-theme="crait"],[data-theme="naboo"],[data-theme="kashyyyk"]) :is(.main,.rail)>.note{background:var(--loose);backdrop-filter:var(--loose-blur)}

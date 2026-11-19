@@ -49,7 +49,7 @@ In the beta (0.2.0-beta.4):
 - **The workshop:** Styles, Style editor (Simple and Full), Font library, Contributors, Demo room.
 - **Safety:** the whole firmware is backed up before every install and can be put back; nothing installs until the wiring is confirmed; presets keep a history; fonts on the card are checked; risky diagnostic commands ask first; "Save diagnostics" writes a local file and sends nothing.
 - **Updates:** the app checks GitHub releases for a newer version and installs it when asked.
-- **Themes:** seven, chosen on the About page. A theme changes colours, shapes, lines, type and the backdrop; it never moves anything.
+- **Themes:** ten, chosen on the About page. A theme changes colours, shapes, lines, type and the backdrop; it never moves anything.
 - **Asset packs:** `.hwpack` files carry hilts or fonts with a creator, a licence and permissions. There are no style packs.
 
 Constraints:

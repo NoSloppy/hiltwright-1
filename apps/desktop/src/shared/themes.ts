@@ -76,6 +76,30 @@ export const THEMES: readonly ThemeDef[] = [
     swatch: ['#d8d2cc', '#f1ede9', '#b8141e', '#7d0c13'],
     scene: { clear: 0x0c0506, floor: 0x1c1011, gridMajor: 0x6a2026, gridMinor: 0x2a1416, ambient: 0xc8b4b0, fill: 0xfff0ea, key: 0xf0d8d2 },
   },
+  {
+    id: 'naboo',
+    name: 'Naboo',
+    about: 'A lake city in daylight: pale stone, arched panels, verdigris for what comes next and wisteria for what is selected.',
+    window: { back: '#d9d3c4', bar: '#ece6d8', symbols: '#1b2233' },
+    swatch: ['#d9d3c4', '#f4efe3', '#4fb8a3', '#7a4fa8'],
+    scene: { clear: 0x070a10, floor: 0x141a26, gridMajor: 0x3d5578, gridMinor: 0x1c2636, ambient: 0xb4bfd4, fill: 0xfff4dc, key: 0xd8e2f4 },
+  },
+  {
+    id: 'kashyyyk',
+    name: 'Kashyyyk',
+    about: 'A village in the giant trees: dark timber, hewn corners, moss green and lantern amber.',
+    window: { back: '#14100b', bar: '#18130d', symbols: '#ece4d0' },
+    swatch: ['#14100b', '#1f1911', '#f0a030', '#a9d46a'],
+    scene: { clear: 0x070503, floor: 0x1a140c, gridMajor: 0x55472a, gridMinor: 0x261f13, ambient: 0xb0a88c, fill: 0xffe2b0, key: 0xdcd8b8 },
+  },
+  {
+    id: 'saberbench',
+    name: 'Saberbench',
+    about: 'The appearance Hiltwright first had: dark navy, cut-corner buttons and cyan.',
+    window: { back: '#0a0e13', bar: '#0d131a', symbols: '#e6edf3' },
+    swatch: ['#0a0e13', '#101720', '#5fd3ff', '#e6edf3'],
+    scene: { clear: 0x05080b, floor: 0x101720, gridMajor: 0x2f4658, gridMinor: 0x18232e, ambient: 0xa3b3c2, fill: 0xe6f4ff, key: 0xcfe6f5 },
+  },
 ];
 
 export const DEFAULT_THEME = THEMES[0].id;

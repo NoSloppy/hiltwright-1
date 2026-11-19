@@ -23,8 +23,10 @@ export function About({ updates }: { updates: UpdatesView | null }) {
   const toggle = (what: 'licence' | 'notices') => setShow((s) => (s === what ? null : what));
   const text = show && legal ? legal[show] : null;
 
+  // flex: none on the root, so the page keeps its full height and the main area scrolls to its end (as a shrinking
+  // column it was cut to the window's height and its last panel ran past the scroll range).
   return (
-    <div className="col" style={{ gap: 16, maxWidth: 900, minHeight: 0 }}>
+    <div className="col" style={{ gap: 16, maxWidth: 900, flex: 'none' }}>
       <section className="panel" aria-label="About Hiltwright" data-tour="about-panel">
         <div className="ph"><h2>Hiltwright {version}</h2></div>
         <div className="pb col" style={{ gap: 14 }}>
@@ -64,7 +66,7 @@ export function About({ updates }: { updates: UpdatesView | null }) {
       {updates && <UpdatesPanel view={updates} />}
       {failed && <div className="note amber" role="alert"><Icon name="warn" /><span>The licence and notices could not be read from this install. They are in the Hiltwright source on GitHub.</span></div>}
       {show && legal && (
-        <section className="panel" aria-label={show === 'licence' ? 'Licence text' : 'Third-party notices'} style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <section className="panel" aria-label={show === 'licence' ? 'Licence text' : 'Third-party notices'} style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="ph"><h2>{show === 'licence' ? 'Licence' : 'Third-party notices'}</h2></div>
           {text
             ? <pre className="mono small" style={{ margin: 0, padding: 18, overflow: 'auto', maxHeight: '60vh', whiteSpace: 'pre-wrap' }}>{text}</pre>
