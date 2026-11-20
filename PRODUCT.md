@@ -54,7 +54,7 @@ In the beta (0.2.0-beta.8):
 
 Constraints:
 
-- Windows is the supported system. A macOS test build is made on GitHub (unsigned; toolchain setup and firmware builds proven on a Mac runner, nothing with a saber proven). No Linux build.
+- Windows and macOS. macOS is the newer and less proven: its builds are made on GitHub, unsigned, with no font packs and no self-update; toolchain setup and firmware builds are proven on a Mac runner, and nothing with a saber is proven there yet (owner's decision, 2026-11-19, to present macOS as part of the beta). No Linux build.
 - The installer is not code-signed. Windows warns about it, and Smart App Control must be off.
 - A closed beta. Tester invitations are still open.
 - The app does not format SD cards and does not build fonts from sounds.

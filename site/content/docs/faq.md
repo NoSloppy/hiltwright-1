@@ -6,7 +6,7 @@ order: 3
 ---
 ## Which boards and systems does it support?
 
-The Proffieboard V2.2 and V3, running ProffieOS 8.x. Hiltwright runs on Windows 10 or 11, 64-bit. Windows in S mode is not supported.
+The Proffieboard V2.2 and V3, running ProffieOS 8.x. Hiltwright runs on Windows 10 or 11, 64-bit (Windows in S mode is not supported), and on macOS 11 or later, on Apple silicon and Intel Macs.
 
 ## Is it free? Is it open source?
 
@@ -34,7 +34,7 @@ And versions from 0.2.0-beta.3 on look for a newer Hiltwright: a little after th
 
 ## Does it work on Mac or Linux?
 
-Windows is the supported system. From 0.2.0-beta.7 a macOS test build is attached to each release: on a Mac it sets up its toolchain and builds firmware, but connecting to a saber and installing firmware have not been tried there yet. The release notes say how to open it. There is no Linux build.
+It works on a Mac, from 0.2.0-beta.7: each release carries a disk image for Apple silicon and one for Intel. macOS is the newer of the two systems. On a Mac Hiltwright sets up its toolchain and builds firmware; installing to a saber has not been confirmed there yet, the six free sound fonts are not included, and the Mac app does not update itself. It is not signed, so macOS asks before it opens it; the release notes say how. There is no Linux build.
 
 ## Windows warns me about the installer. Is that normal?
 
@@ -62,7 +62,7 @@ No. **New saber** in the Armory sets one up ahead: wiring, presets and styles, r
 
 ## What is not in this beta?
 
-Card formatting, code signing, a supported macOS build, Linux, and building fonts from sounds are not in this beta. A couple of features are switched off for now and are not covered in these pages. Known gaps are tracked in the project's later list on GitHub.
+Card formatting, code signing, Linux, and building fonts from sounds are not in this beta. A couple of features are switched off for now and are not covered in these pages. Known gaps are tracked in the project's later list on GitHub.
 
 ## How do I report a problem or give feedback?
 

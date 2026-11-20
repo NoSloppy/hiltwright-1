@@ -1,22 +1,22 @@
 ---
 title: Download
-description: Download the Hiltwright beta for Windows. What you need, what Windows will warn you about, and how to build it from source.
+description: Download the Hiltwright beta for Windows or macOS. What you need, what your system will warn you about, and how to build it from source.
 nav: download
 ---
 <section class="pagehead">
   <div class="wrap dl">
     <div>
       <h1>Hiltwright {{version}}</h1>
-      <p class="lede">A closed beta for Windows 10 and 11, for a Proffieboard V2.2 or V3. Free and open source.</p>
+      <p class="lede">A closed beta for Windows 10 and 11 and for macOS, for a Proffieboard V2.2 or V3. Free and open source.</p>
       <div class="cta">
-        <a class="btn primary big" href="{{releases}}">Get the installer on GitHub</a>
+        <a class="btn primary big" href="{{releases}}">Get it on GitHub</a>
         <a class="btn" href="docs/install.html">Read the install guide first</a>
       </div>
-      <p class="fine">The file is <code>Hiltwright-{{version}}-setup.exe</code>, about 205 MB. It installs for your account only and does not ask for administrator approval.</p>
-      <p class="fine">On a Mac? A macOS test build is on the same release page. It is unsigned and has not been tried with a saber; the <a href="docs/release-notes.html">release notes</a> say what is known.</p>
+      <p class="fine">For Windows the file is <code>Hiltwright-{{version}}-setup.exe</code>, about 205 MB. It installs for your account only and does not ask for administrator approval.</p>
+      <p class="fine">For a Mac the file is <code>Hiltwright-{{version}}-mac-arm64.dmg</code> (Apple silicon) or <code>Hiltwright-{{version}}-mac-x64.dmg</code> (Intel), about 140 MB. macOS is new in this beta: on a Mac Hiltwright sets up its toolchain and builds firmware, and installing to a saber has not been confirmed there yet. The <a href="docs/release-notes.html">release notes</a> say how to open it.</p>
     </div>
     <div class="card warn">
-      <h2>Check Smart App Control first</h2>
+      <h2>On Windows, check Smart App Control first</h2>
       <p>This beta is not signed. If Smart App Control is <b>On</b>, Windows blocks both the installer and the installed app, and there is no way to allow them. It has to be off while you use this beta.</p>
       <p>Look before you download: Windows Security, App &amp; browser control, Smart App Control settings.</p>
       <a class="more" href="docs/install.html#3-smart-app-control">What to check, step by step</a>
@@ -28,7 +28,7 @@ nav: download
   <div class="wrap">
     <h2>What you need</h2>
     <div class="cards three">
-      <div class="card"><h3>A Windows PC</h3><p>Windows 10 or 11, 64-bit. Windows in S mode is not supported. About 2.5 GB of free disk space.</p></div>
+      <div class="card"><h3>A Windows PC or a Mac</h3><p>Windows 10 or 11, 64-bit (Windows in S mode is not supported), or a Mac with Apple silicon or an Intel chip, on macOS 11 or later. About 2.5 GB of free disk space.</p></div>
       <div class="card"><h3>A Proffieboard</h3><p>A V2.2 or a V3, in a saber or on the bench, and the installer's notes on how it is wired.</p></div>
       <div class="card"><h3>A USB data cable</h3><p>Some cables only charge. If the saber is not seen, try another cable first.</p></div>
     </div>

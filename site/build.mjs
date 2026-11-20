@@ -91,7 +91,7 @@ ${body}
   <div class="wrap footgrid">
     <div>
       <a class="brand" href="${root}index.html"><img src="${root}assets/brand/hiltwright-icon.svg" width="30" height="30" alt="">Hiltwright</a>
-      <p>ProffieOS for people who never want to see a compiler. Version ${esc(VERSION)}, a closed beta for Windows.</p>
+      <p>ProffieOS for people who never want to see a compiler. Version ${esc(VERSION)}, a closed beta for Windows and macOS.</p>
     </div>
     <div><p class="foot-h">Site</p><a href="${root}features.html">Features</a><a href="${root}walkthrough.html">Walkthrough</a><a href="${root}download.html">Download</a></div>
     <div><p class="foot-h">Docs</p><a href="${root}docs/install.html">Install guide</a><a href="${root}docs/quick-start.html">Quick start</a><a href="${root}docs/troubleshooting.html">Troubleshooting</a><a href="${root}docs/faq.html">Questions</a></div>
