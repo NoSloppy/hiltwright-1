@@ -1,9 +1,9 @@
-# Hiltwright 0.2.0-beta.7
+# Hiltwright 0.2.0-beta.8
 
 ## New in this beta
 
-- **A first macOS test build.** Two disk images are attached to this release: `Hiltwright-0.2.0-beta.7-mac-arm64.dmg` for Macs with Apple silicon, and `Hiltwright-0.2.0-beta.7-mac-x64.dmg` for Intel Macs. It is a test build, not a supported one. On a Mac, Hiltwright's tests pass, the first-time toolchain setup works and firmware builds. Not yet tried on a Mac: connecting to a saber, installing firmware, the SD card, and how the window looks. The Intel build has not been run at all. If you try it, tell us what happens.
-- **Nothing changes on Windows** in this beta.
+- **The window buttons fit the header.** On Windows, the minimise, maximise and close buttons now sit on the header itself, so they match it in every theme, and they no longer cover the line under it.
+- **The macOS test build** is attached again: `Hiltwright-0.2.0-beta.8-mac-arm64.dmg` for Macs with Apple silicon, and `Hiltwright-0.2.0-beta.8-mac-x64.dmg` for Intel Macs. It is still a test build, not a supported one. On a Mac, Hiltwright's tests pass, the first-time toolchain setup works and firmware builds. Not yet tried on a Mac: connecting to a saber, installing firmware, the SD card, and how the window looks. The Intel build has not been run at all. If you try it, tell us what happens.
 
 An installed copy from 0.2.0-beta.3 on updates to this beta by itself. If that does not work for you, install this beta by hand and tell us.
 
@@ -55,11 +55,11 @@ Coming from 0.2.0-beta.1 or 0.2.0-beta.2? Download this installer and run it. It
 
 The installer is unsigned, so Windows will warn you before it runs. If Smart App Control is on, Windows blocks both the installer and the app, and it has to stay off while you use this beta: check that first (install guide, section 3). The install guide covers each Windows barrier to unsigned software.
 
-Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.7/docs/install-guide.md
+Install guide: https://github.com/safwyls/hiltwright/blob/v0.2.0-beta.8/docs/install-guide.md
 
 ## Licence and source
 
-Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.7
+Hiltwright is licensed under GPL-3.0-or-later. The source for this build is at https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.8
 
 ## Report a problem
 
