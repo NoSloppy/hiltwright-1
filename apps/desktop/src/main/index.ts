@@ -69,6 +69,9 @@ function createWindow(): void {
     // The app's header row is the title bar: draggable, with the caption buttons overlaid in the header's colours.
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: theme.window.bar, symbolColor: theme.window.symbols, height: 60 },
+    // macOS draws its three window buttons at the top left, over the page: they sit in the brand row, which leaves
+    // room for them there (styles.css, data-platform="darwin").
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 18, y: 22 } } : {}),
     webPreferences: {
       // The page reads this before it draws anything (preload: theme.initial), so there is no flash of another theme.
       additionalArguments: [`--hiltwright-theme=${theme.id}`],

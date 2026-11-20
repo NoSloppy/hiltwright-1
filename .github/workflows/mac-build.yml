@@ -1,0 +1,44 @@
+# Builds an unsigned macOS test build of the desktop app. Run it by hand (Actions, "macOS test build", Run workflow).
+# The disk images are attached to the run as an artifact; nothing is published and no release is made.
+#
+# This is a test build, not a supported one: Hiltwright is developed and checked on Windows. The build has no font
+# packs (they are not in the repository) and is signed ad hoc, so macOS asks before it opens it.
+name: macOS test build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests (reported, not required; they have only ever been run on Windows)
+        continue-on-error: true
+        run: npm test
+      - name: Build the app
+        run: npm run build --workspace @hiltwright/desktop
+      - name: Package for macOS
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          mkdir -p resources/packs
+          npx electron-builder --mac --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hiltwright-macos-test-build
+          path: |
+            apps/desktop/release/*.dmg
+          if-no-files-found: error
+          retention-days: 14

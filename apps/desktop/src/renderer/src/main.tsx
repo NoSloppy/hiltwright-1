@@ -20,6 +20,8 @@ import { applyTheme } from './theme';
 
 // Before anything is drawn: the theme the window opened in.
 applyTheme(window.hiltwright?.theme.initial);
+// The few rules that differ by operating system (the brand row on macOS) key off this.
+document.documentElement.dataset.platform = window.hiltwright?.platform ?? '';
 // Dev aid: hiltwrightTheme('hull') shows a theme without saving it, for screenshots.
 if (import.meta.env.DEV) (window as unknown as { hiltwrightTheme?: (id: string) => string }).hiltwrightTheme = (id) => applyTheme(id).id;
 

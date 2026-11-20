@@ -108,9 +108,21 @@
       "artifactName": "Hiltwright-${version}-setup.${ext}"
     },
     "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.utilities",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
       "target": [
-        "dmg"
-      ]
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Hiltwright-${version}-mac-${arch}.${ext}"
     },
     "linux": {
       "target": [
