@@ -34,7 +34,7 @@ import { JsonStore, storeProblems } from './jsonStore';
 import { runLog, runLogs } from './log';
 import { cleanSnapshot, composeBundle, writeBundle, type LastBuild } from './supportBundle';
 import { Updates, WorkCounter, pickAutoUpdater } from './updates';
-import { saveTheme } from './appearance';
+import { captionOverlay, saveTheme } from './appearance';
 import { WORK_CHANNELS, type BusyFacts, type UpdateState, type WorkKind } from '../shared/updates';
 import type { FontLibraryStatus, JobEvent } from '../shared/api';
 import type { FirmwareManifest } from '@hiltwright/core';
@@ -549,7 +549,7 @@ export function registerIpc(): void {
     const theme = await saveTheme(userData, id);
     for (const w of BrowserWindow.getAllWindows()) {
       w.setBackgroundColor(theme.window.back);
-      w.setTitleBarOverlay({ color: theme.window.bar, symbolColor: theme.window.symbols, height: 60 });
+      w.setTitleBarOverlay(captionOverlay(theme));
     }
     return theme.id;
   });

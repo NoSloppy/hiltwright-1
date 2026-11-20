@@ -20,6 +20,17 @@ export function readTheme(userData: string, forced?: string): ThemeDef {
   }
 }
 
+/**
+ * How Windows' three caption buttons are drawn over the header row. Their own background is clear, so the header
+ * shows through and they wear whatever the theme gives the header (its colour, texture, sheen), and they stop one
+ * pixel short of the row's height, so the line under the header runs unbroken beneath them. Only the symbols take a
+ * colour of their own.
+ */
+export const HEADER_HEIGHT = 60;
+export function captionOverlay(theme: ThemeDef): { color: string; symbolColor: string; height: number } {
+  return { color: 'rgba(0, 0, 0, 0)', symbolColor: theme.window.symbols, height: HEADER_HEIGHT - 1 };
+}
+
 /** Saves the theme and returns it. An unknown id saves, and returns, the default. */
 export async function saveTheme(userData: string, id: unknown): Promise<ThemeDef> {
   const theme = themeById(id);

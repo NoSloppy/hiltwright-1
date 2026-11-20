@@ -10,7 +10,7 @@ import { scrubDevEnv } from './devEnv';
 import { activeWant, isProffie, serialAllowed } from './serialGate';
 import { lookUpWanted } from './usb';
 import { startLog } from './log';
-import { readTheme } from './appearance';
+import { captionOverlay, readTheme } from './appearance';
 
 // A packaged build ignores every HILTWRIGHT_* development switch: they are removed before anything reads one.
 scrubDevEnv(process.env, app.isPackaged);
@@ -68,7 +68,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     // The app's header row is the title bar: draggable, with the caption buttons overlaid in the header's colours.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: theme.window.bar, symbolColor: theme.window.symbols, height: 60 },
+    titleBarOverlay: captionOverlay(theme),
     // macOS draws its three window buttons at the top left, over the page: they sit in the brand row, which leaves
     // room for them there (styles.css, data-platform="darwin").
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 18, y: 22 } } : {}),
