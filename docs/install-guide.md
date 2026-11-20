@@ -1,4 +1,4 @@
-# Hiltwright 0.2.0-beta.6: install guide
+# Hiltwright 0.2.0-beta.7: install guide
 
 Hiltwright Beta 1 is not signed. Windows will warn you. This guide takes you from the download to your first firmware install.
 
@@ -14,8 +14,8 @@ You need:
 
 ## 1 Download
 
-1. Open https://github.com/safwyls/hiltwright/releases/tag/v0.2.0-beta.6
-2. Download `Hiltwright-0.2.0-beta.6-setup.exe`.
+1. Open https://github.com/safwyls/hiltwright/releases/tag/v0.2.0-beta.7
+2. Download `Hiltwright-0.2.0-beta.7-setup.exe`.
 
 ## 2 Windows warnings when you run the installer
 
@@ -123,4 +123,8 @@ The browser warning and the **Unblock** step in section 2 are only for installer
 3. Describe what happened and which step you were on.
 4. Attach the diagnostics file.
 
-Source for this build: https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.6
+## 9 On a Mac
+
+This guide is for Windows. A macOS test build is attached to the same release; the release notes say what is known about it and how to open it.
+
+Source for this build: https://github.com/safwyls/hiltwright/tree/v0.2.0-beta.7

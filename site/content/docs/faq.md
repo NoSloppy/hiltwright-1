@@ -34,7 +34,7 @@ And versions from 0.2.0-beta.3 on look for a newer Hiltwright: a little after th
 
 ## Does it work on Mac or Linux?
 
-Not in this beta. Hiltwright is Windows only for now. Mac and Linux support is planned for later.
+Windows is the supported system. From 0.2.0-beta.7 a macOS test build is attached to each release: on a Mac it sets up its toolchain and builds firmware, but connecting to a saber and installing firmware have not been tried there yet. The release notes say how to open it. There is no Linux build.
 
 ## Windows warns me about the installer. Is that normal?
 
@@ -62,7 +62,7 @@ No. **New saber** in the Armory sets one up ahead: wiring, presets and styles, r
 
 ## What is not in this beta?
 
-Card formatting, code signing, macOS and Linux, and building fonts from sounds are not in this beta. A couple of features are switched off for now and are not covered in these pages. Known gaps are tracked in the project's later list on GitHub.
+Card formatting, code signing, a supported macOS build, Linux, and building fonts from sounds are not in this beta. A couple of features are switched off for now and are not covered in these pages. Known gaps are tracked in the project's later list on GitHub.
 
 ## How do I report a problem or give feedback?
 
