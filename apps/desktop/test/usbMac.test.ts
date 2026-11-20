@@ -3,6 +3,32 @@
 
 import { describe, expect, it } from 'vitest';
 import { NATIVE_DRIVER, backAfter, describeBootloader, driverUsable, newBootloaders, usbStateFromIoreg } from '../src/main/flash';
+import { parseMacMounts } from '../src/main/sd';
+
+describe('SD cards on macOS', () => {
+  const MOUNT = [
+    '/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)',
+    'devfs on /dev (devfs, local, nobrowse)',
+    '/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)',
+    'map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)',
+    '/dev/disk5s1 on /Volumes/SABER (msdos, local, nodev, nosuid, noowners)',
+    '/dev/disk6s1 on /Volumes/My Card (exfat, local, nodev, nosuid, noowners)',
+    '/dev/disk7s2 on /Volumes/Backup (apfs, local, nodev, nosuid, journaled, noowners)',
+    '/dev/disk8s1 on /Volumes/Installer (hfs, local, nodev, nosuid, read-only, noowners, quarantine, mounted by me)',
+  ].join('\n');
+
+  it('offers only volumes in a card format, never the Mac\'s own disks', () => {
+    expect(parseMacMounts(MOUNT).map((c) => [c.root, c.label, c.fileSystem])).toEqual([
+      ['/Volumes/SABER', 'SABER', 'FAT32'],
+      ['/Volumes/My Card', 'My Card', 'exFAT'],
+    ]);
+  });
+
+  it('offers nothing when there is no card', () => {
+    expect(parseMacMounts('/dev/disk3s1s1 on / (apfs, sealed, local, read-only, journaled)\n')).toEqual([]);
+    expect(parseMacMounts('')).toEqual([]);
+  });
+});
 
 const device = (name: string, vid: number, pid: number, serial: string | null, depth = '') => [
   `${depth}+-o ${name}@01100000  <class IOUSBHostDevice, id 0x100000a01, registered, matched, active, busy 0 (5 ms), retain 20>`,

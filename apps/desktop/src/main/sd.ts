@@ -101,12 +101,39 @@ async function candidateRoots(): Promise<{ list: Candidate[]; failed: string | n
       resolve({ list: [], failed });
     }));
   }
-  const bases = process.platform === 'darwin' ? ['/Volumes'] : ['/media', '/run/media', '/mnt'];
+  if (process.platform === 'darwin') {
+    // Only volumes in a card's formats: everything under /Volumes would include the Mac's own disk.
+    const text = await new Promise<string | null>((resolve) => execFile('mount', [], { timeout: DRIVE_LIST_TIMEOUT_MS }, (err, stdout) => resolve(err ? null : stdout)));
+    if (text === null) return { list: [], failed: 'the drive query failed' };
+    const list = parseMacMounts(text);
+    for (const c of list) {
+      try { const f = await statfs(c.root); c.free = Number(f.bavail) * Number(f.bsize); c.total = Number(f.blocks) * Number(f.bsize); } catch { /* sizes unknown */ }
+    }
+    return { list, failed: null };
+  }
+  const bases = ['/media', '/run/media', '/mnt'];
   const out: Candidate[] = [];
   for (const b of bases) {
     try { for (const name of await readdir(b)) out.push({ root: join(b, name), label: name, free: null, total: null, saberSerial: null, fileSystem: null }); } catch { /* not present */ }
   }
   return { list: out, failed: null };
+}
+
+/**
+ * The cards in macOS's `mount` listing: volumes under /Volumes whose file system is one a card has (FAT, shown as
+ * msdos, or exFAT). A line reads `/dev/disk4s1 on /Volumes/SABER (msdos, local, nodev, nosuid, noowners)`. The Mac's
+ * own disks (apfs, hfs) and network and image mounts of other kinds are left out.
+ */
+export function parseMacMounts(text: string): Candidate[] {
+  const out: Candidate[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\S+ on (\/Volumes\/.+) \(([a-z0-9_]+)[,)]/i.exec(line);
+    if (!m) continue;
+    const fs = m[2].toLowerCase();
+    if (fs !== 'msdos' && fs !== 'exfat') continue;
+    out.push({ root: m[1], label: m[1].slice('/Volumes/'.length), free: null, total: null, saberSerial: null, fileSystem: fs === 'exfat' ? 'exFAT' : 'FAT32' });
+  }
+  return out;
 }
 
 const DRIVE_LIST_TIMEOUT_MS = 15_000;

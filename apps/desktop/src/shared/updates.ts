@@ -184,7 +184,8 @@ export function actionsFor(s: UpdateState): UpdateAction[] {
 /** The words for the result of the last check or step, as shown beside the setting on the About page. */
 export function statusText(s: UpdateState): string {
   switch (s.phase) {
-    case 'off': return 'Updates are checked only in the installed app.';
+    // A development run, or a system whose builds are not published as releases yet (the macOS test build).
+    case 'off': return 'Updates are checked only in the installed Windows app.';
     case 'idle': return 'Not checked yet.';
     case 'checking': return 'Checking for a newer version…';
     case 'latest': return 'You have the latest version.';

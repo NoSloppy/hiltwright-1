@@ -537,7 +537,9 @@ export function registerIpc(): void {
   // there, for screenshots. During the tour a check is answered with the state as it is, and nothing else runs.
   const sendUpdate = (s: UpdateState) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('updates:changed', s); };
   const updates = new Updates({
-    packaged: app.isPackaged, version: app.getVersion(),
+    // Releases carry Windows files only, so only the installed Windows app checks: a Mac copy would find a release
+    // with nothing in it for a Mac and report a failure.
+    packaged: app.isPackaged && process.platform === 'win32', version: app.getVersion(),
     load: async () => pickAutoUpdater(await import('electron-updater')),
     emit: sendUpdate, workInMain: () => work.now(), log: (l) => console.log(l), now: () => new Date(),
     pretend: !app.isPackaged ? process.env.HILTWRIGHT_UPDATE_STATE : undefined,

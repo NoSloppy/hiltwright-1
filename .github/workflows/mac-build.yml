@@ -40,7 +40,10 @@ jobs:
         run: npm test
       - name: What the USB registry looks like here (for the bootloader lookup)
         continue-on-error: true
-        run: ioreg -r -c IOUSBHostDevice -l -w 0 | head -80
+        run: |
+          ioreg -r -c IOUSBHostDevice -l -w 0 | head -60
+          echo "--- mount (for the SD card list)"
+          mount
       - name: First-time toolchain setup, for real
         working-directory: apps/desktop
         run: HILTWRIGHT_REAL_SETUP="$TOOLCHAIN" npx vitest run test/realSetup.test.ts
