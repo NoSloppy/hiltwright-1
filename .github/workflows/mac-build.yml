@@ -20,7 +20,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # The lockfile is written on Windows and records only Windows builds of the packages that ship a binary for
+      # each system (rollup, esbuild), so `npm ci` leaves a Mac without them. A test build resolves afresh instead.
+      - name: Install dependencies for macOS
+        run: |
+          rm package-lock.json
+          npm install
       - name: Typecheck
         run: npm run typecheck
       - name: Tests (reported, not required; they have only ever been run on Windows)
