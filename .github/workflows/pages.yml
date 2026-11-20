@@ -12,6 +12,9 @@ on:
       - 'docs/images/**'
       - 'packages/core/src/sim.ts'
       - 'packages/core/src/lookLibrary.ts'
+      # The site shows the app's theme paintings and icon (site/build.mjs copies them in).
+      - 'apps/desktop/src/renderer/src/assets/backdrops/**'
+      - 'apps/desktop/src/renderer/src/assets/hiltwright-icon.svg'
       - 'package.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
@@ -29,17 +32,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: site/package-lock.json
       - run: npm ci
         working-directory: site
       - run: npm run build
         working-directory: site
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site/dist
   deploy:
@@ -50,4 +53,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
