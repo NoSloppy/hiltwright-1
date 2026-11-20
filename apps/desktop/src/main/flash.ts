@@ -54,9 +54,42 @@ export function usbStateFrom(list: { InstanceId: string; Service: string | null;
   };
 }
 
+/** What a bootloader's `driver` reads on a system that needs none: the system's own USB access reaches it. */
+export const NATIVE_DRIVER = 'native';
+
+/** True when dfu-util can open a bootloader with this driver: WinUSB on Windows, or a system that needs no driver. */
+export function driverUsable(driver: string | null | undefined): boolean {
+  return driver === NATIVE_DRIVER || /winusb/i.test(driver ?? '');
+}
+
+/**
+ * The USB state from macOS's device registry (`ioreg -r -c IOUSBHostDevice -l`). Each device is a block that starts
+ * `+-o <name>@<location>` and lists properties as `"key" = value`; the ids are decimal there. A device without a
+ * `"USB Serial Number"` gave none.
+ */
+export function usbStateFromIoreg(text: string): UsbState {
+  const list: { InstanceId: string; Service: string | null; Problem: number | null }[] = [];
+  let n = 0;
+  for (const block of text.split(/^[ |]*\+-o /m).slice(1)) {
+    const num = (key: string) => { const m = new RegExp(`"${key}" = (\\d+)`).exec(block); return m ? Number(m[1]) : null; };
+    const vid = num('idVendor'), pid = num('idProduct');
+    const boot = vid === 0x0483 && pid === 0xdf11, runs = vid === 0x1209 && pid === 0x6668;
+    if (!boot && !runs) continue;
+    const serial = /"(?:USB Serial Number|kUSBSerialNumberString)" = "([^"]+)"/.exec(block)?.[1] ?? null;
+    // The same shape Windows gives, so one function judges both: an id with `&` in its tail has no serial.
+    const tail = serial && /^[A-Za-z0-9]+$/.test(serial) ? serial : `no&serial&${n++}`;
+    list.push({ InstanceId: `USB\\VID_${boot ? '0483&PID_DF11' : '1209&PID_6668'}\\${tail}`, Service: boot ? NATIVE_DRIVER : null, Problem: null });
+  }
+  return usbStateFrom(list);
+}
+
 export async function usbState(): Promise<UsbState> {
+  if (process.platform === 'darwin') {
+    const out = await new Promise<string>((resolve) => execFile('ioreg', ['-r', '-c', 'IOUSBHostDevice', '-l', '-w', '0'], { timeout: 10000, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => resolve(err ? '' : stdout)));
+    return usbStateFromIoreg(out);
+  }
   if (process.platform !== 'win32') {
-    // TODO macOS/Linux: use dfu-util -l for the bootloader and the serial port list for runtime.
+    // TODO Linux: read the USB devices (lsusb or sysfs). Until then a running board is assumed and no bootloader seen.
     return { runtimePresent: true, bootloaderPresent: false, bootloaderDriver: 'n/a', bootloaderProblem: null, bootloaders: [], runtimeSerials: [], runtimeNoSerial: 0 };
   }
   const script = `Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match 'VID_1209&PID_6668|VID_0483&PID_DF11' } | Select-Object InstanceId, Service, Status, Problem | ConvertTo-Json`;
@@ -295,6 +328,7 @@ export async function restoreBackup(toolchainRoot: string, path: string, onLine:
 /** Explain the Windows driver situation in the owner's terms. */
 export function describeBootloader(s: UsbState): { ok: boolean; text: string } {
   if (!s.bootloaderPresent) return { ok: false, text: 'The board is not in bootloader mode.' };
+  if (s.bootloaderDriver === NATIVE_DRIVER) return { ok: true, text: 'Bootloader ready.' };
   if (/winusb/i.test(s.bootloaderDriver ?? '')) return { ok: true, text: 'Bootloader ready (WinUSB).' };
   return { ok: false, text: `Windows has no usable driver for the bootloader (service ${s.bootloaderDriver ?? 'none'}, problem code ${s.bootloaderProblem ?? '?'}). Install it once with proffie-dfu-setup.exe, then try again.` };
 }

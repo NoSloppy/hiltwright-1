@@ -27,7 +27,7 @@ import { sourceUrl } from '../shared/about';
 import { installBootloaderDriver } from './driver';
 import { importXenoFont, scanXenoCard, type XenoFontInfo } from './importer';
 import { writeAllowed, type KeptBuild } from './writeGuard';
-import { backAfter, backupFlash, describeBootloader, flashTarget, leaveBootloader, listBackups, newBootloaders, restoreBackup, usbState, waitFor, writeFirmware, type UsbState } from './flash';
+import { backAfter, backupFlash, describeBootloader, driverUsable, flashTarget, leaveBootloader, listBackups, newBootloaders, restoreBackup, usbState, waitFor, writeFirmware, type UsbState } from './flash';
 import { logged } from './ipcLog';
 import { tourGuarded, tourState } from './tourGuard';
 import { JsonStore, storeProblems } from './jsonStore';
@@ -446,7 +446,7 @@ export function registerIpc(): void {
     const s = await waitFor((u) => fresh(u).length > 0, Math.min(Number(timeoutMs) || 15000, 60000), (l) => emit('flash', l));
     if (!s) return { ok: false, text: 'The board did not switch to bootloader mode. Hold BOOT, tap RESET, release BOOT, then try again.', serials: [] };
     // Give Windows a moment to bind the driver before judging it.
-    const bound = (await waitFor((u) => fresh(u).length > 0 && fresh(u).every((b) => /winusb/i.test(b.driver ?? '')), 5000)) ?? s;
+    const bound = (await waitFor((u) => fresh(u).length > 0 && fresh(u).every((b) => driverUsable(b.driver)), 5000)) ?? s;
     const found = fresh(bound);
     return { ...describeBootloader({ ...bound, bootloaderDriver: found[0]?.driver ?? null, bootloaderProblem: found[0]?.problem ?? null }), serials: found.map((b) => b.serial) };
   })()));

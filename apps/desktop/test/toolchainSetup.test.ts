@@ -112,8 +112,10 @@ describe('a pinned, checked toolchain', () => {
   it('a verified unpack stamps the source, and the stamp and the pinned core version drive ready', async () => {
     const root = await mkdtemp(join(tmpdir(), 'hw-tc-'));
     const hw = join(root, 'arduino-data', 'packages', 'proffieboard');
-    await mkdir(join(hw, 'hardware', 'stm32l4', CORE_VERSION, 'tools', process.platform === 'win32' ? 'windows' : 'linux'), { recursive: true });
-    await writeFile(join(hw, 'hardware', 'stm32l4', CORE_VERSION, 'tools', process.platform === 'win32' ? 'windows' : 'linux', process.platform === 'win32' ? 'dfu-util.exe' : 'dfu-util'), '');
+    // The board support keeps dfu-util in a folder named for the system (as findDfuUtil looks for it).
+    const tools = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macosx' : 'linux';
+    await mkdir(join(hw, 'hardware', 'stm32l4', CORE_VERSION, 'tools', tools), { recursive: true });
+    await writeFile(join(hw, 'hardware', 'stm32l4', CORE_VERSION, 'tools', tools, process.platform === 'win32' ? 'dfu-util.exe' : 'dfu-util'), '');
     await mkdir(join(hw, 'tools', 'arm-none-eabi-gcc'), { recursive: true });
     await mkdir(join(root, 'ProffieOS'), { recursive: true });
     await writeFile(join(root, 'ProffieOS', 'ProffieOS.ino'), '//');

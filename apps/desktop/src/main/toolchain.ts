@@ -24,9 +24,13 @@ export const CORE_VERSION = '4.6';
 /**
  * SHA-256 of each pinned download. arduino-cli's matches its published `1.3.1-checksums.txt`; ProffieOS's is the tag
  * archive as GitHub serves it (the owner's working install and a fresh download, 2026-09-26, 4,760,062 bytes).
- * macOS and Linux assets are not pinned yet (firmware-side-later).
+ * The macOS assets are pinned from the same checksums file (and a download on 2026-11-19); Linux is not pinned yet.
  */
-export const CLI_SHA256: Record<string, string> = { [`arduino-cli_${CLI_VERSION}_Windows_64bit.zip`]: 'cfece6f356fdc9ca003cc3f0a488470030719c8e0e7bfce5e42ac9410d87441f' };
+export const CLI_SHA256: Record<string, string> = {
+  [`arduino-cli_${CLI_VERSION}_Windows_64bit.zip`]: 'cfece6f356fdc9ca003cc3f0a488470030719c8e0e7bfce5e42ac9410d87441f',
+  [`arduino-cli_${CLI_VERSION}_macOS_ARM64.tar.gz`]: '723f8ddaf4875e87a20380c88c15ff9d55916c3c80cb432f1f980ea32cec2341',
+  [`arduino-cli_${CLI_VERSION}_macOS_64bit.tar.gz`]: 'a0ca73f7e599d33a532fb2b1f8af9260541d990a684988bf8208abb42be83ced',
+};
 export const PROFFIEOS_SHA256 = '454f2374960ab517b087cb63b438688bc4b5f4b4f2458335afca398d34938dae';
 /** Written into the ProffieOS folder after a verified unpack: what the tree is, so its version is read, not assumed. */
 const SOURCE_STAMP = '.hiltwright-source.json';
